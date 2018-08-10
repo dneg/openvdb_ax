@@ -1,0 +1,2 @@
+v@vector_float = { 5.0f, 5.0f, 5.0f };
+vec3i@vector_float = { 5, 5, 5 };

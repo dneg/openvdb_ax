@@ -1,0 +1,17 @@
+
+vec3f float_test = {1.f, 2.f, 3.f};
+vec3f float_test2 = {3.f, -1.f, 2.f};
+
+v@vec_float_test = float_test + float_test2;
+v@vec_float_test2 = float_test - float_test2;
+v@vec_float_test3 = float_test * 2.f;
+v@vec_float_test4 = float_test / 2.f;
+
+vec3i int_test = {1, 2, 3};
+vec3i int_test2 = {3, -1, 2};
+
+vec3i@vec_int_test = int_test + int_test2;
+vec3i@vec_int_test2 = int_test - int_test2;
+vec3i@vec_int_test3 = int_test * 2;
+vec3i@vec_int_test4 = int_test / 2;
+

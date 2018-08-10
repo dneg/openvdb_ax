@@ -1,0 +1,10 @@
+short@short_test = 1s;
+
+short@short_test2 = short(short@short_test);
+int@int_test = int(short@short_test);
+long@long_test = long(short@short_test);
+
+float@float_test = float(short@short_test);
+double@double_test = double(short@short_test);
+
+

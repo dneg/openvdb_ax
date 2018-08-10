@@ -1,0 +1,32 @@
+
+int low_int = 5;
+int high_int = 10;
+
+float low_float = 5.5f;
+float high_float = 10.5f;
+
+bool@bool_test1 = low_int == low_int;
+bool@bool_test2 = low_int != low_int;
+
+bool@bool_test3 = low_int < high_int;
+bool@bool_test4 = low_int > high_int;
+bool@bool_test5 = low_int <= low_int;
+bool@bool_test6 = low_int >= high_int;
+
+bool@bool_test7 = high_int < low_int;
+bool@bool_test8 = high_int > low_int;
+bool@bool_test9 = high_int <= low_int;
+bool@bool_test10 = high_int >= low_int;
+
+bool@bool_test11 = low_float == low_float;
+bool@bool_test12 = low_float != low_float;
+
+bool@bool_test13 = low_float < high_float;
+bool@bool_test14 = low_float > high_float;
+bool@bool_test15 = low_float <= low_float;
+bool@bool_test16 = low_float >= high_float;
+
+bool@bool_test17 = high_float < low_float;
+bool@bool_test18 = high_float > low_float;
+bool@bool_test19 = high_float <= low_float;
+bool@bool_test20 = high_float >= low_float;

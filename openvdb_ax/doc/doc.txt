@@ -1,0 +1,66 @@
+/**
+@mainpage OpenVDB AX
+
+The <b>OpenVDB AX</b> library provides a powerful way to interact with OpenVDB
+volumes and points using the expression language: AX.
+
+<b>OpenVDB AX</b> is maintained by
+<A HREF="https://www.dneg.com/">DNEG</A>
+and currently supported by DNEG's:
+- Nick Avramoussis
+- Richard Jones
+- Francisco Gochez
+- Matthew Warner
+
+Please contact us on openvdbax@dneg.com if you have any questions.
+
+Other notable contributors include:
+- Dan Bailey
+- Todd Keeler
+- James Bird
+- Harry Biddle
+
+See the @subpage overview "Overview" for an introduction to the library.
+
+See the @subpage languageReference "Language Reference" for details of the
+OpenVDB AX language.
+
+See the @subpage codeExamples "Code Examples" for examples of OpenVDB AX
+in action.
+
+@page overview OpenVDB AX Overview
+
+@section Contents
+- @ref secOverview
+- @ref secAX
+  - @ref subsecTheSyntax
+
+<!-- - @ref secRegistry -->
+
+@section secOverview Introduction
+
+This document is a summary of OpenVDB AX. OpenVDB AX is a JIT compiled
+C-like language for manipulating OpenVDB volumes and points. It has
+influences from C, C++ and SideFX's VEX. It is a highly paralellised and
+efficient way of exposing low level control over voxel values and point
+attributes. It is portable across DCCs provided a plugin for each DCC is
+written for it. Included with the tools as they stand is a plugin for
+Houdini: the OpenVDB AX SOP.
+
+@section secAX AX
+
+Compiled AX is run on OpenVDB "element" data: voxels or points. It
+allows users to write short code snippets which will be evaluated on every
+point or voxel for supplied grids.
+
+Each time a change is made to a snippet it needs to be recompiled, however
+once it has been compiled the "executable" can be run on any number of grids
+until the code snippet is changed.
+
+AX works on points or volumes currently, not both at the same time.
+
+@subsection subsecTheSyntax The syntax
+
+For a detailed description of all the features of AX please see the
+@subpage languageReference "Language Reference".
+*/

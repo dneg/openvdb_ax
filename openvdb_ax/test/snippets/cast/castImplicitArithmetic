@@ -1,0 +1,29 @@
+
+// scalar arithmetic
+@float_test1 = 1 + 1.5f;
+
+// vec3f arithmetic
+vec3f test = -4.2f;
+v@vec_float_test1 = 5 + test;
+
+// int scalar and vec3f arithmetic
+vec3i@vec_int_test1 = 3 + 7;
+vec3i@vec_int_test2 = v@vec_float_test1 - 2;
+
+// float scalar and vec3f arithmetic
+@float_test2 = @float_test1 + v@vec_float_test1;
+
+// float vec3f and integer and float scalar arithmetic
+
+vec3f value1 = { 0.0, 0.9, 0.9 };
+
+// NOTE that if test2 is a float, the below check will fail
+// as implicit arithmetic always casts to the highest possible
+// type (and result2 uses a double)
+
+double test2 = 1 - 0.127;
+
+vec3f result1 = value1 * (test2);
+vec3f result2 = value1 * (1 - 0.127);
+
+bool@bool_test = (result1 == result2);

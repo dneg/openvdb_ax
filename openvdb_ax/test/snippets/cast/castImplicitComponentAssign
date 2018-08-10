@@ -1,0 +1,6 @@
+
+v@vec_float_test1 = { -5.361f, 10.3f, 6.0f };
+i@int_test1 = v@vec_float_test1;
+
+long@long_test1 = 40;
+v@vec_float_test2 = long@long_test1;

@@ -1,0 +1,10 @@
+double@double_test = 1.0;
+
+short@short_test = short(double@double_test);
+int@int_test = int(double@double_test);
+long@long_test = long(double@double_test);
+
+float@float_test = float(double@double_test);
+double@double_test2 = double(double@double_test);
+
+

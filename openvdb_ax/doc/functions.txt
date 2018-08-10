@@ -1,0 +1,323 @@
+/**
+
+@page supportedFunctions OpenVDB AX Supported Functions
+
+This page holds the full list of functions  currently supported by OpenVDB AX.
+
+@section sLanguageContents Contents
+- @ref secFunctions
+	- @ref subsecAbs
+	- @ref subsecAcos
+	- @ref subsecAddtogroup
+	- @ref subsecAsin
+	- @ref subsecAtan
+	- @ref subsecAtan2
+	- @ref subsecAtof
+	- @ref subsecAtoi
+	- @ref subsecCbrt
+	- @ref subsecCeil
+	- @ref subsecClamp
+	- @ref subsecCos
+	- @ref subsecCosh
+	- @ref subsecCross
+	- @ref subsecCurlnoise
+	- @ref subsecDeletepoint
+	- @ref subsecDot
+	- @ref subsecExp
+	- @ref subsecExp2
+	- @ref subsecFabs
+	- @ref subsecFit
+	- @ref subsecFloor
+	- @ref subsecGetcoordx
+	- @ref subsecGetcoordy
+	- @ref subsecGetcoordz
+	- @ref subsecGetvoxelpws
+	- @ref subsecIngroup
+	- @ref subsecLength
+	- @ref subsecLengthsq
+	- @ref subsecLog
+	- @ref subsecLog10
+	- @ref subsecLog2
+	- @ref subsecLookupf
+	- @ref subsecLookupvec3f
+	- @ref subsecMax
+	- @ref subsecMin
+	- @ref subsecNoise
+	- @ref subsecNormalize
+	- @ref subsecPow
+	- @ref subsecPrint
+	- @ref subsecRand
+	- @ref subsecRemovefromgroup
+	- @ref subsecRound
+	- @ref subsecSignbit
+	- @ref subsecSin
+	- @ref subsecSinh
+	- @ref subsecSqrt
+	- @ref subsecTan
+	- @ref subsecTanh
+
+@section secFunctions Functions
+
+@subsection subsecAbs abs
+Computes the absolute value of an integer number.
+  - int abs(int)
+  - long abs(long)
+
+@subsection subsecAcos acos
+Computes the principal value of the arc cosine of the input.
+  - double acos(double)
+  - float acos(float)
+
+@subsection subsecAddtogroup addtogroup
+Add the current point to the given group name, effectively setting its membership to true. If the group does not exist, it is implicitly created. This function has no effect if the point
+   already belongs to the given group.
+  - void addtogroup(string)
+
+@subsection subsecAsin asin
+Computes the principal value of the arc sine of the input.
+  - double asin(double)
+  - float asin(float)
+
+@subsection subsecAtan atan
+Computes the principal value of the arc tangent of the input.
+  - double atan(double)
+  - float atan(float)
+
+@subsection subsecAtan2 atan2
+Computes the arc tangent of y/x using the signs of arguments to determine the correct quadrant.
+  - double atan2(double, double)
+  - float atan2(float, float)
+
+@subsection subsecAtof atof
+Parses the string input, interpreting its content as a floating point number and returns its value
+   as a double.
+  - double atof(string)
+
+@subsection subsecAtoi atoi
+Parses the string input interpreting its content as an integral number, which is returned as a value
+   of type int.
+  - int atoi(string)
+  - long atoi(string)
+
+@subsection subsecCbrt cbrt
+Computes the cubic root of the input.
+  - double cbrt(double)
+  - float cbrt(float)
+
+@subsection subsecCeil ceil
+Computes the smallest integer value not less than arg.
+  - double ceil(double)
+  - float ceil(float)
+
+@subsection subsecClamp clamp
+Clamps the first argument to the minimum second argument value and maximum third argument value
+  - double clamp(double, double, double)
+  - float clamp(float, float, float)
+  - int clamp(int, int, int)
+
+@subsection subsecCos cos
+Computes the cosine of arg (measured in radians).
+  - double cos(double)
+  - float cos(float)
+
+@subsection subsecCosh cosh
+Computes the hyperbolic cosine of the input
+  - double cosh(double)
+  - float cosh(float)
+
+@subsection subsecCross cross
+Computes the cross product of two vectors
+  - vec3d cross(vec3d, vec3d)
+  - vec3f cross(vec3f, vec3f)
+  - vec3i cross(vec3i, vec3i)
+
+@subsection subsecCurlnoise curlnoise
+Generates divergence-free 3D noise, computed using a curl function on standard Perlin Noise.
+  - vec3d curlnoise(vec3d)
+  - vec3d curlnoise(double, double, double)
+
+@subsection subsecDeletepoint deletepoint
+Delete the current point from the point set. Note that this does not stop AX execution - any
+   additional AX commands will be executed on the point and it will remain accessible until the
+   end of execution.
+  - void deletepoint()
+
+@subsection subsecDot dot
+Computes the dot product of two vectors
+  - double dot(vec3d, vec3d)
+  - float dot(vec3f, vec3f)
+  - int dot(vec3i, vec3i)
+
+@subsection subsecExp exp
+Computes e (Euler's number, 2.7182818...) raised to the given power arg.
+  - double exp(double)
+  - float exp(float)
+
+@subsection subsecExp2 exp2
+Computes 2 raised to the given power arg.
+  - double exp2(double)
+  - float exp2(float)
+
+@subsection subsecFabs fabs
+Computes the absolute value of a floating point value arg.
+  - double fabs(double)
+  - float fabs(float)
+
+@subsection subsecFit fit
+Fit the first argument to the output range by first clamping the value between the second and third
+   input range arguments and then remapping the result to the output range fourth and fifth
+   arguments
+  - double fit(double, double, double, double, double)
+  - float fit(float, float, float, float, float)
+  - double fit(int, int, int, int, int)
+
+@subsection subsecFloor floor
+Computes the largest integer value not greater than arg.
+  - double floor(double)
+  - float floor(float)
+
+@subsection subsecGetcoordx getcoordx
+Returns the current voxel's X index value in index space as an integer.
+  - int getcoordx()
+
+@subsection subsecGetcoordy getcoordy
+Returns the current voxel's Y index value in index space as an integer.
+  - int getcoordy()
+
+@subsection subsecGetcoordz getcoordz
+Returns the current voxel's Z index value in index space as an integer.
+  - int getcoordz()
+
+@subsection subsecGetvoxelpws getvoxelpws
+Returns the current voxel's position in world space as a vector float.
+  - vec3f getvoxelpws()
+
+@subsection subsecIngroup ingroup
+Return whether or not the current point is a member of the given group name. This returns false if
+   the group does not exist.
+  - bool ingroup(string)
+
+@subsection subsecLength length
+Returns the length of the given vector
+  - double length(vec3d)
+  - float length(vec3f)
+
+@subsection subsecLengthsq lengthsq
+Returns the squared length of the given vector
+  - double lengthsq(vec3d)
+  - float lengthsq(vec3f)
+  - int lengthsq(vec3i)
+
+@subsection subsecLog log
+Computes the natural (base e) logarithm of arg.
+  - double log(double)
+  - float log(float)
+
+@subsection subsecLog10 log10
+Computes the common (base-10) logarithm of arg.
+  - double log10(double)
+  - float log10(float)
+
+@subsection subsecLog2 log2
+Computes the binary (base-2) logarithm of arg.
+  - double log2(double)
+  - float log2(float)
+
+@subsection subsecLookupf lookupf
+Find a custom user parameter with a given name of type 'float' in the Custom data provided to the AX
+   compiler. If the data can not be found, or is not of the expected type 0.0f is returned.
+  - float lookupf(string)
+
+@subsection subsecLookupvec3f lookupvec3f
+Find a custom user parameter with a given name of type 'vector float' in the Custom data provided to
+   the AX compiler. If the data can not be found, or is not of the expected type { 0.0f, 0.0f,
+   0.0f } is returned.
+  - vec3f lookupvec3f(string)
+
+@subsection subsecMax max
+Returns the larger of the given values.
+  - double max(double, double)
+  - float max(float, float)
+  - int max(int, int)
+
+@subsection subsecMin min
+Returns the smaller of the given values.
+  - double min(double, double)
+  - float min(float, float)
+  - int min(int, int)
+
+@subsection subsecNoise noise
+Compute perlin noise at coordinates x, y and z. 0.0f is taken for any coordinates are not provided.
+  - double noise(double)
+  - double noise(double, double)
+  - double noise(double, double, double)
+  - double noise(vec3d)
+
+@subsection subsecNormalize normalize
+Returns the normalized result of the given vector.
+  - vec3d normalize(vec3d)
+  - vec3f normalize(vec3f)
+
+@subsection subsecPow pow
+Computes the value of the first argument raised to the power of the second argument.
+  - double pow(double, double)
+  - float pow(float, float)
+  - double pow(double, int)
+  - float pow(float, int)
+
+@subsection subsecPrint print
+Prints the input to the standard error stream. Warning: This will be run for every element.
+  - void print(double)
+  - void print(int)
+  - void print(string)
+
+@subsection subsecRand rand
+Creates a random number based on the provided seed. The number will be in the range of 0 to 1. The
+   same number is produced for the same seed.
+  - double rand(double)
+  - double rand(int)
+
+@subsection subsecRemovefromgroup removefromgroup
+Remove the current point from the given group name, effectively setting its membership to false.
+   This function has no effect if the group does not exist.
+  - void removefromgroup(string)
+
+@subsection subsecRound round
+Computes the nearest integer value to arg (in floating-point format), rounding halfway cases away
+   from zero.
+  - double round(double)
+  - float round(float)
+
+@subsection subsecSignbit signbit
+Determines if the given floating point number input is negative.
+  - bool signbit(double)
+  - bool signbit(float)
+
+@subsection subsecSin sin
+Computes the sine of arg (measured in radians).
+  - double sin(double)
+  - float sin(float)
+
+@subsection subsecSinh sinh
+Computes the hyperbolic sine of the input
+  - double sinh(double)
+  - float sinh(float)
+
+@subsection subsecSqrt sqrt
+Computes the square root of arg.
+  - double sqrt(double)
+  - float sqrt(float)
+
+@subsection subsecTan tan
+Computes the tangent of arg (measured in radians).
+  - double tan(double)
+  - float tan(float)
+  - double tan(int)
+
+@subsection subsecTanh tanh
+Computes the hyperbolic tangent of the input
+  - double tanh(double)
+  - float tanh(float)
+
+
+*/

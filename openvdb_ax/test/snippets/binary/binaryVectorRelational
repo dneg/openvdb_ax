@@ -1,0 +1,36 @@
+
+vec3f float_test = {1.f, 2.f, 3.f};
+vec3f float_test2 = {1.f, 2.f, 3.f};
+vec3f float_test3 = {-1.f, 2.f, 3.f};
+vec3f float_test4 = {1.f, -2.f, 3.f};
+vec3f float_test5 = {1.f, 2.f, -3.f};
+vec3f float_test6 = {-1.f, -2.f, -3.f};
+
+bool@bool_test1 = float_test == float_test2;
+bool@bool_test2 = float_test == float_test3;
+bool@bool_test3 = float_test == float_test4;
+bool@bool_test4 = float_test == float_test5;
+bool@bool_test5 = float_test == float_test6;
+bool@bool_test6 = float_test != float_test2;
+bool@bool_test7 = float_test != float_test3;
+bool@bool_test8 = float_test != float_test4;
+bool@bool_test9 = float_test != float_test5;
+bool@bool_test10 = float_test != float_test6;
+
+vec3i int_test = {1, 2, 3};
+vec3i int_test2 = {1, 2, 3};
+vec3i int_test3 = {-1, 2, 3};
+vec3i int_test4 = {1, -2, 3};
+vec3i int_test5 = {1, 2, -3};
+vec3i int_test6 = {-1, -2, -3};
+
+bool@bool_test11 = int_test == int_test2;
+bool@bool_test12 = int_test == int_test3;
+bool@bool_test13 = int_test == int_test4;
+bool@bool_test14 = int_test == int_test5;
+bool@bool_test15 = int_test == int_test6;
+bool@bool_test16 = int_test != int_test2;
+bool@bool_test17 = int_test != int_test3;
+bool@bool_test18 = int_test != int_test4;
+bool@bool_test19 = int_test != int_test5;
+bool@bool_test20 = int_test != int_test6;

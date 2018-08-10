@@ -1,0 +1,44 @@
+/**
+
+@page codeExamples OpenVDB AX Code Examples
+
+@section sExpmaplesContents Contents
+- @ref secCullPointsExample
+- @ref secDragExample
+
+@section secCullPointsExample Cull Points Example
+@code
+int offset = 12345;
+float threshold = 0.5;
+
+// remove points
+if (rand(offset+i@id) > threshold) {
+    deletepoint();
+}
+@endcode
+
+@section secDragExample Drag Example
+@code
+float dt = 1.0f / (4.0f * 24.0f); // timestep
+vec3f gravity = {0.0f, -9.81f, 0.0f}; // gravity
+vec3f dV = {2.0f, 0.0f, 0.0f} - v@v; // drag
+
+float lengthV = length(dV);
+float Re = lengthV * @rad / 1.225f;
+
+float C = 0.0f;
+
+if (Re > 1000.0f) C = 24.0f / Re;
+else C = 0.424f;
+
+// calculate drag force
+vec3f drag = 0.5f * 1.2f * C * lengthV * dV * 4.0f * 3.14f * pow(@rad, 2.0f);
+
+// update velocity
+v@v += (gravity -  drag / ((4.0f / 3.0f) * 3.14f * pow(@rad, 3.0f))) * dt;
+
+// update position
+v@P += v@v * dt;
+@endcode
+
+*/

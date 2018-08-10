@@ -1,0 +1,8 @@
+
+vec3f float_test;
+
+float_test.x = 5.f;
+float_test.y = 4.f;
+float_test.z = 3.f;
+
+v@vec_float_test = float_test;

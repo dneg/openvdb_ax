@@ -1,0 +1,20 @@
+
+double@double_test = sqrt(9.0);
+
+double@double_test2 = cos(0.0);
+
+double@double_test3 = sin(0);
+
+double@double_test4 = log(1.0);
+
+double@double_test5 = log10(1.0);
+
+double@double_test6 = log2(2.0);
+
+double@double_test7 = exp(0.0);
+
+double@double_test8 = exp2(4.0);
+
+double@double_test9 = fabs(-10.321);
+
+double@double_test10 = floor(2194.213);

@@ -1,0 +1,8 @@
+
+double@double_test = min(-1.5, 15l);
+
+double@double_test2 = max(-15s, 105);
+
+double@double_test3 = fit(1.7, 1.5, 2.5, -25l, -15s);
+
+double@double_test4 = clamp(2.5, -1.5, 1.5f);

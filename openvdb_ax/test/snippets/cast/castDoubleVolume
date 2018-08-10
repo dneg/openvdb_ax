@@ -1,0 +1,10 @@
+// Same as castDouble without short data.  Used for volume tests since "short" volumes
+// are not supported at the moment.  Can be deprecated if this ever changes
+
+double@double_test = 1.0;
+
+int@int_test = int(double@double_test);
+long@long_test = long(double@double_test);
+
+float@float_test = float(double@double_test);
+double@double_test2 = double(double@double_test);

@@ -1,0 +1,7 @@
+
+float abc = 0.2f;
+float def = 0.8f;
+
+abc = def;
+
+@float_test = abc;

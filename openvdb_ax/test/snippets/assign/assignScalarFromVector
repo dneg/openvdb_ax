@@ -1,0 +1,18 @@
+// test pure attrib assignment
+
+v@vec_float_test1 = { 10.0f, 9.0f, 8.0f };
+@float_test1;
+
+@float_test1 = v@vec_float_test1;
+
+// test locals
+
+vec3f a = { -10.0f, -8.0f, -7.0f};
+float b;
+b = a;
+
+@float_test2 = b;
+
+vec3f c = { -5.0f, -8.0f, -7.0f};
+
+@float_test3 = c;

@@ -1,0 +1,13 @@
+
+int@int_test = 2 + 1;
+
+int@int_test2 = 2 * 2;
+
+int@int_test3 = 2 - 1;
+
+int@int_test4 = 5 / 3;
+int@int_test5 = 5 / (-3);
+int@int_test6 = 7 / 3;
+
+int@int_test7 = 5 % 3;
+int@int_test8 = (-5) % 3;

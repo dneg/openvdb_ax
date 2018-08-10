@@ -1,0 +1,12 @@
+// Same as castLong without short data.  Used for volume tests since "short" volumes
+// are not supported at the moment.  Can be deprecated if this ever changes
+
+long@long_test = 1l;
+
+int@int_test = int(long@long_test);
+long@long_test2 = long(long@long_test);
+
+float@float_test = float(long@long_test);
+double@double_test = double(long@long_test);
+
+
