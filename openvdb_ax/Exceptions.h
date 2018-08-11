@@ -33,6 +33,9 @@
 
 #include <openvdb/Exceptions.h>
 
+#include <sstream>
+#include <string>
+
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {

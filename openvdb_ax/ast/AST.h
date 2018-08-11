@@ -107,7 +107,7 @@ struct Statement : public Node
     using UniquePtr = std::unique_ptr<Statement>;
 
     ~Statement() override = default;
-    virtual Statement* copy() const = 0;
+    virtual Statement* copy() const override = 0;
 };
 
 // Expressions only contain identifiers, literals and operators, and can be
@@ -120,7 +120,7 @@ struct Expression : public Statement
     using UniquePtr = std::unique_ptr<Expression>;
 
     ~Expression() override = default;
-    virtual Expression* copy() const = 0;
+    virtual Expression* copy() const override = 0;
 };
 
 struct Block : public Statement
@@ -217,7 +217,7 @@ struct Variable : public Expression
     Variable(const Name& name) : mName(name) {}
     ~Variable() override = default;
 
-    virtual Variable* copy() const = 0;
+    virtual Variable* copy() const override = 0;
     const Name mName;
 };
 
