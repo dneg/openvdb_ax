@@ -274,7 +274,7 @@ struct SetAttribute : public FunctionBase
         DECLARE_FUNCTION_SIGNATURE(set_attribute_ptr<openvdb::Vec3d>),
         DECLARE_FUNCTION_SIGNATURE(set_attribute_ptr<openvdb::Vec3f>),
         DECLARE_FUNCTION_SIGNATURE(set_attribute_ptr<openvdb::Vec3i>),
-        DECLARE_FUNCTION_SIGNATURE(set_attribute_string),
+        // DECLARE_FUNCTION_SIGNATURE(set_attribute_string),
     }) {}
 
 private:
@@ -321,24 +321,25 @@ private:
                               openvdb::Vec3s* value);
 };
 
+//@todo: Once required improvements made to StringAttributeArray
+//       renable string attributes and functions
+// struct StringAttribSize : public FunctionBase
+// {
+//     DEFINE_IDENTIFIER_CONTEXT_DOC("strattribsize", FunctionBase::Point,
+//         "Internal function for querying the size of a points string attribute")
 
-struct StringAttribSize : public FunctionBase
-{
-    DEFINE_IDENTIFIER_CONTEXT_DOC("strattribsize", FunctionBase::Point,
-        "Internal function for querying the size of a points string attribute")
+//     inline static Ptr create(const FunctionOptions&) { return Ptr(new StringAttribSize()); }
 
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new StringAttribSize()); }
+//     StringAttribSize() : FunctionBase({
+//         DECLARE_FUNCTION_SIGNATURE(str_attrib_size)
+//     }) {}
 
-    StringAttribSize() : FunctionBase({
-        DECLARE_FUNCTION_SIGNATURE(str_attrib_size)
-    }) {}
+// private:
+//     static size_t str_attrib_size(void* attributeHandle,
+//                                   const uint64_t index,
+//                                   const void* const newDataPtr);
 
-private:
-    static size_t str_attrib_size(void* attributeHandle,
-                                  const uint64_t index,
-                                  const void* const newDataPtr);
-
-};
+// };
 
 
 struct GetAttribute : public FunctionBase
@@ -358,7 +359,7 @@ struct GetAttribute : public FunctionBase
         DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_attribute<openvdb::Vec3d>, 1),
         DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_attribute<openvdb::Vec3f>, 1),
         DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_attribute<openvdb::Vec3i>, 1),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_attribute_string, 1)
+        // DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_attribute_string, 1)
     }) {}
 
 private:

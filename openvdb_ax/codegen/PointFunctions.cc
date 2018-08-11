@@ -128,61 +128,61 @@ bool InGroup::Internal::in_group(const uint8_t* const name,
     return handle ? handle->get(index) : false;
 }
 
-size_t StringAttribSize::str_attrib_size(void* attributeHandle,
-                                         const uint64_t index,
-                                         const void* const leafDataPtr)
-{
-    using AttributeHandleType = openvdb::points::StringAttributeHandle;
+// size_t StringAttribSize::str_attrib_size(void* attributeHandle,
+//                                          const uint64_t index,
+//                                          const void* const leafDataPtr)
+// {
+//     using AttributeHandleType = openvdb::points::StringAttributeHandle;
 
-    assert(attributeHandle);
-    assert(leafDataPtr);
+//     assert(attributeHandle);
+//     assert(leafDataPtr);
 
-    const AttributeHandleType* const handle =
-        static_cast<AttributeHandleType*>(attributeHandle);
+//     const AttributeHandleType* const handle =
+//         static_cast<AttributeHandleType*>(attributeHandle);
 
-    const openvdb::ax::codegen::LeafLocalData* const leafData =
-        static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+//     const openvdb::ax::codegen::LeafLocalData* const leafData =
+//         static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
 
-    std::string data;
-    if (!leafData->getNewStringData(&(handle->array()), index, data)) {
-        handle->get(data, index);
-    }
+//     std::string data;
+//     if (!leafData->getNewStringData(&(handle->array()), index, data)) {
+//         handle->get(data, index);
+//     }
 
-    // include size of null terminator
-    return data.size() + 1;
-}
+//     // include size of null terminator
+//     return data.size() + 1;
+// }
 
-void SetAttribute::set_attribute_string(void* attributeHandle,
-                                        const uint64_t index,
-                                        const uint8_t* value,
-                                        void* const leafDataPtr)
-{
-    using AttributeHandleType = openvdb::points::StringAttributeWriteHandle;
+// void SetAttribute::set_attribute_string(void* attributeHandle,
+//                                         const uint64_t index,
+//                                         const uint8_t* value,
+//                                         void* const leafDataPtr)
+// {
+//     using AttributeHandleType = openvdb::points::StringAttributeWriteHandle;
 
-    assert(attributeHandle);
-    assert(value);
-    assert(leafDataPtr);
+//     assert(attributeHandle);
+//     assert(value);
+//     assert(leafDataPtr);
 
-    const char* const sarray = reinterpret_cast<const char* const>(value);
-    const std::string s(sarray);
+//     const char* const sarray = reinterpret_cast<const char* const>(value);
+//     const std::string s(sarray);
 
-    AttributeHandleType* const handle =
-        static_cast<AttributeHandleType*>(attributeHandle);
+//     AttributeHandleType* const handle =
+//         static_cast<AttributeHandleType*>(attributeHandle);
 
-    openvdb::ax::codegen::LeafLocalData* const leafData =
-        static_cast<openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+//     openvdb::ax::codegen::LeafLocalData* const leafData =
+//         static_cast<openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
 
-    // Check to see if the string exists in the metadata cache. If so, set the string and
-    // remove any new data associated with it, otherwise set the new data
+//     // Check to see if the string exists in the metadata cache. If so, set the string and
+//     // remove any new data associated with it, otherwise set the new data
 
-    if (handle->hasIndex(s)) {
-        handle->set(index, s);
-        leafData->removeNewStringData(&(handle->array()), index);
-    }
-    else {
-        leafData->setNewStringData(&(handle->array()), index, s);
-    }
-}
+//     if (handle->hasIndex(s)) {
+//         handle->set(index, s);
+//         leafData->removeNewStringData(&(handle->array()), index);
+//     }
+//     else {
+//         leafData->setNewStringData(&(handle->array()), index, s);
+//     }
+// }
 
 void SetPointPWS::set_point_pws(void* leafDataPtr,
                                 const uint64_t index,
@@ -195,31 +195,31 @@ void SetPointPWS::set_point_pws(void* leafDataPtr,
 }
 
 
-void GetAttribute::get_attribute_string(void* attributeHandle,
-                                      const uint64_t index,
-                                      uint8_t* value,
-                                      const void* const leafDataPtr)
-{
-    using AttributeHandleType = openvdb::points::StringAttributeHandle;
+// void GetAttribute::get_attribute_string(void* attributeHandle,
+//                                       const uint64_t index,
+//                                       uint8_t* value,
+//                                       const void* const leafDataPtr)
+// {
+//     using AttributeHandleType = openvdb::points::StringAttributeHandle;
 
-    assert(attributeHandle);
-    assert(value);
-    assert(leafDataPtr);
+//     assert(attributeHandle);
+//     assert(value);
+//     assert(leafDataPtr);
 
-    AttributeHandleType* const handle =
-        static_cast<AttributeHandleType*>(attributeHandle);
+//     AttributeHandleType* const handle =
+//         static_cast<AttributeHandleType*>(attributeHandle);
 
-    const openvdb::ax::codegen::LeafLocalData* const leafData =
-        static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+//     const openvdb::ax::codegen::LeafLocalData* const leafData =
+//         static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
 
-    std::string data;
-    if (!leafData->getNewStringData(&(handle->array()), index, data)) {
-        handle->get(data, index);
-    }
+//     std::string data;
+//     if (!leafData->getNewStringData(&(handle->array()), index, data)) {
+//         handle->get(data, index);
+//     }
 
-    char* sarray = reinterpret_cast<char*>(value);
-    strcpy(sarray, data.c_str());
-}
+//     char* sarray = reinterpret_cast<char*>(value);
+//     strcpy(sarray, data.c_str());
+// }
 
 void GetPointPWS::get_point_pws(void* leafDataPtr,
                                 const uint64_t index,

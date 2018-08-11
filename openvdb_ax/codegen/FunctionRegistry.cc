@@ -179,7 +179,7 @@ void insertStandardFunctions(FunctionRegistry& registry)
 
     registry.insert("getattribute", GetAttribute::create, true);
     registry.insert("setattribute", SetAttribute::create, true);
-    registry.insert("strattribsize", StringAttribSize::create, true);
+    // registry.insert("strattribsize", StringAttribSize::create, true);
     registry.insert("getpointpws", GetPointPWS::create, true);
     registry.insert("setpointpws", SetPointPWS::create, true);
 

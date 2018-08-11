@@ -471,6 +471,9 @@ void PointComputeGenerator::visit(const ast::FunctionCall& node)
 
 void PointComputeGenerator::visit(const ast::Attribute& node)
 {
+    if (node.mType == "string") {
+        OPENVDB_THROW(AXCompilerError, "Access to string attributes not yet supported.");
+    }
     if (node.mName == "P") {
         // if accessing position the ptr we push back is actually to the leaf_data
         llvm::Value* leafDataPtr = mLLVMArguments.get("leaf_data");
@@ -538,13 +541,14 @@ void PointComputeGenerator::visit(const ast::AttributeValue& node)
 
     const bool usingString(!usingPosition && type == "string");
     if (usingString) {
-        const FunctionBase::Ptr function = this->getFunction("strattribsize", mOptions, true);
-        llvm::Value* size =
-            function->execute({handlePtr, mLLVMArguments.get("point_index"), mLLVMArguments.get("leaf_data")},
-                mLLVMArguments.map(), mBuilder, mModule, nullptr, true);
+        OPENVDB_THROW(AXCompilerError, "Access to string attributes not yet supported.");
+        // const FunctionBase::Ptr function = this->getFunction("strattribsize", mOptions, true);
+        // llvm::Value* size =
+        //     function->execute({handlePtr, mLLVMArguments.get("point_index"), mLLVMArguments.get("leaf_data")},
+        //         mLLVMArguments.map(), mBuilder, mModule, nullptr, true);
 
-        returnValue = mBuilder.CreateAlloca(returnType, size);
-        args.reserve(4);
+        // returnValue = mBuilder.CreateAlloca(returnType, size);
+        // args.reserve(4);
     }
     else {
         returnValue = mBuilder.CreateAlloca(returnType);
