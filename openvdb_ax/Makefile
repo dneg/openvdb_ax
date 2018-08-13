@@ -338,9 +338,9 @@ TEST_SRC_NAMES := \
 		test/integration/TestGroups.cc \
 		test/integration/TestHarness.cc \
 		test/integration/TestKeyword.cc \
-		test/integration/TestString.cc \
 		test/integration/TestUnary.cc \
 		test/integration/TestWorldSpaceAccessors.cc \
+		# test/integration/TestString.cc \ @todo: reeanable string tests with string support
 #
 
 DOC_FILES := doc/doc.txt doc/language.txt doc/functions.txt doc/codeexamples.txt

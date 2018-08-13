@@ -202,7 +202,7 @@ SET ( TEST_SOURCE_FILES
   test/integration/TestGroups.cc
   test/integration/TestHarness.cc
   test/integration/TestKeyword.cc
-  test/integration/TestString.cc
+  # test/integration/TestString.cc @todo: reenable string tests with string support
   test/integration/TestUnary.cc
   test/integration/TestWorldSpaceAccessors.cc
   test/main.cc
