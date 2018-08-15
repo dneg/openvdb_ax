@@ -30,8 +30,8 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-#ifndef YY_YY_AX_AXPARSER_H_INCLUDED
-# define YY_YY_AX_AXPARSER_H_INCLUDED
+#ifndef YY_YY_GRAMMAR_AXPARSER_H_INCLUDED
+# define YY_YY_GRAMMAR_AXPARSER_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -118,7 +118,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 114 "ax/axparser.y" /* yacc.c:1910  */
+#line 114 "grammar/axparser.y" /* yacc.c:1910  */
 
     const char* value_string;
     uint64_t index;
@@ -136,7 +136,7 @@ union YYSTYPE
     openvdb::ax::ast::DeclareLocal* declare_local;
     openvdb::ax::ast::Local* local;
 
-#line 140 "ax/axparser.h" /* yacc.c:1910  */
+#line 140 "grammar/axparser.h" /* yacc.c:1910  */
 };
 
 typedef union YYSTYPE YYSTYPE;
@@ -163,4 +163,4 @@ extern YYSTYPE yylval;
 extern YYLTYPE yylloc;
 int yyparse (openvdb::ax::ast::Tree** tree);
 
-#endif /* !YY_YY_AX_AXPARSER_H_INCLUDED  */
+#endif /* !YY_YY_GRAMMAR_AXPARSER_H_INCLUDED  */
