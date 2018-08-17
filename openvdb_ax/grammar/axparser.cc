@@ -62,7 +62,7 @@
 
 
 /* Copy the first part of user declarations.  */
-#line 31 "ax/axparser.y" /* yacc.c:339  */
+#line 31 "grammar/axparser.y" /* yacc.c:339  */
 
     #include <stdio.h>
     #include <iostream>
@@ -141,7 +141,7 @@
         }
     }
 
-#line 145 "ax/axparser.cc" /* yacc.c:339  */
+#line 145 "grammar/axparser.cc" /* yacc.c:339  */
 
 # ifndef YY_NULLPTR
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -161,8 +161,8 @@
 
 /* In a future release of Bison, this section will be replaced
    by #include "axparser.h".  */
-#ifndef YY_YY_AX_AXPARSER_H_INCLUDED
-# define YY_YY_AX_AXPARSER_H_INCLUDED
+#ifndef YY_YY_GRAMMAR_AXPARSER_H_INCLUDED
+# define YY_YY_GRAMMAR_AXPARSER_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -249,7 +249,7 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 114 "ax/axparser.y" /* yacc.c:355  */
+#line 114 "grammar/axparser.y" /* yacc.c:355  */
 
     const char* value_string;
     uint64_t index;
@@ -267,7 +267,7 @@ union YYSTYPE
     openvdb::ax::ast::DeclareLocal* declare_local;
     openvdb::ax::ast::Local* local;
 
-#line 271 "ax/axparser.cc" /* yacc.c:355  */
+#line 271 "grammar/axparser.cc" /* yacc.c:355  */
 };
 
 typedef union YYSTYPE YYSTYPE;
@@ -294,11 +294,11 @@ extern YYSTYPE yylval;
 extern YYLTYPE yylloc;
 int yyparse (openvdb::ax::ast::Tree** tree);
 
-#endif /* !YY_YY_AX_AXPARSER_H_INCLUDED  */
+#endif /* !YY_YY_GRAMMAR_AXPARSER_H_INCLUDED  */
 
 /* Copy the second part of user declarations.  */
 
-#line 302 "ax/axparser.cc" /* yacc.c:358  */
+#line 302 "grammar/axparser.cc" /* yacc.c:358  */
 
 #ifdef short
 # undef short
@@ -1727,715 +1727,715 @@ yyreduce:
   switch (yyn)
     {
         case 2:
-#line 204 "ax/axparser.y" /* yacc.c:1648  */
+#line 204 "grammar/axparser.y" /* yacc.c:1648  */
     { *tree = new Tree(); (yyval.tree) = *tree; }
-#line 1733 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1733 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 3:
-#line 205 "ax/axparser.y" /* yacc.c:1648  */
+#line 205 "grammar/axparser.y" /* yacc.c:1648  */
     { *tree = new Tree((yyvsp[0].block)); (yyval.tree) = *tree; }
-#line 1739 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1739 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 4:
-#line 209 "ax/axparser.y" /* yacc.c:1648  */
+#line 209 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.block) = (yyvsp[-1].block); }
-#line 1745 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1745 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 5:
-#line 210 "ax/axparser.y" /* yacc.c:1648  */
+#line 210 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.block) = new Block(); }
-#line 1751 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1751 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 6:
-#line 211 "ax/axparser.y" /* yacc.c:1648  */
+#line 211 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.block) = new Block(); if((yyvsp[0].statement)) (yyval.block)->mList.emplace_back((yyvsp[0].statement)); }
-#line 1757 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1757 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 7:
-#line 215 "ax/axparser.y" /* yacc.c:1648  */
+#line 215 "grammar/axparser.y" /* yacc.c:1648  */
     { if ((yyvsp[0].statement)) (yyvsp[-1].block)->mList.emplace_back((yyvsp[0].statement)); (yyval.block) = (yyvsp[-1].block); }
-#line 1763 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1763 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 8:
-#line 216 "ax/axparser.y" /* yacc.c:1648  */
+#line 216 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.block) = new Block(); if ((yyvsp[0].statement)) (yyval.block)->mList.emplace_back((yyvsp[0].statement)); }
-#line 1769 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1769 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 9:
-#line 222 "ax/axparser.y" /* yacc.c:1648  */
+#line 222 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = (yyvsp[-1].expression); }
-#line 1775 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1775 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 10:
-#line 223 "ax/axparser.y" /* yacc.c:1648  */
+#line 223 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = (yyvsp[-1].statement); }
-#line 1781 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1781 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 11:
-#line 224 "ax/axparser.y" /* yacc.c:1648  */
+#line 224 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = (yyvsp[0].statement); }
-#line 1787 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1787 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 12:
-#line 225 "ax/axparser.y" /* yacc.c:1648  */
+#line 225 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = new Return; }
-#line 1793 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1793 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 13:
-#line 226 "ax/axparser.y" /* yacc.c:1648  */
+#line 226 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = nullptr; }
-#line 1799 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1799 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 14:
-#line 234 "ax/axparser.y" /* yacc.c:1648  */
+#line 234 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = new ConditionalStatement((yyvsp[-1].expression), (yyvsp[0].block), new Block()); }
-#line 1805 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1805 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 15:
-#line 235 "ax/axparser.y" /* yacc.c:1648  */
+#line 235 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = new ConditionalStatement((yyvsp[-3].expression), (yyvsp[-2].block), (yyvsp[0].block)); }
-#line 1811 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1811 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 16:
-#line 241 "ax/axparser.y" /* yacc.c:1648  */
+#line 241 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1817 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1817 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 17:
-#line 242 "ax/axparser.y" /* yacc.c:1648  */
+#line 242 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1823 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1823 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 18:
-#line 243 "ax/axparser.y" /* yacc.c:1648  */
+#line 243 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1829 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1829 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 19:
-#line 244 "ax/axparser.y" /* yacc.c:1648  */
+#line 244 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1835 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1835 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 20:
-#line 245 "ax/axparser.y" /* yacc.c:1648  */
+#line 245 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1841 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1841 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 21:
-#line 246 "ax/axparser.y" /* yacc.c:1648  */
+#line 246 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1847 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1847 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 22:
-#line 247 "ax/axparser.y" /* yacc.c:1648  */
+#line 247 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1853 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1853 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 23:
-#line 248 "ax/axparser.y" /* yacc.c:1648  */
+#line 248 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].expression); }
-#line 1859 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1859 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 24:
-#line 249 "ax/axparser.y" /* yacc.c:1648  */
+#line 249 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].value); }
-#line 1865 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1865 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 25:
-#line 250 "ax/axparser.y" /* yacc.c:1648  */
+#line 250 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].vector_unpack); }
-#line 1871 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1871 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 26:
-#line 251 "ax/axparser.y" /* yacc.c:1648  */
+#line 251 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[0].value); }
-#line 1877 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1877 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 27:
-#line 252 "ax/axparser.y" /* yacc.c:1648  */
+#line 252 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new LocalValue((yyvsp[0].local)); }
-#line 1883 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1883 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 28:
-#line 253 "ax/axparser.y" /* yacc.c:1648  */
+#line 253 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AttributeValue((yyvsp[0].attribute)); }
-#line 1889 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1889 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 29:
-#line 260 "ax/axparser.y" /* yacc.c:1648  */
+#line 260 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.vector_unpack) = new VectorUnpack(new AttributeValue((yyvsp[-1].attribute)), (yyvsp[0].index)); }
-#line 1895 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1895 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 30:
-#line 261 "ax/axparser.y" /* yacc.c:1648  */
+#line 261 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.vector_unpack) = new VectorUnpack(new LocalValue((yyvsp[-1].local)), (yyvsp[0].index)); }
-#line 1901 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1901 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 31:
-#line 266 "ax/axparser.y" /* yacc.c:1648  */
+#line 266 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = (yyvsp[-1].expression); }
-#line 1907 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1907 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 32:
-#line 273 "ax/axparser.y" /* yacc.c:1648  */
+#line 273 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Cast((yyvsp[0].expression), (yyvsp[-1].value_string)); }
-#line 1913 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1913 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 33:
-#line 278 "ax/axparser.y" /* yacc.c:1648  */
+#line 278 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new FunctionCall((yyvsp[-3].value_string), (yyvsp[-1].expressionlist)); free((char*)(yyvsp[-3].value_string)); }
-#line 1919 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1919 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 34:
-#line 279 "ax/axparser.y" /* yacc.c:1648  */
+#line 279 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new FunctionCall((yyvsp[-2].value_string)); free((char*)(yyvsp[-2].value_string)); }
-#line 1925 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1925 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 35:
-#line 284 "ax/axparser.y" /* yacc.c:1648  */
+#line 284 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expressionlist) = new ExpressionList(); (yyval.expressionlist)->mList.emplace_back((yyvsp[0].expression)); }
-#line 1931 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1931 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 36:
-#line 285 "ax/axparser.y" /* yacc.c:1648  */
+#line 285 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyvsp[-2].expressionlist)->mList.emplace_back((yyvsp[0].expression)); (yyval.expressionlist) = (yyvsp[-2].expressionlist); }
-#line 1937 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1937 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 37:
-#line 292 "ax/axparser.y" /* yacc.c:1648  */
+#line 292 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = new AssignExpression((yyvsp[-2].declare_local), (yyvsp[0].expression)); }
-#line 1943 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1943 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 38:
-#line 293 "ax/axparser.y" /* yacc.c:1648  */
+#line 293 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.statement) = (yyvsp[0].declare_local); }
-#line 1949 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1949 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 39:
-#line 302 "ax/axparser.y" /* yacc.c:1648  */
+#line 302 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].attribute), (yyvsp[0].expression)); }
-#line 1955 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1955 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 40:
-#line 303 "ax/axparser.y" /* yacc.c:1648  */
+#line 303 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].attribute), new BinaryOperator(tokens::PLUS, new AttributeValue((yyvsp[-2].attribute)->copy()), (yyvsp[0].expression))); }
-#line 1961 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1961 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 41:
-#line 304 "ax/axparser.y" /* yacc.c:1648  */
+#line 304 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].attribute), new BinaryOperator(tokens::MINUS, new AttributeValue((yyvsp[-2].attribute)->copy()), (yyvsp[0].expression))); }
-#line 1967 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1967 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 42:
-#line 305 "ax/axparser.y" /* yacc.c:1648  */
+#line 305 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].attribute), new BinaryOperator(tokens::MULTIPLY, new AttributeValue((yyvsp[-2].attribute)->copy()), (yyvsp[0].expression))); }
-#line 1973 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1973 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 43:
-#line 306 "ax/axparser.y" /* yacc.c:1648  */
+#line 306 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].attribute), new BinaryOperator(tokens::DIVIDE, new AttributeValue((yyvsp[-2].attribute)->copy()), (yyvsp[0].expression))); }
-#line 1979 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1979 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 44:
-#line 307 "ax/axparser.y" /* yacc.c:1648  */
+#line 307 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].local), (yyvsp[0].expression)); }
-#line 1985 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1985 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 45:
-#line 308 "ax/axparser.y" /* yacc.c:1648  */
+#line 308 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].local), new BinaryOperator(tokens::PLUS, new LocalValue((yyvsp[-2].local)->copy()), (yyvsp[0].expression))); }
-#line 1991 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1991 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 46:
-#line 309 "ax/axparser.y" /* yacc.c:1648  */
+#line 309 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].local), new BinaryOperator(tokens::MINUS, new LocalValue((yyvsp[-2].local)->copy()), (yyvsp[0].expression))); }
-#line 1997 "ax/axparser.cc" /* yacc.c:1648  */
+#line 1997 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 47:
-#line 310 "ax/axparser.y" /* yacc.c:1648  */
+#line 310 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].local), new BinaryOperator(tokens::MULTIPLY, new LocalValue((yyvsp[-2].local)->copy()), (yyvsp[0].expression))); }
-#line 2003 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2003 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 48:
-#line 311 "ax/axparser.y" /* yacc.c:1648  */
+#line 311 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new AssignExpression((yyvsp[-2].local), new BinaryOperator(tokens::DIVIDE, new LocalValue((yyvsp[-2].local)->copy()), (yyvsp[0].expression))); }
-#line 2009 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2009 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 49:
-#line 322 "ax/axparser.y" /* yacc.c:1648  */
+#line 322 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildAttributeComponentExpression(nullptr, (yyvsp[-3].attribute), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2015 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2015 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 50:
-#line 323 "ax/axparser.y" /* yacc.c:1648  */
+#line 323 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::PLUS), (yyvsp[-3].attribute), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2021 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2021 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 51:
-#line 324 "ax/axparser.y" /* yacc.c:1648  */
+#line 324 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::MINUS), (yyvsp[-3].attribute), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2027 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2027 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 52:
-#line 325 "ax/axparser.y" /* yacc.c:1648  */
+#line 325 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::MULTIPLY), (yyvsp[-3].attribute), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2033 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2033 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 53:
-#line 326 "ax/axparser.y" /* yacc.c:1648  */
+#line 326 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::DIVIDE), (yyvsp[-3].attribute), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2039 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2039 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 54:
-#line 327 "ax/axparser.y" /* yacc.c:1648  */
+#line 327 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildLocalComponentExpression(nullptr, (yyvsp[-3].local), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2045 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2045 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 55:
-#line 328 "ax/axparser.y" /* yacc.c:1648  */
+#line 328 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildLocalComponentExpression(new tokens::OperatorToken(tokens::PLUS), (yyvsp[-3].local), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2051 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2051 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 56:
-#line 329 "ax/axparser.y" /* yacc.c:1648  */
+#line 329 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildLocalComponentExpression(new tokens::OperatorToken(tokens::MINUS), (yyvsp[-3].local), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2057 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2057 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 57:
-#line 330 "ax/axparser.y" /* yacc.c:1648  */
+#line 330 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildLocalComponentExpression(new tokens::OperatorToken(tokens::MULTIPLY), (yyvsp[-3].local), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2063 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2063 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 58:
-#line 331 "ax/axparser.y" /* yacc.c:1648  */
+#line 331 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = buildLocalComponentExpression(new tokens::OperatorToken(tokens::DIVIDE), (yyvsp[-3].local), (yyvsp[-2].index), (yyvsp[0].expression)); }
-#line 2069 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2069 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 59:
-#line 340 "ax/axparser.y" /* yacc.c:1648  */
+#line 340 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[0].attribute), new AttributeValue((yyvsp[0].attribute)->copy()), Crement::Increment, /*post*/false); }
-#line 2075 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2075 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 60:
-#line 341 "ax/axparser.y" /* yacc.c:1648  */
+#line 341 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[0].attribute), new AttributeValue((yyvsp[0].attribute)->copy()), Crement::Decrement, /*post*/false); }
-#line 2081 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2081 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 61:
-#line 342 "ax/axparser.y" /* yacc.c:1648  */
+#line 342 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[-1].attribute), new AttributeValue((yyvsp[-1].attribute)->copy()), Crement::Increment, /*post*/true); }
-#line 2087 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2087 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 62:
-#line 343 "ax/axparser.y" /* yacc.c:1648  */
+#line 343 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[-1].attribute), new AttributeValue((yyvsp[-1].attribute)->copy()), Crement::Decrement, /*post*/true); }
-#line 2093 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2093 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 63:
-#line 344 "ax/axparser.y" /* yacc.c:1648  */
+#line 344 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[0].local), new LocalValue((yyvsp[0].local)->copy()), Crement::Increment, /*post*/false); }
-#line 2099 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2099 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 64:
-#line 345 "ax/axparser.y" /* yacc.c:1648  */
+#line 345 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[0].local), new LocalValue((yyvsp[0].local)->copy()), Crement::Decrement, /*post*/false); }
-#line 2105 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2105 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 65:
-#line 346 "ax/axparser.y" /* yacc.c:1648  */
+#line 346 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[-1].local), new LocalValue((yyvsp[-1].local)->copy()), Crement::Increment, /*post*/true); }
-#line 2111 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2111 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 66:
-#line 347 "ax/axparser.y" /* yacc.c:1648  */
+#line 347 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new Crement((yyvsp[-1].local), new LocalValue((yyvsp[-1].local)->copy()), Crement::Decrement, /*post*/true); }
-#line 2117 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2117 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 67:
-#line 352 "ax/axparser.y" /* yacc.c:1648  */
+#line 352 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new UnaryOperator(tokens::PLUS, (yyvsp[0].expression)); }
-#line 2123 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2123 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 68:
-#line 353 "ax/axparser.y" /* yacc.c:1648  */
+#line 353 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new UnaryOperator(tokens::MINUS, (yyvsp[0].expression)); }
-#line 2129 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2129 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 69:
-#line 354 "ax/axparser.y" /* yacc.c:1648  */
+#line 354 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new UnaryOperator(tokens::BITNOT, (yyvsp[0].expression)); }
-#line 2135 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2135 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 70:
-#line 355 "ax/axparser.y" /* yacc.c:1648  */
+#line 355 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new UnaryOperator(tokens::NOT, (yyvsp[0].expression)); }
-#line 2141 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2141 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 71:
-#line 361 "ax/axparser.y" /* yacc.c:1648  */
+#line 361 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::PLUS, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2147 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2147 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 72:
-#line 362 "ax/axparser.y" /* yacc.c:1648  */
+#line 362 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::MINUS, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2153 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2153 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 73:
-#line 363 "ax/axparser.y" /* yacc.c:1648  */
+#line 363 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::MULTIPLY, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2159 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2159 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 74:
-#line 364 "ax/axparser.y" /* yacc.c:1648  */
+#line 364 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::DIVIDE, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2165 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2165 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 75:
-#line 365 "ax/axparser.y" /* yacc.c:1648  */
+#line 365 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::MODULO, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2171 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2171 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 76:
-#line 366 "ax/axparser.y" /* yacc.c:1648  */
+#line 366 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::BITAND, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2177 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2177 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 77:
-#line 367 "ax/axparser.y" /* yacc.c:1648  */
+#line 367 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::BITOR, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2183 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2183 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 78:
-#line 368 "ax/axparser.y" /* yacc.c:1648  */
+#line 368 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::BITXOR, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2189 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2189 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 79:
-#line 369 "ax/axparser.y" /* yacc.c:1648  */
+#line 369 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::AND, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2195 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2195 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 80:
-#line 370 "ax/axparser.y" /* yacc.c:1648  */
+#line 370 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::OR, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2201 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2201 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 81:
-#line 371 "ax/axparser.y" /* yacc.c:1648  */
+#line 371 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::EQUALSEQUALS, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2207 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2207 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 82:
-#line 372 "ax/axparser.y" /* yacc.c:1648  */
+#line 372 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::NOTEQUALS, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2213 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2213 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 83:
-#line 373 "ax/axparser.y" /* yacc.c:1648  */
+#line 373 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::MORETHAN, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2219 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2219 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 84:
-#line 374 "ax/axparser.y" /* yacc.c:1648  */
+#line 374 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::LESSTHAN, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2225 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2225 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 85:
-#line 375 "ax/axparser.y" /* yacc.c:1648  */
+#line 375 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::MORETHANOREQUAL, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2231 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2231 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 86:
-#line 376 "ax/axparser.y" /* yacc.c:1648  */
+#line 376 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.expression) = new BinaryOperator(tokens::LESSTHANOREQUAL, (yyvsp[-2].expression), (yyvsp[0].expression)); }
-#line 2237 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2237 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 87:
-#line 381 "ax/axparser.y" /* yacc.c:1648  */
+#line 381 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new VectorPack((yyvsp[-5].expression), (yyvsp[-3].expression), (yyvsp[-1].expression)); }
-#line 2243 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2243 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 88:
-#line 386 "ax/axparser.y" /* yacc.c:1648  */
+#line 386 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), (yyvsp[-2].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2249 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2249 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 89:
-#line 387 "ax/axparser.y" /* yacc.c:1648  */
+#line 387 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), (yyvsp[-2].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2255 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2255 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 90:
-#line 388 "ax/axparser.y" /* yacc.c:1648  */
+#line 388 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), openvdb::typeNameAsString<int32_t>()); free((char*)(yyvsp[0].value_string)); }
-#line 2261 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2261 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 91:
-#line 389 "ax/axparser.y" /* yacc.c:1648  */
+#line 389 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), openvdb::typeNameAsString<float>()); free((char*)(yyvsp[0].value_string)); }
-#line 2267 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2267 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 92:
-#line 390 "ax/axparser.y" /* yacc.c:1648  */
+#line 390 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), openvdb::typeNameAsString<openvdb::Vec3s>()); free((char*)(yyvsp[0].value_string)); }
-#line 2273 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2273 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 93:
-#line 391 "ax/axparser.y" /* yacc.c:1648  */
+#line 391 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), openvdb::typeNameAsString<std::string>()); free((char*)(yyvsp[0].value_string)); }
-#line 2279 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2279 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 94:
-#line 392 "ax/axparser.y" /* yacc.c:1648  */
+#line 392 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), openvdb::typeNameAsString<std::string>()); free((char*)(yyvsp[0].value_string)); }
-#line 2285 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2285 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 95:
-#line 393 "ax/axparser.y" /* yacc.c:1648  */
+#line 393 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.attribute) = new Attribute((yyvsp[0].value_string), openvdb::typeNameAsString<float>(), true); free((char*)(yyvsp[0].value_string)); }
-#line 2291 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2291 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 96:
-#line 398 "ax/axparser.y" /* yacc.c:1648  */
+#line 398 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.declare_local) = new DeclareLocal((yyvsp[0].value_string), (yyvsp[-1].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2297 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2297 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 97:
-#line 399 "ax/axparser.y" /* yacc.c:1648  */
+#line 399 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.declare_local) = new DeclareLocal((yyvsp[0].value_string), (yyvsp[-1].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2303 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2303 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 98:
-#line 400 "ax/axparser.y" /* yacc.c:1648  */
+#line 400 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.declare_local) = new DeclareLocal((yyvsp[0].value_string), openvdb::typeNameAsString<std::string>()); free((char*)(yyvsp[0].value_string)); }
-#line 2309 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2309 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 99:
-#line 407 "ax/axparser.y" /* yacc.c:1648  */
+#line 407 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.local) = new Local((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2315 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2315 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 100:
-#line 414 "ax/axparser.y" /* yacc.c:1648  */
+#line 414 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<int16_t>((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2321 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2321 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 101:
-#line 415 "ax/axparser.y" /* yacc.c:1648  */
+#line 415 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<int32_t>((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2327 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2327 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 102:
-#line 416 "ax/axparser.y" /* yacc.c:1648  */
+#line 416 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<int64_t>((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2333 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2333 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 103:
-#line 417 "ax/axparser.y" /* yacc.c:1648  */
+#line 417 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<float>((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2339 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2339 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 104:
-#line 418 "ax/axparser.y" /* yacc.c:1648  */
+#line 418 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<double>((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2345 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2345 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 105:
-#line 419 "ax/axparser.y" /* yacc.c:1648  */
+#line 419 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<std::string>((yyvsp[0].value_string)); free((char*)(yyvsp[0].value_string)); }
-#line 2351 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2351 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 106:
-#line 420 "ax/axparser.y" /* yacc.c:1648  */
+#line 420 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<bool>(true); }
-#line 2357 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2357 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 107:
-#line 421 "ax/axparser.y" /* yacc.c:1648  */
+#line 421 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value) = new Value<bool>(false); }
-#line 2363 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2363 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 108:
-#line 426 "ax/axparser.y" /* yacc.c:1648  */
+#line 426 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.index) = 0; }
-#line 2369 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2369 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 109:
-#line 427 "ax/axparser.y" /* yacc.c:1648  */
+#line 427 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.index) = 1; }
-#line 2375 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2375 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 110:
-#line 428 "ax/axparser.y" /* yacc.c:1648  */
+#line 428 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.index) = 2; }
-#line 2381 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2381 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 111:
-#line 434 "ax/axparser.y" /* yacc.c:1648  */
+#line 434 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<bool>(); }
-#line 2387 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2387 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 112:
-#line 435 "ax/axparser.y" /* yacc.c:1648  */
+#line 435 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<int16_t>(); }
-#line 2393 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2393 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 113:
-#line 436 "ax/axparser.y" /* yacc.c:1648  */
+#line 436 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<int32_t>(); }
-#line 2399 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2399 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 114:
-#line 437 "ax/axparser.y" /* yacc.c:1648  */
+#line 437 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<int64_t>(); }
-#line 2405 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2405 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 115:
-#line 438 "ax/axparser.y" /* yacc.c:1648  */
+#line 438 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<float>(); }
-#line 2411 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2411 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 116:
-#line 439 "ax/axparser.y" /* yacc.c:1648  */
+#line 439 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<double>(); }
-#line 2417 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2417 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 117:
-#line 445 "ax/axparser.y" /* yacc.c:1648  */
+#line 445 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<openvdb::Vec3i>(); }
-#line 2423 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2423 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 118:
-#line 446 "ax/axparser.y" /* yacc.c:1648  */
+#line 446 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<openvdb::Vec3s>(); }
-#line 2429 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2429 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
   case 119:
-#line 447 "ax/axparser.y" /* yacc.c:1648  */
+#line 447 "grammar/axparser.y" /* yacc.c:1648  */
     { (yyval.value_string) = openvdb::typeNameAsString<openvdb::Vec3d>(); }
-#line 2435 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2435 "grammar/axparser.cc" /* yacc.c:1648  */
     break;
 
 
-#line 2439 "ax/axparser.cc" /* yacc.c:1648  */
+#line 2439 "grammar/axparser.cc" /* yacc.c:1648  */
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -2669,7 +2669,7 @@ yyreturn:
 #endif
   return yyresult;
 }
-#line 449 "ax/axparser.y" /* yacc.c:1907  */
+#line 449 "grammar/axparser.y" /* yacc.c:1907  */
 
 
 // Copyright (c) 2015-2018 DNEG Visual Effects

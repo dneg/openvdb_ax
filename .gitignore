@@ -1,0 +1,17 @@
+# Compiled Object Files
+*.o
+
+# Compiled Dynamic libraries
+*.so
+*.so.*
+
+# Executables
+openvdb_ax/vdb_ax
+openvdb_ax/vdb_test
+
+# Dependencies
+openvdb_ax/dependencies
+
+# Doxygen
+openvdb_ax/doc/html
+openvdb_ax/doc/latex
