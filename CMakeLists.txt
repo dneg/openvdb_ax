@@ -24,49 +24,44 @@
 # IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
 # LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 #
-cmake_minimum_required(VERSION 3.1)
-PROJECT ( OpenVDB_AX )
+cmake_minimum_required( VERSION 3.1 )
+project ( OpenVDB_AX )
 
-ENABLE_TESTING()
+enable_testing()
 
-find_program(CCACHE_FOUND ccache)
-if(CCACHE_FOUND)
+find_program ( CCACHE_FOUND ccache )
+if (CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-endif(CCACHE_FOUND)
+endif (CCACHE_FOUND)
 
-OPTION ( OPENVDB_AX_BUILD_AX "Build the OpenVDB AX compiler" ON )
-OPTION ( OPENVDB_AX_BUILD_UNITTESTS "Build the OpenVDB AX unit tests" ON )
-OPTION ( OPENVDB_AX_BUILD_DOCS "Build the OpenVDB AX documentation" ON )
-OPTION ( OPENVDB_AX_ENABLE_RPATH "Build with RPATH information" ON )
-OPTION ( OPENVDB_AX_ENABLE_3_ABI_COMPATIBLE "Build with OpenVDB v3 ABI" ON )
-OPTION ( OPENVDB_AX_DISABLE_BOOST_IMPLICIT_LINKING "Disable the implicit linking of Boost libraries on Windows" ON )
-# OPTION ( OPENVDB_AX_BUILD_HOUDINI_SOP "Build the AX Houdini SOP" OFF )
+option ( OPENVDB_AX_BUILD_AX "Build the OpenVDB AX compiler" ON )
+option ( OPENVDB_AX_BUILD_UNITTESTS "Build the OpenVDB AX unit tests" OFF )
+option ( OPENVDB_AX_BUILD_DOCS "Build the OpenVDB AX documentation" OFF )
+option ( OPENVDB_AX_ENABLE_RPATH "Build with RPATH information" ON )
+option ( OPENVDB_AX_DISABLE_BOOST_IMPLICIT_LINKING "Disable the implicit linking of Boost libraries on Windows" ON )
+option ( OPENVDB_AX_BUILD_HOUDINI_SOP "Build the OpenVDB AX Houdini SOP" OFF )
 
-SET ( OPENVDB_ABI_VERSION_NUMBER "" CACHE STRING "build for compatibility
-with version N of the OpenVDB Grid ABI, where N is 2, 3, 4, etc.
-(some newer features will be disabled)")
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" )
 
-LIST(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set ( OPENVDB_AX_TOP_LEVEL_DIR ${PROJECT_SOURCE_DIR} CACHE PATH "OpenVDB AX Top Level Directory to share among sub projects" )
 
-SET ( OPENVDB_AX_TOP_LEVEL_DIR ${PROJECT_SOURCE_DIR} CACHE PATH "OpenVDB AX Top Level Directory to share among sub projects" )
+include_directories ( ${OPENVDB_AX_TOP_LEVEL_DIR} ) # To make sure we pick up headers from this version of OpenVDB AX we are building
 
-INCLUDE_DIRECTORIES ( ${OPENVDB_AX_TOP_LEVEL_DIR} ) # To make sure we pick up headers from this version of OpenVDB we are building
+# Check ABI has been provided
+
 IF ( ${OPENVDB_ABI_VERSION_NUMBER} )
-  MESSAGE( STATUS "Using openvdb abi version ${OPENVDB_ABI_VERSION_NUMBER}")
-
-  ADD_DEFINITIONS (-DOPENVDB_ABI_VERSION_NUMBER=${OPENVDB_ABI_VERSION_NUMBER} )
-ELSEIF ( OPENVDB_ENABLE_3_ABI_COMPATIBLE )
-
-  MESSAGE( DEPRECATION "OPENVDB_ENABLE_3_ABI_COMPATIBLE is deprecated. Instead use OPENVDB_ABI_VERSION_NUMBER=N, where N is the abi version.")
-
-  ADD_DEFINITIONS ( -DOPENVDB_3_ABI_COMPATIBLE )
+  MESSAGE ( STATUS "OpenVDB ABI version: ${OPENVDB_ABI_VERSION_NUMBER}")
+  add_definitions (-DOPENVDB_ABI_VERSION_NUMBER=${OPENVDB_ABI_VERSION_NUMBER} )
+ELSE ()
+    MESSAGE ( FATAL_ERROR "An OpenVDB ABI Version must be provided.\n"
+        "e.g. -D OPENVDB_ABI_VERSION_NUMBER=3" )
 ENDIF ()
 
-IF ( OPENVDB_AX_BUILD_AX )
+if ( OPENVDB_AX_BUILD_AX )
   ADD_SUBDIRECTORY ( openvdb_ax )
-ENDIF ()
+endif ()
 
-# IF ( OPENVDB_AX_BUILD_HOUDINI_SOP )
-#   ADD_SUBDIRECTORY ( openvdb_ax_houdini )
-# ENDIF ()
+if ( OPENVDB_AX_BUILD_HOUDINI_SOP )
+  ADD_SUBDIRECTORY ( openvdb_ax_houdini )
+endif ()

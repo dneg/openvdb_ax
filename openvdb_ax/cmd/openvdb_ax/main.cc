@@ -144,9 +144,6 @@ void printFunctions(std::ostream& os)
 
     for (const auto& iter : reg->map()) {
 
-        // don't print out the scale function as it needs the matrix definition from
-        // the ToLLVM.cc module (and will seg fault)
-        if (iter.first == "scale") continue;
         if (iter.second.isInternal()) continue;
 
         os << iter.first << std::endl << "|" << std::endl;

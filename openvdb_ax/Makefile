@@ -61,8 +61,8 @@
 # The following variables must be defined, either here or on the command line
 # (e.g., "make install DESTDIR=/usr/local"):
 #
-# Note that if you plan to build the Houdini OpenVDB tools (distributed
-# separately), you must build the OpenVDB AX library and the Houdini tools
+# Note that if you plan to build the Houdini OpenVDB AX tool (distributed
+# separately), you must build the OpenVDB AX library and the OpenVDB Houdini tools
 # against compatible versions of the Boost, OpenEXR and TBB libraries.
 # Fortunately, all three are included in the Houdini HDK, so the relevant
 # variables below point by default to the HDK library and header directories:

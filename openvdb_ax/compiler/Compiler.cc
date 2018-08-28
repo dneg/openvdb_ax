@@ -367,12 +367,9 @@ registerAccesses(const codegen::SymbolTable& globals, const ast::Tree& tree)
         const std::string& token = global.first;
         if (!codegen::isGlobalAttributeAccess(token, name, type)) continue;
 
-        // select whether we are writing to this attribute. matrices
-        // must always create write handles as their only use case is
-        // with the scale() function which takes the handle as an argument
+        // select whether we are writing to this attribute.
 
         bool write = targets.count(name);
-        if (type == "mat4s") write = true;
 
         // add the access to the registry - this will force the executables
         // to always request or create the data type

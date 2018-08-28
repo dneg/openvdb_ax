@@ -20,7 +20,6 @@ This page holds the full list of functions  currently supported by OpenVDB AX.
 	- @ref subsecCos
 	- @ref subsecCosh
 	- @ref subsecCross
-	- @ref subsecCurlnoise
 	- @ref subsecDeletepoint
 	- @ref subsecDot
 	- @ref subsecExp
@@ -42,7 +41,6 @@ This page holds the full list of functions  currently supported by OpenVDB AX.
 	- @ref subsecLookupvec3f
 	- @ref subsecMax
 	- @ref subsecMin
-	- @ref subsecNoise
 	- @ref subsecNormalize
 	- @ref subsecPow
 	- @ref subsecPrint
@@ -130,11 +128,6 @@ Computes the cross product of two vectors
   - vec3d cross(vec3d, vec3d)
   - vec3f cross(vec3f, vec3f)
   - vec3i cross(vec3i, vec3i)
-
-@subsection subsecCurlnoise curlnoise
-Generates divergence-free 3D noise, computed using a curl function on standard Perlin Noise.
-  - vec3d curlnoise(vec3d)
-  - vec3d curlnoise(double, double, double)
 
 @subsection subsecDeletepoint deletepoint
 Delete the current point from the point set. Note that this does not stop AX execution - any
@@ -245,13 +238,6 @@ Returns the smaller of the given values.
   - double min(double, double)
   - float min(float, float)
   - int min(int, int)
-
-@subsection subsecNoise noise
-Compute perlin noise at coordinates x, y and z. 0.0f is taken for any coordinates are not provided.
-  - double noise(double)
-  - double noise(double, double)
-  - double noise(double, double, double)
-  - double noise(vec3d)
 
 @subsection subsecNormalize normalize
 Returns the normalized result of the given vector.

@@ -26,39 +26,49 @@
 #
 
 # -*- cmake -*-
-# - Find OpenVDB AX
+# - Find OpenVDB Houdini
 #
-# Author : Nick Avramoussis
+# Author : Richard Jones
 #
-# OpenVDB_AX_FOUND         Set if OpenVDB AX is found.
-# OpenVDB_AX_INCLUDE_DIR   OpenVDB AX's include directory
-# OpenVDB_AX_LIBRARY_DIR   OpenVDB AX's library directory
-# OpenVDB_AX_LIBRARY       OpenVDB AX's library
+# OPENVDB_HOUDINI_FOUND               Set if OpenVDB Houdini is found.
+# OPENVDB_HOUDINI_INCLUDE_DIR         OpenVDB Houdini's include directory
+# OPENVDB_HOUDINI_UTILS_INCLUDE_DIR   OpenVDB Houdini's Utils include directory
+# OPENVDB_HOUDINI_LIBRARY_DIR         OpenVDB Houdini's library directory
+# OPENVDB_HOUDINI_LIBRARY             OpenVDB Houdini's library
 #
 
-FIND_PACKAGE( PackageHandleStandardArgs )
+find_package( PackageHandleStandardArgs )
 
-FIND_PATH( OPENVDB_AX_LOCATION include/openvdb_ax/
-  "$ENV{OPENVDB_AX_ROOT}"
+find_path( OPENVDB_HOUDINI_LOCATION include/openvdb_houdini/
+  "$ENV{OPENVDB_HOUDINI_ROOT}"
   NO_DEFAULT_PATH
   NO_SYSTEM_ENVIRONMENT_PATH
   )
 
-FIND_PACKAGE_HANDLE_STANDARD_ARGS( OpenVDB_AX
-  REQUIRED_VARS OPENVDB_AX_LOCATION
+find_path( OPENVDB_HOUDINI_UTILS_LOCATION include/houdini_utils/
+  "$ENV{OPENVDB_HOUDINI_ROOT}"
+  NO_DEFAULT_PATH
+  NO_SYSTEM_ENVIRONMENT_PATH
   )
 
-IF( OpenVDB_AX_FOUND )
-  SET( OpenVDB_AX_INCLUDE_DIR ${OPENVDB_AX_LOCATION}/include
+find_package_handle_standard_args( OpenVDB_Houdini
+  REQUIRED_VARS OPENVDB_HOUDINI_LOCATION
+  )
+
+if( OPENVDB_HOUDINI_FOUND )
+  set( OPENVDB_HOUDINI_INCLUDE_DIR ${OPENVDB_HOUDINI_LOCATION}/include
     CACHE PATH "OpenVDB include directory")
 
-  SET( OpenVDB_AX_LIBRARY_DIR ${OPENVDB_AX_LOCATION}/lib
-    CACHE PATH "OpenVDB library directory" )
+  set( OPENVDB_HOUDINI_UTILS_INCLUDE_DIR ${OPENVDB_HOUDINI_UTILS_LOCATION}/include
+    CACHE PATH "OpenVDB Houdini Utils include directory")
 
-  FIND_LIBRARY( OpenVDB_AX_LIBRARY openvdb_ax
-    PATHS ${OpenVDB_AX_LIBRARY_DIR}
+  set( OPENVDB_HOUDINI_LIBRARY_DIR ${OPENVDB_HOUDINI_LOCATION}/lib
+    CACHE PATH "OpenVDB Houdini library directory" )
+
+  find_library( OPENVDB_HOUDINI_LIBRARY openvdb_houdini
+    PATHS ${OPENVDB_HOUDINI_LIBRARY_DIR}
     NO_DEFAULT_PATH
     NO_SYSTEM_ENVIRONMENT_PATH
     )
 
-ENDIF( OpenVDB_AX_FOUND )
+endif( OPENVDB_HOUDINI_FOUND )
