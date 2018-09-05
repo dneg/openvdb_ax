@@ -46,8 +46,6 @@
 #include <openvdb_ax/compiler/PointExecutable.h>
 #include <openvdb_ax/compiler/VolumeExecutable.h>
 
-#include <openvdb_ax/deprecated/tools.h>
-
 #include <houdini_utils/ParmFactory.h>
 #include <houdini_utils/geometry.h>
 #include <openvdb_houdini/Utils.h>
@@ -529,12 +527,6 @@ SOP_OpenVDB_AX::cookVDBSop(OP_Context& context)
 
                 mCompilerCache.mRequiresDeletion =
                     openvdb::ax::ast::callsFunction(*mCompilerCache.mSyntaxTree, "deletepoint");
-
-                if (openvdb::ax::deprecated::usesOldStyleDeadGroup(*mCompilerCache.mSyntaxTree)) {
-                    addWarning(SOP_MESSAGE, "AX SOP uses old style \"addtogroup(\"dead\")\" function for "
-                        "deleting points. Use the deletepoint() function instead.");
-                    mCompilerCache.mRequiresDeletion = true;
-                }
 
                 mCompilerCache.mPointExecutable =
                     mCompilerCache.mCompiler->compile<ax::PointExecutable>
