@@ -71,7 +71,7 @@ ENDIF ()
 INCLUDE_DIRECTORIES ( SYSTEM ${ILMBASE_INCLUDE_DIRS} )
 INCLUDE_DIRECTORIES ( SYSTEM ${LLVM_INCLUDE_DIR} )
 
-INCLUDE_DIRECTORIES ( . )
+INCLUDE_DIRECTORIES ( ${PROJECT_SOURCE_DIR} )
 
 IF (WIN32)
   # Because of implicit linking!
@@ -147,8 +147,6 @@ SET_TARGET_PROPERTIES(
   openvdb_ax_shared
   PROPERTIES
   OUTPUT_NAME openvdb_ax
-  SOVERSION ${OPENVDB_MAJOR_VERSION_NUMBER}.${OPENVDB_MINOR_VERSION_NUMBER}
-  VERSION ${OPENVDB_MAJOR_VERSION_NUMBER}.${OPENVDB_MINOR_VERSION_NUMBER}.${OPENVDB_PATCH_VERSION_NUMBER}
   )
 
 SET ( VDB_AX_SOURCE_FILES  cmd/openvdb_ax/main.cc )
@@ -215,6 +213,10 @@ SET_SOURCE_FILES_PROPERTIES ( ${TEST_SOURCE_FILES}
 
 IF ( OPENVDB_AX_BUILD_UNITTESTS )
 
+  # this copies the AX snippets into the build directory so that the test executable
+  # can find them correctly
+  EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/snippets ${CMAKE_CURRENT_BINARY_DIR}/test/snippets)
+
   ADD_EXECUTABLE ( vdb_ax_test
     ${TEST_SOURCE_FILES}
     )
@@ -243,7 +245,7 @@ IF (OPENVDB_AX_BUILD_DOCS)
     )
 
   INSTALL ( CODE "EXECUTE_PROCESS(COMMAND \"${CMAKE_COMMAND}\" --build  \"${PROJECT_BINARY_DIR}\" --target doc)")
-  INSTALL ( DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doc/html DESTINATION docs)
+  INSTALL ( DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/doc/html DESTINATION share/docs/openvdb_ax)
 
 ENDIF ()
 
@@ -274,9 +276,42 @@ ELSE()
     )
 ENDIF ()
 
-INSTALL ( DIRECTORY ${PROJECT_SOURCE_DIR} DESTINATION include
-  FILES_MATCHING PATTERN "*.h"
-  PATTERN "python" EXCLUDE
-  PATTERN "cmd" EXCLUDE
-  PATTERN "doc" EXCLUDE
-  )
+# install headers
+# todo: can this be done without splitting these into multiple lists manually?
+
+SET ( OPENVDB_AX_AST_INCLUDE_FILES
+  ast/AST.h
+  ast/Literals.h
+  ast/PrintTree.h
+  ast/Scanners.h
+  ast/Tokens.h
+)
+
+SET ( OPENVDB_AX_CODEGEN_INCLUDE_FILES
+  codegen/ComputeGenerator.h
+  codegen/FunctionRegistry.h
+  codegen/FunctionTypes.h
+  codegen/Functions.h
+  codegen/LeafLocalData.h
+  codegen/PointComputeGenerator.h
+  codegen/PointFunctions.h
+  codegen/SymbolTable.h
+  codegen/Types.h
+  codegen/Utils.h
+  codegen/VolumeComputeGenerator.h
+  codegen/VolumeFunctions.h
+)
+
+SET ( OPENVDB_AX_COMPILER_INCLUDE_FILES
+  compiler/Compiler.h
+  compiler/CompilerOptions.h
+  compiler/CustomData.h
+  compiler/TargetRegistry.h
+  compiler/PointExecutable.h
+  compiler/VolumeExecutable.h
+)
+
+INSTALL (FILES Exceptions.h DESTINATION include/openvdb_ax/)
+INSTALL (FILES ${OPENVDB_AX_AST_INCLUDE_FILES} DESTINATION include/openvdb_ax/ast)
+INSTALL (FILES ${OPENVDB_AX_CODEGEN_INCLUDE_FILES} DESTINATION include/openvdb_ax/codegen)
+INSTALL (FILES ${OPENVDB_AX_COMPILER_INCLUDE_FILES} DESTINATION include/openvdb_ax/compiler)
