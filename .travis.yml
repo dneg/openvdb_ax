@@ -1,0 +1,88 @@
+# Copyright (c) 2015-2018 DNEG Visual Effects
+#
+# All rights reserved. This software is distributed under the
+# Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
+#
+# Redistributions of source code must retain the above copyright
+# and license notice and the following restrictions and disclaimer.
+#
+# *     Neither the name of DNEG Visual Effects nor the names
+# of its contributors may be used to endorse or promote products derived
+# from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
+# LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
+#
+#
+# Travis yaml script to configure continous integration
+#
+# Author: Matt Warner
+
+os: linux
+
+sudo: required
+dist: trusty
+
+language: cpp
+
+compiler: gcc
+
+addons:
+  apt:
+    sources:
+    # Required for LLVM 5.0.
+    - llvm-toolchain-trusty-5.0
+    packages:
+    - cmake
+    - doxygen
+    - libboost-iostreams1.55-dev
+    - libboost-random1.55-dev
+    - libboost-system1.55-dev
+    - libboost-thread1.55-dev
+    - libcppunit-dev
+    - libghc-zlib-dev
+    - libilmbase-dev
+    - libllvm5.0
+    - libopenexr-dev
+    - libtbb-dev
+    - llvm-5.0
+    - llvm-5.0-dev
+    # Required for vdb_view. TODO: Improve OpenVDB CMake to allow
+    # building of OpenVDB core library without vdb_view.
+    - libglfw-dev
+    - libxcursor-dev
+    - libxi-dev
+    - libxinerama-dev
+    - libxrandr-dev
+
+
+before_install:
+    # TODO: Investigate why OpenVDB's CMake excludes system paths
+    # as this wouldn't be required otherwise
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libHalf.a /usr/lib/libHalf.a
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libHalf.so /usr/lib/libHalf.so
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIex.a /usr/lib/libIex.a
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIex.so /usr/lib/libIex.so
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmImf.a /usr/lib/libIlmImf.a
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmImf.so /usr/lib/libIlmImf.so
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmThread.a /usr/lib/libIlmThread.a
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmThread.so /usr/lib/libIlmThread.so
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libImath.a /usr/lib/libImath.a
+    - sudo ln -s /usr/lib/x86_64-linux-gnu/libImath.so /usr/lib/libImath.so
+
+install:
+    - travis/install-blosc.sh
+    - travis/install-openvdb.sh
+
+script: travis/install.sh
