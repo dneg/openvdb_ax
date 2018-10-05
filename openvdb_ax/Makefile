@@ -258,6 +258,7 @@ ifdef LINUX
 endif
 
 INCLUDE_NAMES := Exceptions.h \
+                 version.h \
                  ast/AST.h \
                  ast/Literals.h \
                  ast/PrintTree.h \
@@ -265,9 +266,8 @@ INCLUDE_NAMES := Exceptions.h \
                  ast/Tokens.h \
                  codegen/ComputeGenerator.h \
                  codegen/FunctionRegistry.h \
-                 codegen/FunctionTypes.h \
                  codegen/Functions.h \
-                 codegen/LeafLocalData.h \
+                 codegen/FunctionTypes.h \
                  codegen/PointComputeGenerator.h \
                  codegen/PointFunctions.h \
                  codegen/SymbolTable.h \
@@ -278,8 +278,9 @@ INCLUDE_NAMES := Exceptions.h \
                  compiler/Compiler.h \
                  compiler/CompilerOptions.h \
                  compiler/CustomData.h \
-                 compiler/TargetRegistry.h \
+                 compiler/LeafLocalData.h \
                  compiler/PointExecutable.h \
+                 compiler/TargetRegistry.h \
                  compiler/VolumeExecutable.h \
 #
 
@@ -372,12 +373,12 @@ ALL_SRC_FILES := $(SRC_FILES)
 OBJ_NAMES := $(SRC_NAMES:.cc=.o)
 TEST_OBJ_NAMES := $(TEST_SRC_NAMES:.cc=.o)
 
-LIB_MAJOR_VERSION=$(shell grep 'define OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER ' \
-    $(OPENVDB_INCL_DIR)/openvdb/version.h | sed 's/[^0-9]*//g')
-LIB_MINOR_VERSION=$(shell grep 'define OPENVDB_LIBRARY_MINOR_VERSION_NUMBER ' \
-    $(OPENVDB_INCL_DIR)/openvdb/version.h | sed 's/[^0-9]*//g')
-LIB_PATCH_VERSION=$(shell grep 'define OPENVDB_LIBRARY_PATCH_VERSION_NUMBER ' \
-    $(OPENVDB_INCL_DIR)/openvdb/version.h | sed 's/[^0-9]*//g')
+LIB_MAJOR_VERSION=$(shell grep 'define OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER ' \
+    version.h | sed 's/[^0-9]*//g')
+LIB_MINOR_VERSION=$(shell grep 'define OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER ' \
+    version.h | sed 's/[^0-9]*//g')
+LIB_PATCH_VERSION=$(shell grep 'define OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER ' \
+    version.h | sed 's/[^0-9]*//g')
 
 LIB_VERSION=$(LIB_MAJOR_VERSION).$(LIB_MINOR_VERSION).$(LIB_PATCH_VERSION)
 SO_VERSION=$(LIB_MAJOR_VERSION).$(LIB_MINOR_VERSION)
@@ -420,7 +421,7 @@ ALL_PRODUCTS := \
 
 .SUFFIXES: .o .cc
 
-.PHONY: all clean depend .depend doc install lib pdfdoc test grammar
+.PHONY: all clean depend doc install lib pdfdoc test grammar
 
 .cc.o:
 	@echo "Building $@ because of $(call list_deps)"
@@ -556,7 +557,7 @@ install: install_lib vdb_ax doc
 # containing a rule for each *.o file.  Consider generating a separate
 # dependency file for each *.o file instead.
 
-.depend: $(ALL_INCLUDE_FILES) $(ALL_SRC_FILES)
+depend: $(ALL_INCLUDE_FILES) $(ALL_SRC_FILES)
 	@echo "Generating dependencies because of $(list_deps)"
 	$(RM) $(DEPEND)
 	for f in $(SRC_NAMES) $(CMD_SRC_NAMES); \
@@ -571,8 +572,6 @@ install: install_lib vdb_ax doc
 				-isystem $(CPPUNIT_INCL_DIR) >> $(DEPEND); \
 		done; \
 	fi
-
-depend: .depend
 
 # Compile an implicit translation unit for each header to identify any indirect includes
 HEADER_TEST_CXXFLAGS := $(CXXFLAGS)

@@ -58,6 +58,7 @@ class CustomData
 public:
 
     using Ptr = std::shared_ptr<CustomData>;
+    using ConstPtr = std::shared_ptr<const CustomData>;
     using UniquePtr = std::unique_ptr<CustomData>;
 
     CustomData() : mData() {}

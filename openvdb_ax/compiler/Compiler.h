@@ -111,7 +111,7 @@ public:
     template <typename ExecutableT>
     typename ExecutableT::Ptr
     compile(const ast::Tree& syntaxTree,
-            const CustomData::Ptr& data,
+            const CustomData::Ptr data = CustomData::Ptr(),
             std::vector<std::string>* compilerErrors = nullptr);
 
     /// @brief Compile/build a given snippet of AX code into an executable object of the given type.
@@ -124,7 +124,7 @@ public:
     template <typename ExecutableT>
     typename ExecutableT::Ptr
     compile(const std::string& code,
-            const CustomData::Ptr& data,
+            const CustomData::Ptr data = CustomData::Ptr(),
             std::vector<std::string>* compilerErrors = nullptr)
     {
         ast::Tree::Ptr syntaxTree = mParser(code.c_str());

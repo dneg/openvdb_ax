@@ -33,13 +33,26 @@ IF (NOT WIN32)
   FIND_PACKAGE ( Threads REQUIRED )
 ENDIF()
 
-# Determine OpenVDB version
-FIND_PACKAGE ( OpenVDB REQUIRED )
+# Determine OpenVDB AX version
 
-# Set the variables that are otherwise defined in the core module.
-SET ( OPENVDB_MAJOR_VERSION_NUMBER ${OpenVDB_MAJOR_VERSION} )
-SET ( OPENVDB_MINOR_VERSION_NUMBER ${OpenVDB_MINOR_VERSION} )
-SET ( OPENVDB_PATCH_VERSION_NUMBER ${OpenVDB_PATCH_VERSION} )
+SET( OPENVDB_AX_VERSION_FILE ${CMAKE_CURRENT_SOURCE_DIR}/version.h )
+
+FILE( STRINGS "${OPENVDB_AX_VERSION_FILE}" openvdb_ax_major_version_str REGEX "^#define[\t ]+OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER[\t ]+.*")
+FILE( STRINGS "${OPENVDB_AX_VERSION_FILE}" openvdb_ax_minor_version_str REGEX "^#define[\t ]+OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER[\t ]+.*")
+FILE( STRINGS "${OPENVDB_AX_VERSION_FILE}" openvdb_ax_patch_version_str REGEX "^#define[\t ]+OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER[\t ]+.*")
+
+STRING( REGEX REPLACE "^.*OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER[\t ]+([0-9]*).*$" "\\1"
+_openvdb_ax_major_version_number "${openvdb_ax_major_version_str}")
+STRING( REGEX REPLACE "^.*OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER[\t ]+([0-9]*).*$" "\\1"
+_openvdb_ax_minor_version_number "${openvdb_ax_minor_version_str}")
+STRING( REGEX REPLACE "^.*OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER[\t ]+([0-9]*).*$" "\\1"
+_openvdb_ax_patch_version_number "${openvdb_ax_patch_version_str}")
+
+SET( OPENVDB_AX_MAJOR_VERSION_NUMBER ${_openvdb_ax_major_version_number} CACHE STRING "OpenVDB AX major version number" )
+SET( OPENVDB_AX_MINOR_VERSION_NUMBER ${_openvdb_ax_minor_version_number} CACHE STRING "OpenVDB AX minor version number" )
+SET( OPENVDB_AX_PATCH_VERSION_NUMBER ${_openvdb_ax_patch_version_number} CACHE STRING "OpenVDB AX patch version number" )
+
+FIND_PACKAGE ( OpenVDB REQUIRED )
 
 # Use the library installed
 SET ( OPENVDB_SHARED_LIB ${OpenVDB_OPENVDB_LIBRARY} )
@@ -147,6 +160,8 @@ SET_TARGET_PROPERTIES(
   openvdb_ax_shared
   PROPERTIES
   OUTPUT_NAME openvdb_ax
+  SOVERSION ${OPENVDB_AX_MAJOR_VERSION_NUMBER}.${OPENVDB_AX_MINOR_VERSION_NUMBER}
+  VERSION ${OPENVDB_AX_MAJOR_VERSION_NUMBER}.${OPENVDB_AX_MINOR_VERSION_NUMBER}.${OPENVDB_AX_PATCH_VERSION_NUMBER}
   )
 
 SET ( VDB_AX_SOURCE_FILES  cmd/openvdb_ax/main.cc )
@@ -290,9 +305,8 @@ SET ( OPENVDB_AX_AST_INCLUDE_FILES
 SET ( OPENVDB_AX_CODEGEN_INCLUDE_FILES
   codegen/ComputeGenerator.h
   codegen/FunctionRegistry.h
-  codegen/FunctionTypes.h
   codegen/Functions.h
-  codegen/LeafLocalData.h
+  codegen/FunctionTypes.h
   codegen/PointComputeGenerator.h
   codegen/PointFunctions.h
   codegen/SymbolTable.h
@@ -306,12 +320,13 @@ SET ( OPENVDB_AX_COMPILER_INCLUDE_FILES
   compiler/Compiler.h
   compiler/CompilerOptions.h
   compiler/CustomData.h
-  compiler/TargetRegistry.h
+  compiler/LeafLocalData.h
   compiler/PointExecutable.h
+  compiler/TargetRegistry.h
   compiler/VolumeExecutable.h
 )
 
-INSTALL (FILES Exceptions.h DESTINATION include/openvdb_ax/)
+INSTALL (FILES Exceptions.h version.h DESTINATION include/openvdb_ax/)
 INSTALL (FILES ${OPENVDB_AX_AST_INCLUDE_FILES} DESTINATION include/openvdb_ax/ast)
 INSTALL (FILES ${OPENVDB_AX_CODEGEN_INCLUDE_FILES} DESTINATION include/openvdb_ax/codegen)
 INSTALL (FILES ${OPENVDB_AX_COMPILER_INCLUDE_FILES} DESTINATION include/openvdb_ax/compiler)

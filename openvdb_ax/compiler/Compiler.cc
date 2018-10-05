@@ -45,6 +45,7 @@
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/InitializePasses.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
@@ -112,6 +113,8 @@ void initialize()
         llvm::InitializeNativeTargetAsmParser()) {
         OPENVDB_THROW(LLVMInitialisationError, "Failed to initialize for JIT");
     }
+
+    LLVMLinkInMCJIT();
 
     // Initialize passes
     llvm::PassRegistry& registry = *llvm::PassRegistry::getPassRegistry();
@@ -501,7 +504,6 @@ public:
 
     void
     compileBlocks(const ast::Tree& syntaxTree,
-                  CustomData& customData,
                   llvm::Module& module,
                   const FunctionOptions& options,
                   codegen::SymbolTable& globals,
@@ -512,19 +514,20 @@ public:
         int volumeCount = 0;
 
         do {
-            modifier.restart();
-
             openvdb::SharedPtr<ast::Tree> tree(syntaxTree.copy());
 
+            modifier.restart();
             tree->accept(modifier);
 
-            const std::string funcName("compute_volume_" + std::to_string(volumeCount));
-            codegen::VolumeComputeGenerator
-                codeGenerator(module, &customData, options, functionRegistry, warnings, funcName);
+            const std::string functionName =
+                codegen::VolumeKernel::getDefaultName() + std::to_string(volumeCount);
+
+            codegen::VolumeComputeGenerator codeGenerator(module, options, functionRegistry, warnings);
+            codeGenerator.setFunctionName(functionName);
             tree->accept(codeGenerator);
 
             mBlockFunctionNames.push_back(std::vector<std::string>());
-            codeGenerator.getFunctionList(mBlockFunctionNames.back());
+            mBlockFunctionNames.back().emplace_back(functionName);
 
             if (globals.map().empty() && !codeGenerator.globals().map().empty()) {
                 globals = codeGenerator.globals();
@@ -621,7 +624,7 @@ Compiler::Compiler(const CompilerOptions& options,
     , mFunctionRegistry()
 {
     mContext.reset(new llvm::LLVMContext);
-    mFunctionRegistry = codegen::createStandardRegistry(options.functionOptions);
+    mFunctionRegistry = codegen::createStandardRegistry(options.mFunctionOptions);
 }
 
 Compiler::UniquePtr Compiler::create(const CompilerOptions &options,
@@ -640,7 +643,7 @@ void Compiler::setFunctionRegistry(std::unique_ptr<codegen::FunctionRegistry>&& 
 template<>
 PointExecutable::Ptr
 Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
-                                   const CustomData::Ptr& data,
+                                   const CustomData::Ptr customData,
                                    std::vector<std::string>* warnings)
 {
     openvdb::SharedPtr<ast::Tree> tree(syntaxTree.copy());
@@ -675,7 +678,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
 
     codegen::PointComputeGenerator
-        codeGenerator(*module, data.get(), mCompilerOptions.functionOptions,
+        codeGenerator(*module, mCompilerOptions.mFunctionOptions,
             *mFunctionRegistry, warnings);
     tree->accept(codeGenerator);
 
@@ -694,13 +697,14 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
 
     // get module, verify and create execution engine
     llvm::Module* modulePtr = module.get();
-    optimiseAndVerify(modulePtr, mCompilerOptions.verify, mCompilerOptions.optLevel);
+    optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
 
     // create the llvm execution engine which will build our function pointers
 
     std::string error;
     std::shared_ptr<llvm::ExecutionEngine>
         executionEngine(llvm::EngineBuilder(std::move(module))
+            .setEngineKind(llvm::EngineKind::JIT)
             .setErrorStr(&error)
             .create());
 
@@ -718,8 +722,10 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
 
     // get the built function pointers
 
-    std::vector<std::string> functionNames;
-    codeGenerator.getFunctionList(functionNames);
+    const std::vector<std::string> functionNames {
+        codegen::PointKernel::getDefaultName(),
+        codegen::PointRangeKernel::getDefaultName()
+    };
 
     std::map<std::string, uint64_t> functionMap;
 
@@ -732,7 +738,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     }
 
     // create final executable object
-    PointExecutable::Ptr executable(new PointExecutable(executionEngine, mContext, registry, data,
+    PointExecutable::Ptr executable(new PointExecutable(executionEngine, mContext, registry, customData,
         functionMap));
     return executable;
 }
@@ -740,7 +746,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
 template<>
 VolumeExecutable::Ptr
 Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
-                                    const CustomData::Ptr& customData,
+                                    const CustomData::Ptr customData,
                                     std::vector<std::string>* warnings)
 {
     // initialize the module and generate LLVM IR
@@ -750,8 +756,8 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
     VolumeCodeBlocks volumeCodeBlocks;
     codegen::SymbolTable globals;
 
-    volumeCodeBlocks.compileBlocks(syntaxTree, *customData, *module,
-        mCompilerOptions.functionOptions, globals, *mFunctionRegistry, warnings);
+    volumeCodeBlocks.compileBlocks(syntaxTree, *module,
+        mCompilerOptions.mFunctionOptions, globals, *mFunctionRegistry, warnings);
 
     // map accesses (always do this prior to optimising as globals may be removed)
 
@@ -760,11 +766,12 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 
 
     llvm::Module* modulePtr = module.get();
-    optimiseAndVerify(modulePtr, mCompilerOptions.verify, mCompilerOptions.optLevel);
+    optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
 
     std::string error;
     std::shared_ptr<llvm::ExecutionEngine>
         executionEngine(llvm::EngineBuilder(std::move(module))
+            .setEngineKind(llvm::EngineKind::JIT)
             .setErrorStr(&error)
             .create());
 

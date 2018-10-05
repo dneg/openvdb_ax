@@ -41,13 +41,12 @@
 #include <openvdb_ax/compiler/CustomData.h>
 #include <openvdb_ax/compiler/TargetRegistry.h>
 
-#include <openvdb/openvdb.h>
+// Forward declaration of LLVM types which persist on the Executables
 
-//forward
 namespace llvm {
 
-    class ExecutionEngine;
-    class LLVMContext;
+class ExecutionEngine;
+class LLVMContext;
 
 }
 
@@ -79,9 +78,9 @@ public:
     ///        than directly
     VolumeExecutable(const std::shared_ptr<const llvm::ExecutionEngine>& exeEngine,
                      const std::shared_ptr<const llvm::LLVMContext>& context,
-                     const VolumeRegistry::ConstPtr& volumeRegistry,
-                     const CustomData::Ptr& customData,
-                     const std::vector<std::map<std::string, uint64_t> >& functionAddresses,
+                     const Registry::ConstPtr& volumeRegistry,
+                     const CustomData::ConstPtr& customData,
+                     const std::vector<std::map<std::string, uint64_t>>& functionAddresses,
                      const std::vector<std::string>& assignedVolumes)
         : mExecutionEngine(exeEngine)
         , mContext(context)
@@ -101,10 +100,8 @@ private:
     // as these objects must not be destroyed before this one
     const std::shared_ptr<const llvm::ExecutionEngine> mExecutionEngine;
     const std::shared_ptr<const llvm::LLVMContext> mContext;
-
     const Registry::ConstPtr mVolumeRegistry;
-
-    const CustomData::Ptr mCustomData;
+    const CustomData::ConstPtr mCustomData;
     const std::vector<std::map<std::string, uint64_t> > mBlockFunctionAddresses;
     const std::vector<std::string> mAssignedVolumes;
 };

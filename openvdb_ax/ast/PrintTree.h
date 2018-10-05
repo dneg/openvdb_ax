@@ -31,7 +31,7 @@
 #ifndef OPENVDB_AX_AST_PRINT_TREE_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_PRINT_TREE_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
+#include <openvdb_ax/version.h>
 
 #include <iosfwd>
 #include <iostream>

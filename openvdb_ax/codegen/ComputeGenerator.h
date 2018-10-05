@@ -39,6 +39,7 @@
 #define OPENVDB_AX_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 
 #include "FunctionRegistry.h"
+#include "FunctionTypes.h"
 
 #include "SymbolTable.h"
 
@@ -60,26 +61,41 @@ OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
-
-struct CustomData;
-
 namespace codegen {
+
+/// @brief  The function definition and signature which is built by the
+///         ComputeGenerator.
+///
+///         The argument structure is as follows:
+///
+///           1) - A void pointer to the CustomData
+///
+struct ComputeKernel
+{
+    /// The name of the generated function
+    static const std::string Name;
+
+    /// The signature of the generated function
+    using Signature = void(const void* const);
+
+    using FunctionT = std::function<Signature>;
+    using FunctionTraitsT = codegen::FunctionTraits<FunctionT>;
+    static const size_t N_ARGS = FunctionTraitsT::N_ARGS;
+
+    /// The argument key names available during code generation
+    static const std::array<std::string, N_ARGS>& getArgumentKeys();
+    static std::string getDefaultName();
+};
+
+
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
 
 struct ComputeGenerator : public ast::Visitor
 {
-    /// @brief  The function pointer signature which is compiled by the base code generation.
-    ///         The base code generation class only supports code generation for local
-    ///         declarations
-    struct ComputeFunction
-    {
-        using Signature = std::add_pointer<void()>::type;
-        static const std::string Name;
-    };
-
-    //////////////////////////////////////////////////////////////////////////////////////////
 
     ComputeGenerator(llvm::Module& module,
-                     CustomData* customData,
                      const FunctionOptions& options,
                      FunctionRegistry& functionRegistry,
                      std::vector<std::string>* const warnings = nullptr);
@@ -89,11 +105,7 @@ struct ComputeGenerator : public ast::Visitor
     inline SymbolTable& globals() { return mSymbolTables.globals(); }
     inline const SymbolTable& globals() const { return mSymbolTables.globals(); }
 
-    inline static void
-    getFunctionList(std::vector<std::string>& list)
-    {
-        list.push_back(ComputeFunction::Name);
-    }
+protected:
 
     // The following methods are typically overridden based on the volume
     // access
@@ -169,7 +181,8 @@ protected:
     // The function used as the base code block
     llvm::Function* mFunction;
 
-    CustomData* mCustomData;
+    // The string mapped function variables, defined by the Function interface
+    SymbolTable mLLVMArguments;
 
     const FunctionOptions mOptions;
 

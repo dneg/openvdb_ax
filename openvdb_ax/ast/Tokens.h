@@ -40,7 +40,7 @@
 #define OPENVDB_AX_AST_TOKENS_HAS_BEEN_INCLUDED
 
 #include <openvdb/util/Name.h>
-#include <openvdb/version.h>
+#include <openvdb_ax/version.h>
 
 #include <openvdb_ax/Exceptions.h>
 

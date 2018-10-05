@@ -307,7 +307,8 @@ TestFunctionSignature::testPrint()
     CPPUNIT_ASSERT_NO_THROW(functionPtr =
         FunctionSignature<void**(void*, void**, void***, float*, float**, float***)>::
             create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction"));
-    expected = std::string("void**(void*; void**; void***; float*; float**; float***)");
+    // void pointers are pointers to structs containing a void member
+    expected = std::string("{ void }**({ void }*; { void }**; { void }***; float*; float**; float***)");
     functionPtr->print(state.context(), "", os);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");;

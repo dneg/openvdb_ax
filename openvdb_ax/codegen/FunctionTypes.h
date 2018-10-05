@@ -284,7 +284,7 @@ struct FunctionSignatureBase
 
     /// @brief  Returns the number of return arguments. This includes whether the
     ///         function return type is non void.
-    /// @param  M  The llvm module
+    /// @param  C  The llvm context
     ///
     inline size_t numReturnValues(llvm::LLVMContext& C) const {
         return hasReturnValue(C) ? 1 + mOutputArguments : mOutputArguments;
@@ -297,7 +297,6 @@ struct FunctionSignatureBase
     ///
     /// @param values   The vector of llvm values to append to
     /// @param builder  The current llvm IRBuilder
-    /// @param M        The llvm module
     ///
     void appendOutputArguments(std::vector<llvm::Value*>& values,
                        llvm::IRBuilder<>& builder) const;
@@ -312,7 +311,7 @@ struct FunctionSignatureBase
                       llvm::LLVMContext& C) const;
 
     /// @brief  Builds and registers this function signature and symbol name as an
-    ///         available and callable function withing the llvm context. Returns the
+    ///         available and callable function within the llvm module. Returns the
     ///         resulting llvm function
     ///
     /// @param M  The llvm module to insert the function into
@@ -578,9 +577,9 @@ struct FunctionSignature : public FunctionSignatureBase
     /// @param types  An optional vector of llvm types
     ///
     inline llvm::Type*
-    toLLVMTypes(llvm::LLVMContext& context, std::vector<llvm::Type*>* types = nullptr) const override final
+    toLLVMTypes(llvm::LLVMContext& C, std::vector<llvm::Type*>* types = nullptr) const override final
     {
-        return FunctionSignatureBase::toLLVMTypes<Signature>(context, types);
+        return FunctionSignatureBase::toLLVMTypes<Signature>(C, types);
     }
 };
 

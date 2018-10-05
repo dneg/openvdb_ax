@@ -68,13 +68,13 @@ struct CompilerOptions
         O3  // Optimization level 3. Similar to clang -O3
     };
 
-    OptLevel optLevel = OptLevel::O3;
+    OptLevel mOptLevel = OptLevel::O3;
 
     /// @brief If this flag is true, the generated llvm module will be verified when compilation
     ///        occurs, resulting in an exception being thrown if it is not valid
-    bool verify = true;
+    bool mVerify = true;
     /// @brief Options for the function registry
-    FunctionOptions functionOptions = FunctionOptions();
+    FunctionOptions mFunctionOptions = FunctionOptions();
 };
 
 }

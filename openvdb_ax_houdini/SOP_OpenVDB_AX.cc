@@ -59,6 +59,7 @@
 #include <CH/CH_Channel.h>
 #include <OP/OP_Expression.h>
 #include <PRM/PRM_Parm.h>
+#include <UT/UT_Ramp.h>
 
 #include <tbb/mutex.h>
 

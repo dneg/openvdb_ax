@@ -47,7 +47,6 @@
 #include "Functions.h"
 #include "Types.h"
 #include "Utils.h"
-#include "LeafLocalData.h"
 
 #include <openvdb_ax/ast/Tokens.h>
 #include <openvdb_ax/compiler/CompilerOptions.h>
@@ -55,7 +54,7 @@
 #include <openvdb_ax/Exceptions.h>
 
 #include <openvdb/openvdb.h>
-#include <openvdb/version.h>
+#include <openvdb_ax/version.h>
 #include <openvdb/points/PointDataGrid.h>
 
 #include <unordered_map>
