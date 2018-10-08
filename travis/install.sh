@@ -50,7 +50,7 @@ ORIGINAL_LLVM_CONFIG=`readlink /usr/bin/llvm-config`
 sudo ln -sfn /usr/bin/llvm-config-5.0 /usr/bin/llvm-config
 
 cmake \
-	-D OPENVDB_ABI_VERSION_NUMBER=4 \
+    -D OPENVDB_ABI_VERSION_NUMBER=4 \
     -D MINIMUM_BOOST_VERSION=1.55 \
     -D OPENVDB_AX_BUILD_DOCS=ON \
     -D OPENVDB_AX_BUILD_UNITTESTS=ON \
