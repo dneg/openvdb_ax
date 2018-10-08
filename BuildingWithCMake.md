@@ -24,7 +24,7 @@ Once these are set, make a temporary directory and from there invoke CMake i.e.
 ```
 mkdir build
 cd build
-cmake -D CMAKE_CXX_FLAGS="-std=c++11 -fext-numeric-literals" \
+cmake \
     -D OPENVDB_ABI_VERSION_NUMBER=4 \
     -D MINIMUM_BOOST_VERSION=1.55 \
     -D ILMBASE_NAMESPACE_VERSIONING=OFF \

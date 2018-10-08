@@ -38,7 +38,6 @@
 #include <openvdb/openvdb.h>
 #include <openvdb/util/logging.h>
 #include <openvdb/points/PointDelete.h>
-#include <openvdb/pointsdev/PointSort.h>
 
 #ifdef DWA_OPENVDB
 #include <usagetrack.h>
