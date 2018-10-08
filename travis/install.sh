@@ -41,8 +41,6 @@ export LLVM_ROOT=/usr
 export CPPUNIT_ROOT=/usr
 export OPENVDB_ROOT=/usr
 
-CURRENT_LOCATION=$PWD
-
 mkdir build
 cd build
 
@@ -73,5 +71,3 @@ cd openvdb_ax
 
 # Reset the symlink for /usr/bin/llvm-config to original setting.
 sudo ln -sfn $ORIGINAL_LLVM_CONFIG /usr/bin/llvm-config
-
-cd $CURRENT_LOCATION
