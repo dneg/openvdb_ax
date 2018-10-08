@@ -47,79 +47,72 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-const std::string ComputeVolumeFunction::DefaultName = "compute_volume";
-
-const std::array<std::string, ComputeVolumeFunction::N_ARGS> ComputeVolumeFunction::ArgumentKeys =
+const std::array<std::string, VolumeKernel::N_ARGS>&
+VolumeKernel::argumentKeys()
 {
-    "custom_data",
-    "coord_is",
-    "coord_ws",
-    "accessors",
-    "transforms"
-};
+    static const std::array<std::string, VolumeKernel::N_ARGS> arguments = {
+        "custom_data",
+        "coord_is",
+        "coord_ws",
+        "accessors",
+        "transforms"
+    };
+
+    return arguments;
+}
+
+std::string VolumeKernel::getDefaultName() { return "compute_voxel"; }
+
+
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
 
 VolumeComputeGenerator::VolumeComputeGenerator(llvm::Module& module,
-                                               CustomData* const customData,
                                                const FunctionOptions& options,
                                                FunctionRegistry& functionRegistry,
-                                               std::vector<std::string>* const warnings,
-                                               const std::string& functionName)
-    : ComputeGenerator(module, customData, options, functionRegistry, warnings)
-    , mLLVMArguments()
+                                               std::vector<std::string>* const warnings)
+    : ComputeGenerator(module, options, functionRegistry, warnings)
     , mVolumeVisitCount(0)
-    , mFunctionName(functionName) {}
+    , mFunctionName(VolumeKernel::getDefaultName()) {}
+
+void VolumeComputeGenerator::setFunctionName(const std::string& name)
+{
+    mFunctionName = name;
+}
 
 void VolumeComputeGenerator::init(const ast::Tree&)
 {
     // Override the ComputeGenerators default init() with the custom
     // functions requires for Volume execution
 
-    std::vector<llvm::Type*> argTypes;
-    llvmTypesFromSignature<ComputeVolumeFunction::Signature>(mContext, &argTypes);
-    assert(argTypes.size() == ComputeVolumeFunction::N_ARGS);
-    assert(argTypes.size() == ComputeVolumeFunction::ArgumentKeys.size());
+    using FunctionSignatureT = FunctionSignature<VolumeKernel::Signature>;
 
-    llvm::FunctionType* computeFunctionType =
-        llvm::FunctionType::get(/*Return*/LLVMType<ComputeVolumeFunction::ReturnT>::get(mContext),
-                          llvm::ArrayRef<llvm::Type*>(argTypes),
-                          /*Variable args*/ false);
+    // Use the function signature type to generate the llvm function
 
-    // Function Declaration
+    const FunctionSignatureT::Ptr volumeKernelSignature =
+        FunctionSignatureT::create(nullptr, mFunctionName, 0);
 
-    llvm::Function* computeVolume =
-        llvm::Function::Create(computeFunctionType,
-                                llvm::Function::ExternalLinkage,
-                                mFunctionName,
-                                &mModule);
+    // Set the base code generator function to the compute voxel function
 
-    // Check to see if the registration of the function above conflicted
-    // If it did, there is already a function called "compute"
-    // We should only be making one of these! Something has gone wrong
-
-    if (computeVolume->getName() != mFunctionName) {
-        OPENVDB_THROW(LLVMModuleError, "Function \"" + mFunctionName +
-            + "\" already exists!");
-    }
+    mFunction = volumeKernelSignature->toLLVMFunction(mModule);
 
     // Set up arguments for initial entry
 
-    llvm::Function::arg_iterator argIter = computeVolume->arg_begin();
-    auto keyIter = ComputeVolumeFunction::ArgumentKeys.cbegin();
+    llvm::Function::arg_iterator argIter = mFunction->arg_begin();
+    const auto arguments = VolumeKernel::argumentKeys();
+    auto keyIter = arguments.cbegin();
 
-    for (; argIter != computeVolume->arg_end(); ++argIter, ++keyIter) {
+    for (; argIter != mFunction->arg_end(); ++argIter, ++keyIter) {
         if (!mLLVMArguments.insert(*keyIter, llvm::cast<llvm::Value>(argIter))) {
             OPENVDB_THROW(LLVMFunctionError, "Function \"" + mFunctionName
                 + "\" has been setup with non-unique argument keys.");
         }
     }
 
-    mBlocks.push(llvm::BasicBlock::Create(mContext, "__entry_compute_volume", computeVolume));
+    mBlocks.push(llvm::BasicBlock::Create(mContext,
+        "entry_" + mFunctionName, mFunction));
     mBuilder.SetInsertPoint(mBlocks.top());
-    mCurrentBlock = 1;
-
-    // Set the base code generator function to the compute point function
-
-    mFunction = computeVolume;
 }
 
 void VolumeComputeGenerator::visit(const ast::AssignExpression& node)

@@ -63,13 +63,25 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
+
+const std::array<std::string, ComputeKernel::N_ARGS>&
+ComputeKernel::getArgumentKeys()
+{
+    static const std::array<std::string, ComputeKernel::N_ARGS> arguments = {
+        "custom_data"
+    };
+
+    return arguments;
+}
+
+std::string ComputeKernel::getDefaultName() { return "compute"; }
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-const std::string ComputeGenerator::ComputeFunction::Name = "compute_local";
 
 ComputeGenerator::ComputeGenerator(llvm::Module& module,
-                                   CustomData* customData,
                                    const FunctionOptions& options,
                                    FunctionRegistry& functionRegistry,
                                    std::vector<std::string>* const warnings)
@@ -84,29 +96,42 @@ ComputeGenerator::ComputeGenerator(llvm::Module& module,
     , mSymbolTables()
     , mWarnings(warnings)
     , mFunction(nullptr)
-    , mCustomData(customData)
+    , mLLVMArguments()
     , mOptions(options)
     , mTargetLibInfoImpl(new llvm::TargetLibraryInfoImpl(llvm::Triple(mModule.getTargetTriple())))
     , mFunctionRegistry(functionRegistry) {}
 
 void ComputeGenerator::init(const ast::Tree&)
 {
-    // Initialise a default function body which returns void and accetps
-    // no arguments
+    // Initialise a default function body which returns void and accepts
+    // a custom data pointer as an argument
 
-    const std::vector<llvm::Type*> argumentTypes {};
-    llvm::FunctionType* defaultFunctionType =
-        llvm::FunctionType::get(LLVMType<void>::get(mContext),
-                          llvm::ArrayRef<llvm::Type*>(argumentTypes),
-                          /*Variable args*/ false);
+    using FunctionSignatureT = FunctionSignature<ComputeKernel::Signature>;
 
-    mFunction =
-        llvm::Function::Create(defaultFunctionType,
-                               llvm::Function::ExternalLinkage,
-                               ComputeFunction::Name,
-                               &mModule);
+    // Use the function signature type to generate the llvm function
 
-    mBlocks.push(llvm::BasicBlock::Create(mContext, "__entry_default_function", mFunction));
+    const FunctionSignatureT::Ptr computeKernel =
+        FunctionSignatureT::create(nullptr, ComputeKernel::getDefaultName());
+
+    // Set the base code generator function to the compute voxel function
+
+    mFunction = computeKernel->toLLVMFunction(mModule);
+
+    // Set up arguments for initial entry
+
+    llvm::Function::arg_iterator argIter = mFunction->arg_begin();
+    const auto arguments = ComputeKernel::getArgumentKeys();
+    auto keyIter = arguments.cbegin();
+
+    for (; argIter != mFunction->arg_end(); ++argIter, ++keyIter) {
+        if (!mLLVMArguments.insert(*keyIter, llvm::cast<llvm::Value>(argIter))) {
+            OPENVDB_THROW(LLVMFunctionError, "Function \"" + ComputeKernel::getDefaultName()
+                + "\" has been setup with non-unique argument keys.");
+        }
+    }
+
+    mBlocks.push(llvm::BasicBlock::Create(mContext,
+        "entry_" + ComputeKernel::getDefaultName(), mFunction));
     mBuilder.SetInsertPoint(mBlocks.top());
 }
 
@@ -694,7 +719,6 @@ void ComputeGenerator::visit(const ast::FunctionCall& node)
         node.mFunction).c_str());
 
     const FunctionBase::Ptr function = this->getFunction(node.mFunction, mOptions);
-    assert(function);
 
     if (!(function->context() & FunctionBase::Base)) {
         OPENVDB_THROW(LLVMContextError, "\"" + node.mFunction +
@@ -707,15 +731,8 @@ void ComputeGenerator::visit(const ast::FunctionCall& node)
     argumentsFromStack(mValues, args, arguments);
     parseDefaultArgumentState(arguments, mBuilder);
 
-    // @todo  Engine data should be an optional llvm argument to the
-    //        base compute function
-
-    const std::unordered_map<std::string, llvm::Value*> globals {
-        { "custom_data" , llvmPointerFromAddress<void>(mCustomData, mBuilder) }
-    };
-
     std::vector<llvm::Value*> results;
-    llvm::Value* result = function->execute(arguments, globals, mBuilder, mModule, &results);
+    llvm::Value* result = function->execute(arguments, mLLVMArguments.map(), mBuilder, mModule, &results);
     llvm::Type* resultType = result->getType();
 
     if (resultType != LLVMType<void>::get(mContext)) {

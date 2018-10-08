@@ -30,16 +30,24 @@
 
 #include "VolumeExecutable.h"
 
-// @TODO refactor so we don't have to include VolumeComputeGenerator.h, but still have the functions
-// defined in one place
-#include <openvdb_ax/codegen/VolumeComputeGenerator.h>
 #include <openvdb_ax/Exceptions.h>
+
+// @TODO refactor so we don't have to include VolumeComputeGenerator.h,
+// but still have the functions defined in one place
+#include <openvdb_ax/codegen/VolumeComputeGenerator.h>
 
 #include <openvdb/Exceptions.h>
 #include <openvdb/tree/LeafManager.h>
 #include <openvdb/Types.h>
+#include <openvdb/math/Coord.h>
+#include <openvdb/math/Transform.h>
+#include <openvdb/math/Vec3.h>
+#include <openvdb/tree/ValueAccessor.h>
+#include <openvdb/tree/LeafManager.h>
 
 #include <tbb/parallel_for.h>
+
+#include <memory>
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -49,9 +57,100 @@ namespace ax {
 
 namespace {
 
+/// @brief Volume Kernel types
+///
+using KernelFunctionPtr = std::add_pointer<codegen::VolumeKernel::Signature>::type;
+using FunctionTraitsT = codegen::VolumeKernel::FunctionTraitsT;
+using ReturnT = FunctionTraitsT::ReturnType;
+
+
+/// The arguments of the generated function
+struct VolumeFunctionArguments
+{
+    struct Accessors { using UniquePtr = std::unique_ptr<Accessors>; };
+
+    template <typename TreeT>
+    struct TypedAccessor : public Accessors
+    {
+        using UniquePtr = std::unique_ptr<TypedAccessor<TreeT>>;
+
+        inline void*
+        init(TreeT& tree) {
+            mAccessor.reset(new tree::ValueAccessor<TreeT>(tree));
+            return static_cast<void*>(mAccessor.get());
+        }
+
+        std::unique_ptr<tree::ValueAccessor<TreeT>> mAccessor;
+    };
+
+
+    ///////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
+
+    VolumeFunctionArguments(const CustomData::ConstPtr customData)
+        : mCustomData(customData)
+        , mCoord()
+        , mCoordWS()
+        , mVoidAccessors()
+        , mAccessors()
+        , mVoidTransforms() {}
+
+    /// @brief  Given a built version of the function signature, automatically
+    ///         bind the current arguments and return a callable function
+    ///         which takes no arguments
+    ///
+    /// @param  function  The fully generated function built from the
+    ///                   VolumeComputeGenerator
+    ///
+    inline std::function<ReturnT()>
+    bind(KernelFunctionPtr function)
+    {
+        return std::bind(function,
+            static_cast<FunctionTraitsT::Arg<0>::Type>(mCustomData.get()),
+            reinterpret_cast<FunctionTraitsT::Arg<1>::Type>(mCoord.data()),
+            reinterpret_cast<FunctionTraitsT::Arg<2>::Type>(mCoordWS.asV()),
+            static_cast<FunctionTraitsT::Arg<3>::Type>(mVoidAccessors.data()),
+            static_cast<FunctionTraitsT::Arg<4>::Type>(mVoidTransforms.data()));
+    }
+
+    template <typename TreeT>
+    inline void
+    addAccessor(TreeT& tree)
+    {
+        typename TypedAccessor<TreeT>::UniquePtr accessor(new TypedAccessor<TreeT>());
+        mVoidAccessors.emplace_back(accessor->init(tree));
+        mAccessors.emplace_back(std::move(accessor));
+    }
+
+    template <typename TreeT>
+    inline void
+    addConstAccessor(const TreeT& tree)
+    {
+        typename TypedAccessor<const TreeT>::UniquePtr accessor(new TypedAccessor<const TreeT>());
+        mVoidAccessors.emplace_back(accessor->init(tree));
+        mAccessors.emplace_back(std::move(accessor));
+    }
+
+    inline void
+    addTransform(math::Transform::Ptr transform)
+    {
+        mVoidTransforms.emplace_back(static_cast<void*>(transform.get()));
+    }
+
+    const CustomData::ConstPtr mCustomData;
+    openvdb::Coord mCoord;
+    openvdb::math::Vec3<float> mCoordWS;
+
+private:
+    std::vector<void*> mVoidAccessors;
+    std::vector<Accessors::UniquePtr> mAccessors;
+    std::vector<void*> mVoidTransforms;
+};
+
 template <typename ValueType>
 inline void
-retrieveAccessorTyped(codegen::ComputeVolumeFunction::Arguments& args,
+retrieveAccessorTyped(VolumeFunctionArguments& args,
                       openvdb::GridBase::Ptr grid)
 {
     using GridType = typename openvdb::BoolGrid::ValueConverter<ValueType>::Type;
@@ -60,7 +159,7 @@ retrieveAccessorTyped(codegen::ComputeVolumeFunction::Arguments& args,
 }
 
 inline void
-retrieveAccessor(codegen::ComputeVolumeFunction::Arguments& args,
+retrieveAccessor(VolumeFunctionArguments& args,
                  const openvdb::GridBase::Ptr grid,
                  const std::string& valueType)
 {
@@ -83,13 +182,12 @@ template <typename TreeT>
 struct VolumeExecuterOp
 {
     using LeafManagerT = typename tree::LeafManager<TreeT>;
-    using FunctionT = codegen::ComputeVolumeFunction::SignaturePtr;
 
-        VolumeExecuterOp(const VolumeRegistry& volumeRegistry,
-                         const CustomData& customData,
-                         const math::Transform& assignedVolumeTransform,
-                         FunctionT computeFunction,
-                         openvdb::GridPtrVec& grids)
+    VolumeExecuterOp(const VolumeRegistry& volumeRegistry,
+                     const CustomData::ConstPtr& customData,
+                     const math::Transform& assignedVolumeTransform,
+                     KernelFunctionPtr computeFunction,
+                     openvdb::GridPtrVec& grids)
         : mVolumeRegistry(volumeRegistry)
         , mCustomData(customData)
         , mComputeFunction(computeFunction)
@@ -100,7 +198,7 @@ struct VolumeExecuterOp
 
     void operator()(const typename LeafManagerT::LeafRange& range) const
     {
-        codegen::ComputeVolumeFunction::Arguments args(mCustomData);
+        VolumeFunctionArguments args(mCustomData);
 
         size_t location(0);
         for (const auto& iter : mVolumeRegistry.volumeData()) {
@@ -120,8 +218,8 @@ struct VolumeExecuterOp
 
 private:
     const VolumeRegistry&       mVolumeRegistry;
-    const CustomData&           mCustomData;
-    FunctionT                   mComputeFunction;
+    const CustomData::ConstPtr  mCustomData;
+    KernelFunctionPtr           mComputeFunction;
     const openvdb::GridPtrVec&  mGrids;
     const math::Transform&      mTargetVolumeTransform;
 };
@@ -167,18 +265,18 @@ void VolumeExecutable::execute(const openvdb::GridPtrVec& grids) const
 
     registerVolumes(grids, writeableGrids, usableGrids, mVolumeRegistry->volumeData());
 
-    using FunctionType = codegen::ComputeVolumeFunction;
     const int numBlocks = mBlockFunctionAddresses.size();
 
     for (int i = 0; i < numBlocks; i++) {
 
-        FunctionType::SignaturePtr compute = nullptr;
-        std::stringstream funcName("compute_volume_" + std::to_string(i));
         const std::map<std::string, uint64_t>& blockFunctions = mBlockFunctionAddresses.at(i);
-        auto iter = blockFunctions.find(funcName.str());
 
+        const std::string funcName(codegen::VolumeKernel::getDefaultName() + std::to_string(i));
+        auto iter = blockFunctions.find(funcName);
+
+        KernelFunctionPtr compute = nullptr;
         if (iter != blockFunctions.cend() && (iter->second != uint64_t(0))) {
-            compute = reinterpret_cast<FunctionType::SignaturePtr>(iter->second);
+            compute = reinterpret_cast<KernelFunctionPtr>(iter->second);
         }
 
         if (!compute) {
@@ -205,63 +303,63 @@ void VolumeExecutable::execute(const openvdb::GridPtrVec& grids) const
         if (gridToModify->isType<BoolGrid>()) {
             BoolGrid::Ptr typed = StaticPtrCast<BoolGrid>(gridToModify);
             tree::LeafManager<BoolTree> leafManager(typed->tree());
-            VolumeExecuterOp<BoolTree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<BoolTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<Int32Grid>()) {
             Int32Grid::Ptr typed = StaticPtrCast<Int32Grid>(gridToModify);
             tree::LeafManager<Int32Tree> leafManager(typed->tree());
-            VolumeExecuterOp<Int32Tree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<Int32Tree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                  compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<Int64Grid>()) {
             Int64Grid::Ptr typed = StaticPtrCast<Int64Grid>(gridToModify);
             tree::LeafManager<Int64Tree> leafManager(typed->tree());
-            VolumeExecuterOp<Int64Tree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<Int64Tree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<FloatGrid>()) {
             FloatGrid::Ptr typed = StaticPtrCast<FloatGrid>(gridToModify);
             tree::LeafManager<FloatTree> leafManager(typed->tree());
-            VolumeExecuterOp<FloatTree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<FloatTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<DoubleGrid>()) {
             DoubleGrid::Ptr typed = StaticPtrCast<DoubleGrid>(gridToModify);
             tree::LeafManager<DoubleTree> leafManager(typed->tree());
-            VolumeExecuterOp<DoubleTree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<DoubleTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<Vec3IGrid>()) {
             Vec3IGrid::Ptr typed = StaticPtrCast<Vec3IGrid>(gridToModify);
             tree::LeafManager<Vec3ITree> leafManager(typed->tree());
-            VolumeExecuterOp<Vec3ITree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<Vec3ITree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<Vec3fGrid>()) {
             Vec3fGrid::Ptr typed = StaticPtrCast<Vec3fGrid>(gridToModify);
             tree::LeafManager<Vec3fTree> leafManager(typed->tree());
-            VolumeExecuterOp<Vec3fTree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<Vec3fTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<Vec3dGrid>()) {
             Vec3dGrid::Ptr typed = StaticPtrCast<Vec3dGrid>(gridToModify);
             tree::LeafManager<Vec3dTree> leafManager(typed->tree());
-            VolumeExecuterOp<Vec3dTree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<Vec3dTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }
         else if (gridToModify->isType<MaskGrid>()) {
             MaskGrid::Ptr typed = StaticPtrCast<MaskGrid>(gridToModify);
             tree::LeafManager<MaskTree> leafManager(typed->tree());
-            VolumeExecuterOp<MaskTree> executerOp(*mVolumeRegistry, *mCustomData, *writeTransform,
+            VolumeExecuterOp<MaskTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
                 compute, usableGrids);
             tbb::parallel_for(leafManager.leafRange(), executerOp);
         }

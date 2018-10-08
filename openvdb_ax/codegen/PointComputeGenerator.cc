@@ -62,123 +62,122 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-const std::string ComputePointFunction::Name = "compute_point";
-const std::string ComputePointRangeFunction::Name = "compute_point_range";
 
-const std::array<std::string, ComputePointFunction::N_ARGS> ComputePointFunction::ArgumentKeys =
+const std::array<std::string, PointKernel::N_ARGS>&
+PointKernel::argumentKeys()
 {
-    "custom_data",
-    "attribute_set",
-    "point_index",
-    "attribute_handles",
-    "group_handles",
-    "leaf_data"
-};
+    static const std::array<std::string, PointKernel::N_ARGS> arguments = {
+        "custom_data",
+        "attribute_set",
+        "point_index",
+        "attribute_handles",
+        "group_handles",
+        "leaf_data"
+    };
+
+    return arguments;
+}
+
+std::string PointKernel::getDefaultName() { return "compute_point"; }
+
+std::string PointRangeKernel::getDefaultName() { return "compute_point_range"; }
+
+
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
 
 PointComputeGenerator::PointComputeGenerator(llvm::Module& module,
-                                             CustomData* customData,
                                              const FunctionOptions& options,
                                              FunctionRegistry& functionRegistry,
                                              std::vector<std::string>* const warnings)
-    : ComputeGenerator(module, customData, options, functionRegistry, warnings)
-    , mLLVMArguments()
+    : ComputeGenerator(module, options, functionRegistry, warnings)
     , mAttributeVisitCount(0) {}
 
 void PointComputeGenerator::init(const ast::Tree&)
 {
-    std::vector<llvm::Type*> argTypes;
-    llvmTypesFromSignature<ComputePointFunction::Signature>(mContext, &argTypes);
-    assert(argTypes.size() == ComputePointFunction::N_ARGS);
-    assert(argTypes.size() == ComputePointFunction::ArgumentKeys.size());
+    // Override the ComputeGenerators default init() with the custom
+    // functions requires for Point execution
 
-    llvm::FunctionType* computeFunctionType =
-        llvm::FunctionType::get(/*Return*/LLVMType<ComputePointFunction::ReturnT>::get(mContext),
-                          llvm::ArrayRef<llvm::Type*>(argTypes),
-                          /*Variable args*/ false);
+    using FunctionSignatureT = FunctionSignature<PointKernel::Signature>;
 
-    // Function Declarations
+    // Use the function signature type to generate the llvm function
 
-    llvm::Function* computePoint =
-        llvm::Function::Create(computeFunctionType,
-                                llvm::Function::ExternalLinkage,
-                                ComputePointFunction::Name,
-                                &mModule);
+    const FunctionSignatureT::Ptr pointKernelSignature =
+        FunctionSignatureT::create(nullptr, PointKernel::getDefaultName());
 
-    llvm::Function* computePointRange =
-        llvm::Function::Create(computeFunctionType,
-                               llvm::Function::ExternalLinkage,
-                               ComputePointRangeFunction::Name,
-                               &mModule);
+    // Set the base code generator function to the compute voxel function
 
-    // Check to see if the registration of the function above conflicted
-    // If it did, there is already a function called "compute"
-    // We should only be making one of these! Something has gone wrong
-
-    if (computePoint->getName() != ComputePointFunction::Name) {
-        OPENVDB_THROW(LLVMModuleError, "Function \"" + ComputePointFunction::Name
-            + "\" already exists!");
-    }
-
-    if (computePointRange->getName() != ComputePointRangeFunction::Name) {
-        OPENVDB_THROW(LLVMModuleError, "Function \"" + ComputePointRangeFunction::Name
-            + "\" already exists!");
-    }
+    mFunction = pointKernelSignature->toLLVMFunction(mModule);
 
     // Set up arguments for initial entry
 
-    llvm::Function::arg_iterator argIter = computePointRange->arg_begin();
-    auto keyIter = ComputePointFunction::ArgumentKeys.cbegin();
+    llvm::Function::arg_iterator argIter = mFunction->arg_begin();
+    const auto arguments = PointKernel::argumentKeys();
+    auto keyIter = arguments.cbegin();
 
-    for (; argIter != computePointRange->arg_end(); ++argIter, ++keyIter) {
+    for (; argIter != mFunction->arg_end(); ++argIter, ++keyIter) {
         if (!mLLVMArguments.insert(*keyIter, llvm::cast<llvm::Value>(argIter))) {
-            OPENVDB_THROW(LLVMFunctionError, "Function \"" + ComputePointRangeFunction::Name
+            OPENVDB_THROW(LLVMFunctionError, "Function \"" + PointKernel::getDefaultName()
                 + "\" has been setup with non-unique argument keys.");
         }
     }
 
-    // Generate the Compute function which simply calls compute_point
-    // mPointCount times
+    const FunctionSignatureT::Ptr pointRangeKernelSignature =
+        FunctionSignatureT::create(nullptr, PointRangeKernel::getDefaultName());
+
+    llvm::Function* rangeFunction = pointRangeKernelSignature->toLLVMFunction(mModule);
+
+    // Set up arguments for initial entry for the range function
+
+    std::vector<llvm::Value*> kPointRangeArguments;
+    argIter = rangeFunction->arg_begin();
+    for (; argIter != rangeFunction->arg_end(); ++argIter) {
+        kPointRangeArguments.emplace_back(llvm::cast<llvm::Value>(argIter));
+    }
 
     {
-        // For the computePointRange function, simply create a for loop which calls
-        // compute_point for every point index 0 to mPointCount. The argument types for
-        // computePointRange and compute_point are the same, but the third argument for
-        // compute_point is the point index rather than the point range
+        // Generate the range function which calls mFunction point_count times
 
-        llvm::BasicBlock* preLoop = llvm::BasicBlock::Create(mContext, "__entry_compute", computePointRange);
+        // For the pointRangeKernelSignature function, create a for loop which calls
+        // kPoint for every point index 0 to mPointCount. The argument types for
+        // pointRangeKernelSignature and kPoint are the same, but the 'point_index' argument for
+        // kPoint is the point index rather than the point range
+
+        auto iter = std::find(arguments.begin(), arguments.end(), "point_index");
+        assert(iter != arguments.end());
+        const size_t argumentIndex = std::distance(arguments.begin(), iter);
+
+        llvm::BasicBlock* preLoop = llvm::BasicBlock::Create(mContext,
+            "entry_" + PointRangeKernel::getDefaultName(), rangeFunction);
         mBuilder.SetInsertPoint(preLoop);
 
-        llvm::Value* indexMinusOne = mBuilder.CreateSub(mLLVMArguments.get("point_index"), mBuilder.getInt64(1));
+        llvm::Value* pointCountValue = kPointRangeArguments[argumentIndex];
+        llvm::Value* indexMinusOne = mBuilder.CreateSub(pointCountValue, mBuilder.getInt64(1));
 
-        llvm::BasicBlock* loop = llvm::BasicBlock::Create(mContext, "__loop_compute", computePointRange);
+        llvm::BasicBlock* loop =
+            llvm::BasicBlock::Create(mContext, "loop_compute_point", rangeFunction);
         mBuilder.CreateBr(loop);
         mBuilder.SetInsertPoint(loop);
 
         llvm::PHINode* incr = mBuilder.CreatePHI(mBuilder.getInt64Ty(), 2, "i");
         incr->addIncoming(/*start*/mBuilder.getInt64(0), preLoop);
 
-        // Call compute point with incr which will be updated per branch
+        // Call kPoint with incr which will be updated per branch
 
-        std::vector<llvm::Value*> rangeArguments;
-        rangeArguments.reserve(ComputePointFunction::ArgumentKeys.size());
+        // Map the function arguments. For the 'point_index' argument, we don't pull in the provided
+        // args, but instead use the value of incr. incr will correspond to the index of the
+        // point being accessed within the pointRangeKernelSignature loop.
 
-        // Map the function arguments. For "point_index", we don't pull in the provided
-        // mLLVMArguments "point_index", but instead use the value of incr. incr will correspond
-        // to the index of the point being accessed within the ComputePointRangeFunction loop.
-
-        for (const std::string& key : ComputePointFunction::ArgumentKeys) {
-            if (key == "point_index") rangeArguments.emplace_back(incr);
-            else                      rangeArguments.emplace_back(mLLVMArguments.get(key));
-        }
-
-        mBuilder.CreateCall(computePoint, rangeArguments);
+        std::vector<llvm::Value*> args(kPointRangeArguments);
+        args[argumentIndex] = incr;
+        mBuilder.CreateCall(mFunction, args);
 
         llvm::Value* next = mBuilder.CreateAdd(incr, mBuilder.getInt64(1), "nextval");
-
         llvm::Value* endCondition = mBuilder.CreateICmpULT(incr, indexMinusOne, "endcond");
         llvm::BasicBlock* loopEnd = mBuilder.GetInsertBlock();
 
-        llvm::BasicBlock* postLoop = llvm::BasicBlock::Create(mContext, "__post_loop_compute", computePointRange);
+        llvm::BasicBlock* postLoop =
+            llvm::BasicBlock::Create(mContext, "post_loop_compute_point", rangeFunction);
         mBuilder.CreateCondBr(endCondition, loop, postLoop);
         mBuilder.SetInsertPoint(postLoop);
         incr->addIncoming(next, loopEnd);
@@ -187,23 +186,9 @@ void PointComputeGenerator::init(const ast::Tree&)
         mBuilder.ClearInsertionPoint();
     }
 
-    // Now generate the code for compute_point by setting up a new block and
-    // continuing the visit to all nodes
-
-    argIter = computePoint->arg_begin();
-    keyIter = ComputePointFunction::ArgumentKeys.cbegin();
-
-    for (; argIter != computePoint->arg_end(); ++argIter, ++keyIter) {
-        mLLVMArguments.replace(*keyIter, llvm::cast<llvm::Value>(argIter));
-    }
-
-    mBlocks.push(llvm::BasicBlock::Create(mContext, "__entry_compute_point", computePoint));
+    mBlocks.push(llvm::BasicBlock::Create(mContext,
+        "entry_" + PointKernel::getDefaultName(), mFunction));
     mBuilder.SetInsertPoint(mBlocks.top());
-    mCurrentBlock = 1;
-
-    // Set the base code generator function to the compute point function
-
-    mFunction = computePoint;
 }
 
 void PointComputeGenerator::visit(const ast::AssignExpression& node)
@@ -434,7 +419,6 @@ void PointComputeGenerator::visit(const ast::FunctionCall& node)
 
     const FunctionBase::Ptr function =
         this->getFunction(node.mFunction, mOptions, /*no internal access*/false);
-    assert(function);
 
     if (function->context() & FunctionBase::Base) {
         ComputeGenerator::visit(node);

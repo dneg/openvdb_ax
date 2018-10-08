@@ -42,21 +42,6 @@
 #include "ComputeGenerator.h"
 #include "FunctionTypes.h"
 
-#include <openvdb_ax/compiler/TargetRegistry.h>
-
-#include <openvdb/math/Coord.h>
-#include <openvdb/math/Transform.h>
-#include <openvdb/math/Vec3.h>
-#include <openvdb/tree/ValueAccessor.h>
-
-#include <llvm/IR/Module.h>
-
-// fwd declaration
-namespace llvm
-{
-    struct Value;
-}
-
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
@@ -64,128 +49,42 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-struct Accessors { using Ptr = std::unique_ptr<Accessors>; };
-
-template <typename TreeT>
-struct TypedAccessor : public Accessors
-{
-    using Ptr = std::unique_ptr<TypedAccessor<TreeT>>;
-
-    inline void*
-    init(TreeT& tree) {
-        mAccessor.reset(new tree::ValueAccessor<TreeT>(tree));
-        return static_cast<void*>(mAccessor.get());
-    }
-
-    std::unique_ptr<tree::ValueAccessor<TreeT>> mAccessor;
-};
-
 /// @brief  The function definition and signature which is built by the
 ///         VolumeComputeGenerator.
 ///
 ///         The argument structure is as follows:
 ///
 ///             1) - A void pointer to the CustomData
-///             2) - An pointer to an array of three ints representing the
+///             2) - A pointer to an array of three ints representing the
 ///                  current voxel coord being accessed
 ///             3) - An pointer to an array of three floats representing the
 ///                  current voxel world space coord being accessed
-///             4) - A void pointer to a vector of void pointers, representing an array
-///                  of grid accessors
-///             4) - A void pointer to a vector of void pointers, representing an array
-///                  of grid transforms
+///             4) - A void pointer to a vector of void pointers, representing
+///                  an array of grid accessors
+///             5) - A void pointer to a vector of void pointers, representing
+///                  an array of grid transforms
 ///
-struct ComputeVolumeFunction
+struct VolumeKernel
 {
-    /// The name of the generated function
-    static const std::string DefaultName;
-
-    /// The signature of the generated function
+    // The signature of the generated function
     using Signature =
         void(const void* const,
              const int32_t (*)[3],
              const float (*)[3],
              void**,
-             void**
-            );
+             void**);
 
-    using SignaturePtr = std::add_pointer<Signature>::type;
     using FunctionT = std::function<Signature>;
-    using FunctionTraitsT = FunctionTraits<FunctionT>;
-    using ReturnT = FunctionTraitsT::ReturnType;
-
+    using FunctionTraitsT = codegen::FunctionTraits<FunctionT>;
     static const size_t N_ARGS = FunctionTraitsT::N_ARGS;
 
-    /// The argument key names available during code generation
-    static const std::array<std::string, N_ARGS> ArgumentKeys;
-
-    /// The arguments of the generated function
-    struct Arguments
-    {
-        Arguments(const CustomData& customData)
-            : mCustomDataPtr(&customData)
-            , mCoord()
-            , mCoordWS()
-            , mVoidAccessors()
-            , mAccessors()
-            , mVoidTransforms() {}
-
-        /// @brief  Given a built version of the function signature, automatically
-        ///         bind the current arguments and return a callable function
-        ///         which takes no arguments
-        ///
-        /// @param  function  The fully generated function built from the
-        ///                   VolumeComputeGenerator
-        ///
-        inline std::function<ReturnT()>
-        bind(Signature function)
-        {
-            return std::bind(function,
-                static_cast<FunctionTraitsT::Arg<0>::Type>(mCustomDataPtr),
-                reinterpret_cast<FunctionTraitsT::Arg<1>::Type>(mCoord.data()),
-                reinterpret_cast<FunctionTraitsT::Arg<2>::Type>(mCoordWS.asV()),
-                static_cast<FunctionTraitsT::Arg<3>::Type>(mVoidAccessors.data()),
-                static_cast<FunctionTraitsT::Arg<4>::Type>(mVoidTransforms.data()));
-        }
-
-        template <typename TreeT>
-        inline void
-        addAccessor(TreeT& tree)
-        {
-            typename TypedAccessor<TreeT>::Ptr accessor(new TypedAccessor<TreeT>());
-            mVoidAccessors.emplace_back(accessor->init(tree));
-            mAccessors.emplace_back(std::move(accessor));
-        }
-
-        template <typename TreeT>
-        inline void
-        addConstAccessor(const TreeT& tree)
-        {
-            typename TypedAccessor<const TreeT>::Ptr accessor(new TypedAccessor<const TreeT>());
-            mVoidAccessors.emplace_back(accessor->init(tree));
-            mAccessors.emplace_back(std::move(accessor));
-        }
-
-        inline void
-        addTransform(math::Transform::Ptr transform)
-        {
-            mVoidTransforms.emplace_back(static_cast<void*>(transform.get()));
-        }
-
-        const CustomData* const mCustomDataPtr;
-        openvdb::Coord mCoord;
-        openvdb::math::Vec3<float> mCoordWS;
-
-    private:
-        std::vector<void*> mVoidAccessors;
-        std::vector<Accessors::Ptr> mAccessors;
-        std::vector<void*> mVoidTransforms;
-    };
+    static const std::array<std::string, N_ARGS>& argumentKeys();
+    static std::string getDefaultName();
 };
 
 
-//////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
 
 /// @brief Visitor object which will generate llvm IR for a syntax tree which has been generated
 ///        from AX that targets volumes.  The IR will represent a single function. It is mainly
@@ -202,21 +101,15 @@ struct VolumeComputeGenerator : public ComputeGenerator
     ///                         be stored.
     /// @param functionName     Name of the generated IR function
     VolumeComputeGenerator(llvm::Module& module,
-                           CustomData* const customData,
                            const FunctionOptions& options,
                            FunctionRegistry& functionRegistry,
-                           std::vector<std::string>* const warnings = nullptr,
-                           const std::string& functionName = ComputeVolumeFunction::DefaultName);
+                           std::vector<std::string>* const warnings = nullptr);
 
     ~VolumeComputeGenerator() override = default;
 
-    /// @brief Retrieve the name of the generated IR function
-    /// @param list Vector of strings into which the name should be retrieved
-    inline void
-    getFunctionList(std::vector<std::string>& list)
-    {
-        list.push_back(mFunctionName);
-    }
+    void setFunctionName(const std::string& name);
+
+protected:
 
     /// @brief initializes visitor.  Automatically called when visiting the tree's root node.
     void init(const ast::Tree& node) override;
@@ -228,11 +121,6 @@ struct VolumeComputeGenerator : public ComputeGenerator
 
 private:
 
-    // The string mapped function variables, defined by the Function interface
-    SymbolTable mLLVMArguments;
-
-    // Track how many attributes have been visisted so we can choose the correct
-    // code path
     size_t mVolumeVisitCount;
     std::string mFunctionName;
 };

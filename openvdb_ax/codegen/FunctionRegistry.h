@@ -44,7 +44,7 @@
 
 #include <openvdb_ax/compiler/CompilerOptions.h>
 
-#include <openvdb/version.h>
+#include <openvdb_ax/version.h>
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE

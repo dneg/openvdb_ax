@@ -171,7 +171,7 @@ FunctionSignatureBase::implicitMatch(std::vector<llvm::Type*>& input, llvm::LLVM
 bool
 FunctionSignatureBase::hasReturnValue(llvm::LLVMContext& C) const
 {
-    return !this->toLLVMTypes(C)->isVoidTy();
+    return this->toLLVMTypes(C) != LLVMType<void>::get(C);
 }
 
 void
@@ -406,10 +406,10 @@ FunctionBase::execute(const std::vector<llvm::Value*>& args,
     std::vector<llvm::Type*> types;
     valuesToTypes(args, types);
 
-    llvm::LLVMContext& context = builder.getContext();
+    llvm::LLVMContext& C = M.getContext();
 
     const FunctionBase::FunctionMatch functionMatch =
-        match(types, context, addOutputArguments);
+        match(types, C, addOutputArguments);
 
     const FunctionSignatureBase::Ptr targetFunction = functionMatch.first;
     const FunctionSignatureBase::SignatureMatch& match = functionMatch.second;
@@ -419,7 +419,7 @@ FunctionBase::execute(const std::vector<llvm::Value*>& args,
     if (match == FunctionSignatureBase::SignatureMatch::Implicit) {
 
         std::vector<llvm::Type*> targetTypes;
-        targetFunction->toLLVMTypes(context, &targetTypes);
+        targetFunction->toLLVMTypes(C, &targetTypes);
 
         for (size_t i = 0; i < input.size(); ++i) {
             if (isScalarType(input[i]->getType())) {
@@ -460,10 +460,10 @@ FunctionBase::execute(const std::vector<llvm::Value*>& args,
         }
 
         // @todo  To implicit cast wrong return types?
-        if (result->getType() != targetFunction->toLLVMTypes(context)) {
+        if (result->getType() != targetFunction->toLLVMTypes(C)) {
             std::string type, expected;
             llvmTypeToString(result->getType(), type);
-            llvmTypeToString(targetFunction->toLLVMTypes(context), expected);
+            llvmTypeToString(targetFunction->toLLVMTypes(C), expected);
 
             OPENVDB_THROW(LLVMFunctionError, "Function \"" + this->identifier() +
                 "\" has been invoked with a mismatching return type. Expected: \"" +
@@ -484,14 +484,14 @@ FunctionBase::execute(const std::vector<llvm::Value*>& args,
     else {
         // match == FunctionSignatureBase::SignatureMatch::Size
         os << "No matching function for ";
-        printSignature(LLVMType<void>::get(context), types, this->identifier(), os);
+        printSignature(LLVMType<void>::get(C), types, this->identifier(), os);
         os << ".";
     }
 
     os << " Candidates are: ";
     for (const auto& function : mFunctionList) {
         os << std::endl;
-        function->print(context, this->identifier(), os);
+        function->print(C, this->identifier(), os);
         os << ", ";
     }
 

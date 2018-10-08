@@ -52,7 +52,7 @@
 #include <openvdb_ax/compiler/CustomData.h>
 #include <openvdb_ax/Exceptions.h>
 
-#include <openvdb/version.h>
+#include <openvdb_ax/version.h>
 
 #include <unordered_map>
 

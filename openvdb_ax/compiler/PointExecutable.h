@@ -47,8 +47,8 @@
 //forward
 namespace llvm {
 
-    class ExecutionEngine;
-    class LLVMContext;
+class ExecutionEngine;
+class LLVMContext;
 
 }
 
@@ -80,7 +80,7 @@ public:
     PointExecutable(const std::shared_ptr<const llvm::ExecutionEngine>& exeEngine,
                     const std::shared_ptr<const llvm::LLVMContext>& context,
                     const Registry::ConstPtr& attributeRegistry,
-                    const CustomData::Ptr& customData,
+                    const CustomData::ConstPtr& customData,
                     const std::map<std::string, uint64_t>& functions)
         : mExecutionEngine(exeEngine)
         , mContext(context)
@@ -106,9 +106,8 @@ private:
     // as these objects must not be destroyed before this one
     const std::shared_ptr<const llvm::ExecutionEngine> mExecutionEngine;
     const std::shared_ptr<const llvm::LLVMContext> mContext;
-
     const Registry::ConstPtr mAttributeRegistry;
-    const CustomData::Ptr mCustomData;
+    const CustomData::ConstPtr mCustomData;
     // addresses of actual compiled code
     const std::map<std::string, uint64_t> mFunctionAddresses;
 };

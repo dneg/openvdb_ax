@@ -29,8 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 
-#ifndef OPENVDB_AX_CODEGEN_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
-#define OPENVDB_AX_CODEGEN_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
+#ifndef OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
+#define OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
 
 #include <openvdb/openvdb.h>
 #include <openvdb/points/AttributeArray.h>
@@ -43,7 +43,7 @@ OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
-namespace codegen {
+namespace compiler {
 
 
 /// @brief  Various functions can request the use and initialization of point data from within
@@ -303,7 +303,7 @@ private:
 }
 }
 
-#endif // OPENVDB_AX_CODEGEN_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
+#endif // OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
 
 // Copyright (c) 2015-2018 DNEG Visual Effects
 // All rights reserved. This software is distributed under the

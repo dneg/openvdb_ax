@@ -36,7 +36,7 @@
 
 #include <openvdb/Types.h>
 #include <openvdb/util/Name.h>
-#include <openvdb/version.h>
+#include <openvdb_ax/version.h>
 
 #include <memory>
 #include <utility>

@@ -179,16 +179,36 @@ struct LLVMType<char> {
     static_assert(std::is_same<uint8_t, unsigned char>::value,
         "This library requires std::uint8_t to be implemented as unsigned char.");
     static inline llvm::Type*
-    get(llvm::LLVMContext& c) {
-        return LLVMType<uint8_t>::get(c);
+    get(llvm::LLVMContext& C) {
+        return LLVMType<uint8_t>::get(C);
     }
 };
 
 template <>
 struct LLVMType<void> {
     static inline llvm::Type*
-    get(llvm::LLVMContext& c) {
-        return llvm::Type::getVoidTy(c);
+    get(llvm::LLVMContext& C) {
+        return llvm::Type::getVoidTy(C);
+    }
+};
+
+/// @note  void/opaque pointers are not supported in LLVM (although they seem to
+///        work as long as assertions are turned off during LLVM compilation). We
+///        cant use i8* types instead as various code-generation checks the llvm
+///        type for instruction branching. To temporarily circumvent this, void
+///        pointers are re-directed as pointers to structs containing a void member.
+///        They should never be used internally, and are only required by the external
+///        kernel functions.
+///
+/// @todo  introduce better front-end type management of AX types
+///
+template <>
+struct LLVMType<void*> {
+    static inline llvm::Type*
+    get(llvm::LLVMContext& C) {
+        llvm::Type* type = LLVMType<void>::get(C);
+        return llvm::StructType::get(C,
+            llvm::ArrayRef<llvm::Type*>(type))->getPointerTo(0);
     }
 };
 
@@ -236,8 +256,8 @@ llvmFloatType(const size_t size, llvm::LLVMContext& context)
 /// @note   For string types, this function returns the element type, not the
 ///         object type! The llvm type representing a char block of memory
 ///         is LLVMType<char*>::get(C);
-/// @param type    The name of the type to request.
-/// @param module  The LLVMContext to request the Type from.
+/// @param type  The name of the type to request.
+/// @param C     The LLVMContext to request the Type from.
 ///
 inline llvm::Type*
 llvmTypeFromName(const std::string& type,
@@ -315,15 +335,25 @@ isArrayType(llvm::Type* type)
     return static_cast<bool>(arrayType);
 }
 
+/// @brief Returns whether the supplied Type* is an array type with count elements
+/// @param type The Type* to check
+/// @param count The number of elements
+///
+inline bool
+isArrayNType(llvm::Type* type, const size_t count)
+{
+    llvm::ArrayType* arrayType = llvm::dyn_cast<llvm::ArrayType>(type);
+    if (!arrayType) return false;
+    return arrayType->getNumElements() == count;
+}
+
 /// @brief Returns whether the supplied Type* is an array type with 3 elements
 /// @param type The Type* to check
 ///
 inline bool
 isArray3Type(llvm::Type* type)
 {
-    llvm::ArrayType* arrayType = llvm::dyn_cast<llvm::ArrayType>(type);
-    if (!arrayType) return false;
-    return arrayType->getNumElements() == 3;
+    return isArrayNType(type, 3);
 }
 
 }

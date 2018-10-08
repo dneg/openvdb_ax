@@ -30,10 +30,9 @@
 
 #include "PointFunctions.h"
 
-#include "LeafLocalData.h"
-
 #include <openvdb_ax/compiler/CustomData.h>
 #include <openvdb_ax/compiler/TargetRegistry.h>
+#include <openvdb_ax/compiler/LeafLocalData.h>
 
 #include <openvdb/openvdb.h>
 #include <openvdb/points/PointDataGrid.h>
@@ -77,8 +76,8 @@ namespace point_functions_internal
         }
 
         if (!handle) {
-            openvdb::ax::codegen::LeafLocalData* const leafData =
-                static_cast<openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+            openvdb::ax::compiler::LeafLocalData* const leafData =
+                static_cast<openvdb::ax::compiler::LeafLocalData* const>(leafDataPtr);
 
             // If we are setting membership and the handle doesnt exist, create in in
             // the set of new data thats being added
@@ -121,8 +120,8 @@ bool InGroup::Internal::in_group(const uint8_t* const name,
     // If the handle doesn't exist, check to see if any new groups have
     // been added
 
-    const openvdb::ax::codegen::LeafLocalData* const leafData =
-        static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+    const openvdb::ax::compiler::LeafLocalData* const leafData =
+        static_cast<const openvdb::ax::compiler::LeafLocalData* const>(leafDataPtr);
 
     handle = leafData->get(nameStr);
     return handle ? handle->get(index) : false;
@@ -140,8 +139,8 @@ bool InGroup::Internal::in_group(const uint8_t* const name,
 //     const AttributeHandleType* const handle =
 //         static_cast<AttributeHandleType*>(attributeHandle);
 
-//     const openvdb::ax::codegen::LeafLocalData* const leafData =
-//         static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+//     const openvdb::ax::compiler::LeafLocalData* const leafData =
+//         static_cast<const openvdb::ax::compiler::LeafLocalData* const>(leafDataPtr);
 
 //     std::string data;
 //     if (!leafData->getNewStringData(&(handle->array()), index, data)) {
@@ -169,8 +168,8 @@ bool InGroup::Internal::in_group(const uint8_t* const name,
 //     AttributeHandleType* const handle =
 //         static_cast<AttributeHandleType*>(attributeHandle);
 
-//     openvdb::ax::codegen::LeafLocalData* const leafData =
-//         static_cast<openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+//     openvdb::ax::compiler::LeafLocalData* const leafData =
+//         static_cast<openvdb::ax::compiler::LeafLocalData* const>(leafDataPtr);
 
 //     // Check to see if the string exists in the metadata cache. If so, set the string and
 //     // remove any new data associated with it, otherwise set the new data
@@ -189,8 +188,8 @@ void SetPointPWS::set_point_pws(void* leafDataPtr,
                                 openvdb::Vec3s* value)
 {
     assert(index >= 0);
-    openvdb::ax::codegen::LeafLocalData* leafData =
-        static_cast<openvdb::ax::codegen::LeafLocalData*>(leafDataPtr);
+    openvdb::ax::compiler::LeafLocalData* leafData =
+        static_cast<openvdb::ax::compiler::LeafLocalData*>(leafDataPtr);
     leafData->setPosition(*value, index);
 }
 
@@ -209,8 +208,8 @@ void SetPointPWS::set_point_pws(void* leafDataPtr,
 //     AttributeHandleType* const handle =
 //         static_cast<AttributeHandleType*>(attributeHandle);
 
-//     const openvdb::ax::codegen::LeafLocalData* const leafData =
-//         static_cast<const openvdb::ax::codegen::LeafLocalData* const>(leafDataPtr);
+//     const openvdb::ax::compiler::LeafLocalData* const leafData =
+//         static_cast<const openvdb::ax::compiler::LeafLocalData* const>(leafDataPtr);
 
 //     std::string data;
 //     if (!leafData->getNewStringData(&(handle->array()), index, data)) {
@@ -226,8 +225,8 @@ void GetPointPWS::get_point_pws(void* leafDataPtr,
                                 openvdb::Vec3s* value)
 {
     assert(index >= 0);
-    openvdb::ax::codegen::LeafLocalData* leafData =
-        static_cast<openvdb::ax::codegen::LeafLocalData*>(leafDataPtr);
+    openvdb::ax::compiler::LeafLocalData* leafData =
+        static_cast<openvdb::ax::compiler::LeafLocalData*>(leafDataPtr);
    (*value) = leafData->getPositions()[index];
 }
 

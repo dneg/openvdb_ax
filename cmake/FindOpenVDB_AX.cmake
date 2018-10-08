@@ -61,4 +61,27 @@ IF( OpenVDB_AX_FOUND )
     NO_SYSTEM_ENVIRONMENT_PATH
     )
 
+  SET( OPENVDB_AX_VERSION_FILE ${OpenVDB_AX_INCLUDE_DIR}/openvdb_ax/version.h )
+
+  FILE( STRINGS "${OPENVDB_AX_VERSION_FILE}" openvdb_ax_major_version_str
+    REGEX "^#define[\t ]+OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER[\t ]+.*")
+  FILE( STRINGS "${OPENVDB_AX_VERSION_FILE}" openvdb_ax_minor_version_str
+    REGEX "^#define[\t ]+OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER[\t ]+.*")
+  FILE( STRINGS "${OPENVDB_AX_VERSION_FILE}" openvdb_ax_patch_version_str
+    REGEX "^#define[\t ]+OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER[\t ]+.*")
+
+  STRING( REGEX REPLACE "^.*OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER[\t ]+([0-9]*).*$" "\\1"
+    _openvdb_ax_major_version_number "${openvdb_ax_major_version_str}")
+  STRING( REGEX REPLACE "^.*OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER[\t ]+([0-9]*).*$" "\\1"
+    _openvdb_ax_minor_version_number "${openvdb_ax_minor_version_str}")
+  STRING( REGEX REPLACE "^.*OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER[\t ]+([0-9]*).*$" "\\1"
+    _openvdb_ax_patch_version_number "${openvdb_ax_patch_version_str}")
+
+  SET( OPENVDB_AX_MAJOR_VERSION_NUMBER ${_openvdb_ax_major_version_number}
+    CACHE STRING "OpenVDB AX major version number" )
+  SET( OPENVDB_AX_MINOR_VERSION_NUMBER ${_openvdb_ax_minor_version_number}
+    CACHE STRING "OpenVDB AX minor version number" )
+  SET( OPENVDB_AX_PATCH_VERSION_NUMBER ${_openvdb_ax_patch_version_number}
+    CACHE STRING "OpenVDB AX patch version number" )
+
 ENDIF( OpenVDB_AX_FOUND )
