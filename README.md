@@ -1,11 +1,23 @@
-# OpenVDB AX
+# OpenVDB AX [![Build Status](https://travis-ci.com/dneg/openvdb_ax.svg?branch=master)](https://travis-ci.com/dneg/openvdb_ax)
+
+* [Introduction](#introduction)
+* [Development Repository](#development-repository)
+	* [License](#license)
+	* [Documentation](#documentation)
+	* [Getting up and running](#getting-up-and-running)
+* [Roadmap](#roadmap)
+
+
+## Introduction
 
 OpenVDB AX is an open source C++ library that provides a powerful and easy way of interacting with [OpenVDB](http://www.openvdb.org/) point and volume data. This exposes an expression language to allow fast, custom manipulation of point attributes and voxel values using a collection of mathematical functions. Expressions are quickly JIT-compiled and to offer great performance that in many cases rival custom C++ operators. It is developed and maintained by DNEG Visual Effects, providing a flexible and portable way to work with OpenVDB data.
 
 
-## Development Repository
+## Development repository
 
 This repository hosts the latest developments in the OpenVDB AX repository. This has been used in production at DNEG in various feature films yet remains a work-in-progress and such may be quite volatile. That is, both API and ABI **may be subject to change** so development using more niche features and lower-level components of the library (close to the LLVM component) should be approached with caution. However, use of the library and AX language (i.e. through the provided vdb_ax binary and Houdini OpenVDB AX SOP) is encouraged and future developments will focus on extending the language further to offer a wider range of functionality.
+
+For the latest changes please see our [change log](openvdb_ax/CHANGES.md).
 
 
 ### License
