@@ -20,4 +20,6 @@ This library uses doxygen for creating its documentation. Following the instruct
 ### Getting up and running
 
 Following building and installing the library as in INSTALL or BuildingWithCMake. If you have chosen to build the vdb_ax binary, this should be available from the install folder and can be accessed from the command line. Alternatively, using the OpenVDB AX Houdini SOP you will be able to modify OpenVDB data interactively within Houdini.
+## Roadmap
 
+Please see our [roadmap](ROADMAP.md) for more details.
