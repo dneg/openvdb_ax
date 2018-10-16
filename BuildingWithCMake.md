@@ -42,5 +42,4 @@ make install -j32
 
 ```
 
-
 Thanks to those who supplied the CMake setup in OpenVDB upon which this is heavily based.
