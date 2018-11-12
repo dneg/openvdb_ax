@@ -123,6 +123,7 @@
     openvdb::ax::ast::Expression* expression;
     openvdb::ax::ast::ExpressionList* expressionlist;
     openvdb::ax::ast::Variable* variable;
+    openvdb::ax::ast::ExternalVariable* external;
     openvdb::ax::ast::Attribute* attribute;
     openvdb::ax::ast::AttributeValue* attributevalue;
     openvdb::ax::ast::DeclareLocal* declare_local;
@@ -132,7 +133,7 @@
 %start statements
 
 %token TRUE FALSE
-%token SEMICOLON AT
+%token SEMICOLON AT DOLLAR
 %token IF ELSE
 %token RETURN
 %token EQUALS PLUSEQUALS MINUSEQUALS MULTIPLYEQUALS DIVIDEEQUALS PLUSPLUS MINUSMINUS
@@ -141,7 +142,7 @@
 %token BITAND BITOR BITXOR BITNOT
 %token EQUALSEQUALS NOTEQUALS MORETHAN LESSTHAN MORETHANOREQUAL LESSTHANOREQUAL
 %token AND OR NOT
-%token STRING DOUBLE FLOAT LONG INT SHORT BOOL VOID F_AT I_AT V_AT S_AT
+%token STRING DOUBLE FLOAT LONG INT SHORT BOOL VOID F_AT I_AT V_AT S_AT F_DOLLAR I_DOLLAR V_DOLLAR S_DOLLAR
 %token COMMA
 %token VEC3I VEC3F VEC3D
 %token DOT_X DOT_Y DOT_Z
@@ -171,6 +172,7 @@
 %type <expression> cast_expression
 %type <expressionlist> arguments
 %type <attribute> attribute
+%type <external> external
 %type <declare_local> declare_local
 %type <local> local
 %type <vector_unpack> vector_element
@@ -249,6 +251,7 @@ expression:
     | vector_literal               { $$ = $1; }
     | vector_element               { $$ = $1; }
     | literal                      { $$ = $1; }
+    | external                     { $$ = $1; }
     | local                        { $$ = new LocalValue($1); }
     | attribute                    { $$ = new AttributeValue($1); }
 ;
@@ -258,7 +261,8 @@ expression:
 ///         value.
 vector_element:
     attribute component  { $$ = new VectorUnpack(new AttributeValue($1), $2); } |
-    local component      { $$ = new VectorUnpack(new LocalValue($1), $2); }
+    local component      { $$ = new VectorUnpack(new LocalValue($1), $2); }     |
+    external component   { $$ = new VectorUnpack($1, $2); }
 ;
 
 /// @brief  A unique type of expression to support recursive brackets
@@ -391,6 +395,18 @@ attribute:
     | S_AT IDENTIFIER            { $$ = new Attribute($2, openvdb::typeNameAsString<std::string>()); free((char*)$2); }
     | STRING AT IDENTIFIER       { $$ = new Attribute($3, openvdb::typeNameAsString<std::string>()); free((char*)$3); }
     | AT IDENTIFIER              { $$ = new Attribute($2, openvdb::typeNameAsString<float>(), true); free((char*)$2); }
+;
+
+/// @brief  Syntax for supported external variable access
+external:
+      scalar_type DOLLAR IDENTIFIER  { $$ = new ExternalVariable($3, $1); free((char*)$3); }
+    | vector_type DOLLAR IDENTIFIER  { $$ = new ExternalVariable($3, $1); free((char*)$3); }
+    | I_DOLLAR  IDENTIFIER           { $$ = new ExternalVariable($2, openvdb::typeNameAsString<int32_t>()); free((char*)$2); }
+    | F_DOLLAR  IDENTIFIER           { $$ = new ExternalVariable($2, openvdb::typeNameAsString<float>()); free((char*)$2); }
+    | V_DOLLAR IDENTIFIER            { $$ = new ExternalVariable($2, openvdb::typeNameAsString<openvdb::Vec3s>()); free((char*)$2); }
+    | S_DOLLAR IDENTIFIER            { $$ = new ExternalVariable($2, openvdb::typeNameAsString<std::string>()); free((char*)$2); }
+    | STRING DOLLAR IDENTIFIER       { $$ = new ExternalVariable($3, openvdb::typeNameAsString<std::string>()); free((char*)$3); }
+    | DOLLAR IDENTIFIER              { $$ = new ExternalVariable($2, openvdb::typeNameAsString<float>()); free((char*)$2); }
 ;
 
 /// @brief  Syntax for the declaration of supported local variable types

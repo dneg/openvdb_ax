@@ -341,6 +341,54 @@ void optimiseAndVerify(llvm::Module* module, const bool verify, const CompilerOp
     }
 }
 
+void verifyTypedAccesses(const ast::Tree& tree)
+{
+    // verify the attributes and external variables requested in the syntax tree
+    // only have a single type. Note that the executer will also throw a runtime
+    // error if the same attribute is accessed with different types, but as that's
+    // currently not a valid state on a PointDataGrid, error in compilation as well
+    // @todo - introduce a framework for supporting custom preprocessors
+
+    std::unordered_map<std::string, std::string> nameType;
+
+    auto attributeOp =
+        [&nameType](const ast::Attribute& node) {
+            auto iter = nameType.find(node.mName);
+            if (iter == nameType.end()) {
+                nameType[node.mName] = node.mType;
+            }
+            else if (iter->second != node.mType) {
+                OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous @ parameters. "
+                    "\"" + node.mName + "\" has been accessed with different types.");
+            }
+        };
+
+    ast::visitNodeType<ast::Attribute>(tree, attributeOp);
+
+    nameType.clear();
+
+    auto externalOp =
+        [&nameType](const ast::ExternalVariable& node) {
+            auto iter = nameType.find(node.mName);
+            if (iter == nameType.end()) {
+                nameType[node.mName] = node.mType;
+            }
+            else if (iter->second != node.mType) {
+                OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous $ parameters. "
+                    "\"" + node.mName + "\" has been accessed with different types.");
+            }
+
+            // Error on string lookups as we don't support these
+            // @todo ... support these
+            if (node.mType == openvdb::typeNameAsString<std::string>()) {
+                OPENVDB_THROW(AXCompilerError, "Failed to compile string $ parameter "
+                    "\"" + node.mName + "\". string lookups are not currently supported.");
+            }
+        };
+
+    ast::visitNodeType<ast::ExternalVariable>(tree, externalOp);
+}
+
 template <typename RegistryT>
 inline typename RegistryT::Ptr
 registerAccesses(const codegen::SymbolTable& globals, const ast::Tree& tree)
@@ -391,10 +439,90 @@ registerAccesses(const codegen::SymbolTable& globals, const ast::Tree& tree)
         assert(variable->getValueType()->isIntegerTy(64));
 
         variable->setInitializer(llvm::ConstantInt::get(variable->getValueType(), index));
-        variable->setConstant(true); // is not writen to at runtime
+        variable->setConstant(true); // is not written to at runtime
     }
 
     return registry;
+}
+
+inline void
+registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& data, llvm::LLVMContext& C)
+{
+    std::string name, type;
+    for (const auto& global : globals.map()) {
+
+        const std::string& token = global.first;
+        if (!codegen::isGlobalExternalAccess(token, name, type)) continue;
+
+        // if we have any external variables, the custom data must be initialized to at least hold
+        // zero values (initialized by the default metadata types)
+        if (!data) data.reset(new CustomData);
+
+        // should always be a GlobalVariable.
+        assert(llvm::isa<llvm::GlobalVariable>(global.second));
+
+        llvm::GlobalVariable* variable = llvm::cast<llvm::GlobalVariable>(global.second);
+        assert(variable->getValueType() == codegen::LLVMType<uintptr_t>::get(C));
+        llvm::Constant* initializer = nullptr;
+
+        if (type == typeNameAsString<bool>()) {
+            TypedMetadata<bool>* meta =
+                data->getOrInsertData<TypedMetadata<bool>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<int16_t>()) {
+            TypedMetadata<int16_t>* meta =
+                data->getOrInsertData<TypedMetadata<int16_t>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<int32_t>()) {
+            TypedMetadata<int32_t>* meta =
+                data->getOrInsertData<TypedMetadata<int32_t>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<int64_t>()) {
+            TypedMetadata<int64_t>* meta =
+                data->getOrInsertData<TypedMetadata<int64_t>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<float>()) {
+            TypedMetadata<float>* meta =
+                 data->getOrInsertData<TypedMetadata<float>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<double>()) {
+            TypedMetadata<double>* meta =
+                data->getOrInsertData<TypedMetadata<double>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<math::Vec3<int32_t>>()) {
+            TypedMetadata<math::Vec3<int32_t>>*
+                meta = data->getOrInsertData<TypedMetadata<math::Vec3<int32_t>>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<math::Vec3<float>>()) {
+            TypedMetadata<math::Vec3<float>>*
+                meta = data->getOrInsertData<TypedMetadata<math::Vec3<float>>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else if (type == typeNameAsString<math::Vec3<double>>()) {
+            TypedMetadata<math::Vec3<double>>*
+                meta = data->getOrInsertData<TypedMetadata<math::Vec3<double>>>(name);
+            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
+        }
+        else {
+            // grammar guarantees this is unreachable as long as all types are supported
+            OPENVDB_THROW(AXCompilerError, "Unsupported $ parameter type \"" + type + "\".");
+        }
+
+        if (!initializer) {
+            OPENVDB_THROW(AXCompilerError, "Custom data \"" + name + "\" already exists with a "
+                "different type.");
+        }
+
+        variable->setInitializer(initializer);
+        variable->setConstant(true); // is not written to at runtime
+    }
 }
 
 /// @brief Modifier class that "disables" attribute assignment statements inside of an AST.
@@ -406,8 +534,7 @@ public:
         : mTargetVolAssignmentExpression(0)
         , mCurrentVolAssignmentExpression(0)
         , mVolumesAssigned()
-        , mVolumeAssignmentFound(false)
-    {}
+        , mVolumeAssignmentFound(false) {}
 
     virtual ~ModifyVolumeAssignments() = default;
 
@@ -420,8 +547,8 @@ public:
 
         // extract the "variable" being assigned to
 
-        const ast::Attribute* const attribute =
-            dynamic_cast<const ast::Attribute* const>(node.mVariable.get());
+        const ast::Attribute::Ptr attribute =
+            std::dynamic_pointer_cast<ast::Attribute>(node.mVariable);
 
         // in this case, we are assigning to an "attribute" rather than a local variable
 
@@ -529,8 +656,13 @@ public:
             mBlockFunctionNames.push_back(std::vector<std::string>());
             mBlockFunctionNames.back().emplace_back(functionName);
 
-            if (globals.map().empty() && !codeGenerator.globals().map().empty()) {
-                globals = codeGenerator.globals();
+            // insert any accessed globals into the final global table - different
+            // block excutions may access different globals but, as it's all compiled
+            // into the same module, we need to track them all
+
+            const codegen::SymbolTable& accessedGlobals = codeGenerator.globals();
+            for (const auto& global : accessedGlobals.map()) {
+                globals.insert(global.first, global.second);
             }
 
             // increment "initial"/"base" volume assignment if we found another assignment
@@ -601,9 +733,9 @@ struct PointDefaultModifier : public openvdb::ax::ast::Modifier
     {
         openvdb::ax::ast::Attribute::UniquePtr replacement;
 
-        if (vectorDefaults.find(node.mName) != vectorDefaults.end()) {
+        if (node.mTypeInferred) {
             // if the user hasn't defined specific type, then allow conversion to vector
-            if (node.mTypeInferred) {
+            if (vectorDefaults.find(node.mName) != vectorDefaults.end()) {
                 replacement.reset(new openvdb::ax::ast::Attribute(node.mName, "vec3s", true));
             }
         }
@@ -650,28 +782,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     PointDefaultModifier modifier;
     tree->accept(modifier);
 
-    // verify the attributes requested in the syntax tree only have a single type
-    // note that the executer
-    // will also throw a runtime error if the same attribute is accessed with different
-    // types, but as that's currently not a valid state on a PointDataGrid, error in
-    // compilation as well
-    // @todo - introduce a framework for supporting custom preprocessors
-    {
-        std::map<std::string, std::string> nameType;
-        auto op =
-            [&nameType](const ast::Attribute& node) {
-                auto iter = nameType.find(node.mName);
-                if (iter == nameType.end()) {
-                    nameType[node.mName] = node.mType;
-                }
-                else if (iter->second != node.mType) {
-                    OPENVDB_THROW(TypeError, "Ambiguous value type for attribute \"" +
-                        node.mName + "\"");
-                }
-            };
-
-        ast::visitNodeType<ast::Attribute>(*tree, op);
-    }
+    verifyTypedAccesses(*tree);
 
     // initialize the module and generate LLVM IR
 
@@ -687,10 +798,13 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     AttributeRegistry::Ptr registry =
         registerAccesses<AttributeRegistry>(codeGenerator.globals(), *tree);
 
+    CustomData::Ptr validCustomData(customData);
+    registerExternalGlobals(codeGenerator.globals(), validCustomData, *mContext);
+
     // as P is accessed specially and not accessed via a global, need to add it to the registry
 
-    if (ast::usesAttribute(syntaxTree, "P")) {
-        registry->addData("P", "vec3s", ast::writesToAttribute(syntaxTree, "P"));
+    if (ast::usesAttribute(*tree, "P")) {
+        registry->addData("P", "vec3s", ast::writesToAttribute(*tree, "P"));
     }
 
     // optimise
@@ -738,7 +852,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     }
 
     // create final executable object
-    PointExecutable::Ptr executable(new PointExecutable(executionEngine, mContext, registry, customData,
+    PointExecutable::Ptr executable(new PointExecutable(executionEngine, mContext, registry, validCustomData,
         functionMap));
     return executable;
 }
@@ -749,6 +863,8 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
                                     const CustomData::Ptr customData,
                                     std::vector<std::string>* warnings)
 {
+    verifyTypedAccesses(syntaxTree);
+
     // initialize the module and generate LLVM IR
 
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
@@ -764,6 +880,8 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
     const VolumeRegistry::Ptr registry =
         registerAccesses<VolumeRegistry>(globals, syntaxTree);
 
+    CustomData::Ptr validCustomData(customData);
+    registerExternalGlobals(globals, validCustomData, *mContext);
 
     llvm::Module* modulePtr = module.get();
     optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
@@ -794,7 +912,7 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 
     // create final executable object
     VolumeExecutable::Ptr
-        executable(new VolumeExecutable(executionEngine, mContext, registry, customData,
+        executable(new VolumeExecutable(executionEngine, mContext, registry, validCustomData,
             volumeCodeBlocks.functionsForAllBlocks(), volumesAssigned));
     return executable;
 }

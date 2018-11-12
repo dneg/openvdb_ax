@@ -63,6 +63,7 @@ public:
     CPPUNIT_TEST(testAssignScopedLocalVariables);
     CPPUNIT_TEST(testAssignDuplicateLocalVariables);
     CPPUNIT_TEST(testAssignDuplicateScopedLocalVariables);
+    CPPUNIT_TEST(testAssignFromExternals);
     CPPUNIT_TEST_SUITE_END();
 
     void testAssignArithmeticPoints();
@@ -83,6 +84,7 @@ public:
     void testAssignScopedLocalVariables();
     void testAssignDuplicateLocalVariables();
     void testAssignDuplicateScopedLocalVariables();
+    void testAssignFromExternals();
 
 };
 
@@ -308,6 +310,38 @@ TestAssign::testAssignDuplicateScopedLocalVariables()
         mHarness.executeCode("test/snippets/assign/assignDuplicateScopedLocalVariables"),
             openvdb::LLVMDeclarationError
         );
+}
+
+void
+TestAssign::testAssignFromExternals()
+{
+    mHarness.addAttribute<int32_t>("int_test1", -3);
+    mHarness.addAttribute<int32_t>("int_test2", 1);
+    mHarness.addAttribute<int64_t>("long_test1", 2l);
+    mHarness.addAttribute<float>("float_test1", 5.6f);
+    mHarness.addAttribute<float>("float_test2", 8.3f);
+    mHarness.addAttribute<float>("float_test3", -1.0f, 0.0f); // float_test3 should be set to zero from empty data
+    mHarness.addAttribute<double>("double_test1", 3.3);
+    mHarness.addAttribute<openvdb::Vec3f>("vector_test1", openvdb::Vec3f(5.f, 4.f, 3.f));
+    mHarness.addAttribute<openvdb::Vec3f>("vector_test2", openvdb::Vec3f(1.f, 2.f, 6.f));
+    mHarness.addAttribute<openvdb::Vec3i>("vector_test3", openvdb::Vec3i(10, 11, 12));
+    mHarness.addAttribute<openvdb::Vec3d>("vector_test4", openvdb::Vec3d(4.5, 4.4, 4.3));
+
+    openvdb::ax::CustomData::Ptr data = openvdb::ax::CustomData::create();
+    data->insertData("short_test1", openvdb::TypedMetadata<int16_t>(-3).copy());
+    data->insertData("int_test2", openvdb::TypedMetadata<int32_t>(1).copy());
+    data->insertData("long_test1", openvdb::TypedMetadata<int64_t>(2l).copy());
+    data->insertData("float_test1", openvdb::TypedMetadata<float>(5.6f).copy());
+    data->insertData("float_test2", openvdb::TypedMetadata<float>(8.3f).copy());
+    data->insertData("double_test1", openvdb::TypedMetadata<double>(3.3).copy());
+    data->insertData("vector_test1", openvdb::TypedMetadata<openvdb::Vec3f>(openvdb::Vec3f(5.f, 4.f, 3.f)).copy());
+    data->insertData("vector_test2", openvdb::TypedMetadata<openvdb::Vec3f>(openvdb::Vec3f(1.f, 2.f, 6.f)).copy());
+    data->insertData("vector_test3", openvdb::TypedMetadata<openvdb::Vec3i>(openvdb::Vec3i(10, 11, 12)).copy());
+    data->insertData("vector_test4", openvdb::TypedMetadata<openvdb::Vec3d>(openvdb::Vec3d(4.5, 4.4, 4.3)).copy());
+
+    mHarness.executeCode("test/snippets/assign/assignFromExternals", nullptr, nullptr, data);
+
+    AXTESTS_STANDARD_ASSERT();
 }
 
 // Copyright (c) 2015-2018 DNEG Visual Effects

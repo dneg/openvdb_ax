@@ -31,6 +31,7 @@
 #include "TestHarness.h"
 
 #include <openvdb_ax/test/util.h>
+#include <openvdb_ax/compiler/CustomData.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -39,6 +40,7 @@
 #include <boost/random/uniform_01.hpp>
 
 using namespace openvdb::points;
+using namespace openvdb::ax;
 
 class TestFunction : public unittest_util::AXTestCase
 {
@@ -62,6 +64,7 @@ public:
     CPPUNIT_TEST(testFunctionVolumeIndexCoords);
     CPPUNIT_TEST(testFunctionVolumePWS);
     CPPUNIT_TEST(testFunctionDeletePoint);
+    CPPUNIT_TEST(testFunctionLookup);
     CPPUNIT_TEST_SUITE_END();
 
     void testFunctionAbs();
@@ -82,6 +85,7 @@ public:
     void testFunctionVolumeIndexCoords();
     void testFunctionVolumePWS();
     void testFunctionDeletePoint();
+    void testFunctionLookup();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestFunction);
@@ -359,6 +363,58 @@ TestFunction::testFunctionDeletePoint()
     mHarness.executeCode("test/snippets/function/functionDeletePoint");
 
     AXTESTS_STANDARD_ASSERT();
+}
+
+void
+TestFunction::testFunctionLookup()
+{
+    mHarness.addAttribute<float>("foo", 2.0f);
+    mHarness.addAttribute<openvdb::Vec3f>("v", openvdb::Vec3f(1.0f, 2.0f, 3.0f));
+
+    using FloatMeta = openvdb::TypedMetadata<float>;
+    using VectorFloatMeta = openvdb::TypedMetadata<openvdb::math::Vec3<float>>;
+
+    FloatMeta customFloatData(2.0f);
+    VectorFloatMeta customVecData(openvdb::math::Vec3<float>(1.0f, 2.0f, 3.0f));
+
+    // test initialising the data before compile
+
+    CustomData::Ptr data = CustomData::create();
+    data->insertData("float1", customFloatData.copy());
+    data->insertData("vector1", customVecData.copy());
+
+    mHarness.executeCode("test/snippets/function/functionLookup", nullptr, nullptr, data);
+    AXTESTS_STANDARD_ASSERT_HARNESS(mHarness)
+
+    mHarness.reset();
+
+    mHarness.addAttribute<float>("foo", 2.0f);
+    mHarness.addAttribute<openvdb::Vec3f>("v", openvdb::Vec3f(1.0f, 2.0f, 3.0f));
+
+    // test post compilation
+
+    data->reset();
+
+    const std::string code = unittest_util::loadText("test/snippets/function/functionLookup");
+    Compiler compiler;
+    PointExecutable::Ptr pointExecutable = compiler.compile<PointExecutable>(code, data);
+    VolumeExecutable::Ptr volumeExecutable = compiler.compile<VolumeExecutable>(code, data);
+
+    data->insertData("float1", customFloatData.copy());
+
+    VectorFloatMeta::Ptr customTypedVecData =
+        openvdb::StaticPtrCast<VectorFloatMeta>(customVecData.copy());
+    data->insertData<VectorFloatMeta>("vector1", customTypedVecData);
+
+    for (auto& grid : mHarness.mInputPointGrids) {
+        pointExecutable->execute(*grid.second);
+    }
+
+    for (auto& grid : mHarness.mInputVolumeGrids) {
+        volumeExecutable->execute(grid.second);
+    }
+
+    AXTESTS_STANDARD_ASSERT_HARNESS(mHarness)
 }
 
 // Copyright (c) 2015-2018 DNEG Visual Effects

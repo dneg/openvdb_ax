@@ -30,6 +30,7 @@
 
 #include <openvdb_ax/ast/AST.h>
 #include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/codegen/FunctionRegistry.h>
 #include <openvdb_ax/compiler/Compiler.h>
 #include <openvdb_ax/compiler/PointExecutable.h>
@@ -57,6 +58,7 @@ struct ProgOptions
     std::string mInputVDBFile = "";
     std::string mOutputVDBFile = "";
     bool mVerbose = false;
+    bool mPrintAST = false;
 };
 
 void
@@ -70,6 +72,7 @@ usage [[noreturn]] (int exitStatus = EXIT_FAILURE)
 "    -f file.txt       execute text file containing a code snippet on the input.vdb file\n" <<
 "    -v                verbose (print timing and diagnostics)\n" <<
 "    --list-functions  list all available functions, their signatures and their documentation\n" <<
+"    --print-ast       print the abstract syntax tree generated for point and volume execution\n" <<
 "Warning:\n" <<
 "     Providing the same file-path to both input.vdb and output.vdb arguments will overwrite\n" <<
 "     the file. If no output file is provided, the input.vdb will be processed but will remain\n" <<
@@ -205,6 +208,8 @@ main(int argc, char *argv[])
                 initializer.initializeCompiler();
                 printFunctions(std::cout);
                 return EXIT_SUCCESS;
+            } else if (parser.check(i, "--print-ast", 0)) {
+                options.mPrintAST = true;
             } else if (arg == "-h" || arg == "-help" || arg == "--help") {
                 usage(EXIT_SUCCESS);
             } else {
@@ -259,6 +264,14 @@ main(int argc, char *argv[])
     initializer.initializeCompiler();
     openvdb::ax::Compiler::Ptr compiler = openvdb::ax::Compiler::create();
 
+    // parse
+
+    const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
+        openvdb::ax::ast::parse(options.mInputCode.c_str());
+    if (options.mPrintAST) {
+        openvdb::ax::ast::print(*syntaxTree);
+    }
+
     // Execute on PointDataGrids
 
     bool executeOnPoints = false;
@@ -275,9 +288,6 @@ main(int argc, char *argv[])
 
         openvdb::ax::CustomData::Ptr customData = openvdb::ax::CustomData::create();
         PointExecutable::Ptr pointExecutable;
-
-        const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
-            openvdb::ax::ast::parse(options.mInputCode.c_str());
 
         if (options.mVerbose) std::cout << "OpenVDB PointDataGrids Found" << std::endl;
         std::vector<std::string> warnings;
@@ -348,7 +358,7 @@ main(int argc, char *argv[])
         try {
             if (options.mVerbose) std::cout << "  Compiling for Volume VDB Grid...";
             volumeExecutable =
-                compiler->compile<VolumeExecutable>(options.mInputCode, customData, &warnings);
+                compiler->compile<VolumeExecutable>(*syntaxTree, customData, &warnings);
         } catch (std::exception& e) {
             OPENVDB_LOG_FATAL("Compilation error!");
             OPENVDB_LOG_FATAL("Errors:");
