@@ -139,6 +139,11 @@ void Attribute::accept(Visitor& visitor) const
     visitor.visit(*this);
 }
 
+void ExternalVariable::accept(Visitor& visitor) const
+{
+    visitor.visit(*this);
+}
+
 void AttributeValue::accept(Visitor& visitor) const
 {
     mAttribute->accept(visitor);
@@ -349,6 +354,14 @@ Expression* Return::accept(Modifier& visitor)
 }
 
 Variable* Attribute::accept(Modifier& visitor)
+{
+    if (Variable* node = visitor.visit(*this)) {
+        return node;
+    }
+    return nullptr;
+}
+
+Variable* ExternalVariable::accept(Modifier& visitor)
 {
     if (Variable* node = visitor.visit(*this)) {
         return node;

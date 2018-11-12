@@ -42,6 +42,7 @@
 
 ";"                         { return SEMICOLON; }
 "@"                         { return AT; }
+"$"                         { return DOLLAR; }
 
 "="                         { return EQUALS; }
 
@@ -104,6 +105,11 @@
 "f@"                        { return F_AT; }
 "i@"                        { return I_AT; }
 "s@"                        { return S_AT; }
+
+"v$"                        { return V_DOLLAR; }
+"f$"                        { return F_DOLLAR; }
+"i$"                        { return I_DOLLAR; }
+"s$"                        { return S_DOLLAR; }
 
 "vector"                    { return VEC3F; } /*VEX SUPPORT TOKENS*/
 

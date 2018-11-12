@@ -48,7 +48,7 @@ struct Tree;
 /// @brief Writes a debug printout of a Tree object into a target stream
 /// @param tree Tree to print
 /// @param os   Stream to write into
-void print(ast::Tree& tree, std::ostream& os = std::cout);
+void print(const ast::Tree& tree, std::ostream& os = std::cout);
 
 } // namespace ast
 } // namespace ax

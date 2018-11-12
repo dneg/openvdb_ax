@@ -318,6 +318,7 @@ TEST_SRC_NAMES := \
     test/frontend/TestConditionalStatementNode.cc \
     test/frontend/TestCrementNode.cc \
     test/frontend/TestDeclareLocalNode.cc \
+    test/frontend/TestExternalVariableNode.cc \
     test/frontend/TestFunctionCallNode.cc \
     test/frontend/TestKeywordNode.cc \
     test/frontend/TestLocalValueNode.cc \
@@ -331,7 +332,6 @@ TEST_SRC_NAMES := \
     test/integration/TestAssign.cc \
     test/integration/TestBinary.cc \
     test/integration/TestCast.cc \
-    test/integration/TestChannelExpressions.cc \
     test/integration/TestDeclare.cc \
     test/integration/TestEditGroups.cc \
     test/integration/TestEmpty.cc \

@@ -127,6 +127,7 @@ protected:
     void visit(const ast::Cast& node) override;
     void visit(const ast::DeclareLocal& node) override;
     void visit(const ast::Local& node) override;
+    void visit(const ast::ExternalVariable& node) override;
 
     /// @brief VectorUnpack pushes a single llvm::Value onto the value
     /// stack which represents a pointer to an element of a vector

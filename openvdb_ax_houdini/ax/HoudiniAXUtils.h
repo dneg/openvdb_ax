@@ -42,7 +42,6 @@
 #include <openvdb_ax/ast/AST.h>
 #include <openvdb_ax/ast/Scanners.h>
 #include <openvdb_ax/codegen/FunctionTypes.h>
-#include <openvdb_ax/codegen/FunctionTypes.h>
 #include <openvdb_ax/codegen/FunctionRegistry.h>
 #include <openvdb_ax/codegen/Utils.h>
 #include <openvdb_ax/compiler/Compiler.h>
@@ -62,18 +61,6 @@
 namespace openvdb_ax_houdini
 {
 
-/// @brief  Tokenized representation of supported Houdini channel functions
-/// @note   The OpenVDB AX core library internally supports lookups
-///         to engine data objects of supported VDB Metadata types. chramp
-///         must be externally registered (see registerCustomHoudiniFunctions())
-///
-enum class ChannelTokens
-{
-    CH,
-    CHV,
-    CHRAMP
-};
-
 enum class TargetType
 {
     POINTS,
@@ -81,15 +68,23 @@ enum class TargetType
     LOCAL
 };
 
-using ChannelExpressionPair = std::pair<ChannelTokens, std::string>;
+using ChannelExpressionPair = std::pair<std::string, std::string>;
 using ChannelExpressionSet = std::set<ChannelExpressionPair>;
 
 /// @brief  Find any Houdini channel expressions represented inside the
 ///         provided Syntax Tree.
 ///
-/// @param  tree     The AST to parse
-/// @param  exprSet  The expression set to populate
-inline void findChannelExpressions(openvdb::ax::ast::Tree& tree,
+/// @param  tree              The AST to parse
+/// @param  exprSet           The expression set to populate
+inline void findChannelExpressions(const openvdb::ax::ast::Tree& tree,
+                            ChannelExpressionSet& exprSet);
+
+/// @brief  Find any Houdini $ expressions represented inside the
+///         provided Syntax Tree.
+///
+/// @param  tree              The AST to parse
+/// @param  exprSet           The expression set to populate
+inline void findDollarExpressions(const openvdb::ax::ast::Tree& tree,
                             ChannelExpressionSet& exprSet);
 
 /// @brief  Converts a Syntax Tree which contains possible representations of
@@ -101,6 +96,15 @@ inline void findChannelExpressions(openvdb::ax::ast::Tree& tree,
 inline void convertASTFromVEX(openvdb::ax::ast::Tree& tree,
                        const TargetType targetType);
 
+/// @brief  Converts lookup functions within a Syntax Tree to ExternalVariable nodes
+///         if the argument is a string literal. This method is much faster than using
+///         the lookup functions but uses $ AX syntax which isn't typical of a Houdini
+///         session.
+///
+/// @param  tree        The AST to convert
+/// @param  targetType  The type of primitive being compiled (this can potentially
+///                     alter the generated instructions)
+inline void convertASTKnownLookups(openvdb::ax::ast::Tree& tree);
 
 /// @brief  Register custom Houdini functions, making them available to the
 ///         core compiler. These functions generally have specific Houdini only
@@ -119,42 +123,59 @@ struct FindChannelExpressions : public openvdb::ax::ast::Visitor
 {
     FindChannelExpressions(ChannelExpressionSet& expressions)
         : mExpressions(expressions) {}
-    virtual ~FindChannelExpressions() {}
+    virtual ~FindChannelExpressions() = default;
+
+    static const std::string*
+    getChannelPath(const openvdb::ax::ast::ExpressionList::Ptr args)
+    {
+        assert(args);
+        const std::vector<openvdb::ax::ast::Expression::Ptr>& inputs = args->mList;
+        if (inputs.empty()) return nullptr;
+
+        const openvdb::ax::ast::Expression* const firstInput = inputs.front().get();
+        const openvdb::ax::ast::Value<std::string>* const path =
+            dynamic_cast<const openvdb::ax::ast::Value<std::string>* const>(firstInput);
+        if (!path) return nullptr;
+        return &(path->mValue);
+    }
 
     /// @brief  Add channel expression function calls
     /// @param  node The FunctionCall AST node being visited
     void visit(const openvdb::ax::ast::FunctionCall& node) override final
     {
-        if (node.mFunction.compare(0,2,"ch") != 0) return;
+        std::string type;
 
-        openvdb_ax_houdini::ChannelTokens token;
-        if (node.mFunction == "ch") token = openvdb_ax_houdini::ChannelTokens::CH;
-        else if (node.mFunction == "chv") token = openvdb_ax_houdini::ChannelTokens::CHV;
-        else if (node.mFunction == "chramp") token = openvdb_ax_houdini::ChannelTokens::CHRAMP;
-        else return;
+        if (node.mFunction == "lookupf" ||
+            node.mFunction == "ch") {
+            type = openvdb::typeNameAsString<float>();
+        }
+        else if (node.mFunction == "lookupvec3f" ||
+                 node.mFunction == "chv") {
+            type = openvdb::typeNameAsString<openvdb::Vec3f>();
+        }
+        else if (node.mFunction == "chramp") {
+            type = "ramp";
+        }
+
+        if (type.empty()) return;
 
         // Get channel arguments. If there are incorrect arguments, defer to
         // the compiler code generation function error system to report proper
         // errors later
 
-        const openvdb::ax::ast::ExpressionList* const args = node.mArguments.get();
-        assert(args);
-        const std::vector<openvdb::ax::ast::Expression::Ptr>& inputs = args->mList;
-        if (inputs.empty()) return;
-
-        const openvdb::ax::ast::Expression* const firstInput = inputs.front().get();
-        const openvdb::ax::ast::Value<std::string>* const path =
-            dynamic_cast<const openvdb::ax::ast::Value<std::string>* const>(firstInput);
+        const openvdb::ax::ast::ExpressionList::Ptr args = node.mArguments;
+        const std::string* path = getChannelPath(args);
         if (!path) return;
 
-        mExpressions.insert(ChannelExpressionPair(token, path->mValue));
+        mExpressions.emplace(type, *path);
     }
 
 private:
     ChannelExpressionSet& mExpressions;
 };
 
-inline void findChannelExpressions(openvdb::ax::ast::Tree& tree, ChannelExpressionSet& exprSet)
+inline void findChannelExpressions(const openvdb::ax::ast::Tree& tree,
+                                   ChannelExpressionSet& exprSet)
 {
     FindChannelExpressions op(exprSet);
     tree.accept(op);
@@ -163,38 +184,52 @@ inline void findChannelExpressions(openvdb::ax::ast::Tree& tree, ChannelExpressi
 
 ///////////////////////////////////////////////////////////////////////////
 
+
+inline void findDollarExpressions(const openvdb::ax::ast::Tree& tree,
+                                  ChannelExpressionSet& exprSet)
+{
+    openvdb::ax::ast::visitNodeType<openvdb::ax::ast::ExternalVariable>(tree,
+        [&](const openvdb::ax::ast::ExternalVariable& node) {
+            exprSet.emplace(node.mType, node.mName);
+        });
+}
+
+
+///////////////////////////////////////////////////////////////////////////
+
 /// @brief AST modifier to convert VEX-like syntax from Houdini to AX.
-///        Finds scalar and vector channel expressions and replace with AX custom data lookups.
-///        Replaces volume intrinsics @P, @ix, @iy, @iz with AX function calls
+///        Finds scalar and vector channel expressions and replace with AX custom
+///        data lookups. Replaces volume intrinsics @P, @ix, @iy, @iz with AX function
+///        calls. In the future this may be used to translate VEX syntax to an AX AST
+///        and back to text for in application conversion to AX syntax.
 struct ConvertFromVEX : public openvdb::ax::ast::Modifier
 {
     ConvertFromVEX(const TargetType targetType)
         : mTargetType(targetType) {}
-    virtual ~ConvertFromVEX() {}
+    virtual ~ConvertFromVEX() = default;
 
     /// @brief  Convert channel function calls to internally supported functions
-    /// @param  node The FunctionCall AST node being visited
+    /// @param  node  The FunctionCall AST node being visited
     openvdb::ax::ast::Expression*
     visit(openvdb::ax::ast::FunctionCall& node) override final
     {
         openvdb::ax::ast::FunctionCall::UniquePtr replacement;
 
-        if (node.mFunction == "ch" || node.mFunction == "chv") {
+        std::string identifier;
+        if (node.mFunction == "ch")       identifier = "lookupf";
+        else if (node.mFunction == "chv") identifier = "lookupvec3f";
+
+        if (!identifier.empty()) {
             // Copy the arguments
             openvdb::ax::ast::ExpressionList::UniquePtr args(node.mArguments->copy());
-            if (node.mFunction == "ch") {
-                replacement.reset(new openvdb::ax::ast::FunctionCall("lookupf", args.release()));
-            }
-            else if (node.mFunction == "chv") {
-                replacement.reset(new openvdb::ax::ast::FunctionCall("lookupvec3f", args.release()));
-            }
+            replacement.reset(new openvdb::ax::ast::FunctionCall(identifier, args.release()));
         }
 
         return replacement.release();
     }
 
     /// @brief  Convert Houdini instrinsic volume attribute read accesses
-    /// @param  node The AttributeValue AST node being visited
+    /// @param  node  The AttributeValue AST node being visited
     openvdb::ax::ast::Expression*
     visit(openvdb::ax::ast::AttributeValue& node) override final
     {
@@ -243,6 +278,57 @@ inline void convertASTFromVEX(openvdb::ax::ast::Tree& tree,
                        const TargetType targetType)
 {
     ConvertFromVEX converter(targetType);
+    tree.accept(converter);
+}
+
+
+///////////////////////////////////////////////////////////////////////////
+
+/// @brief  Convert any lookup or channel functions to ExternalVariable nodes
+///         if the path is a string literal
+struct ConvertKnownLookups : public openvdb::ax::ast::Modifier
+{
+    ConvertKnownLookups() = default;
+    virtual ~ConvertKnownLookups() = default;
+
+    /// @brief  Performs the function call to external variable conversion
+    /// @param  node  The FunctionCall AST node being visited
+    openvdb::ax::ast::Expression*
+    visit(openvdb::ax::ast::FunctionCall& node) override final
+    {
+        const bool isFloatLookup(node.mFunction == "lookupf");
+        const bool isStringLookup(false /*node.mFunction == "lookups"*/);
+        const bool isVec3fLookup(node.mFunction == "lookupvec3f");
+
+        if (!isFloatLookup && !isStringLookup && !isVec3fLookup) return nullptr;
+
+        openvdb::ax::ast::ExternalVariable::UniquePtr replacement;
+        const std::string* path =
+            FindChannelExpressions::getChannelPath(node.mArguments);
+
+        // If for any reason we couldn't validate or get the channel path from the
+        // first argument, fall back to the internal lookup functions. These will
+        // error with the expected function argument style results on invalid arguments
+        // and, correctly support string attribute arguments provided by s@attribute
+        // (although are much slower)
+
+        if (path) {
+
+            std::string type;
+            if (isFloatLookup) type = openvdb::typeNameAsString<float>();
+            else if (isStringLookup) type = openvdb::typeNameAsString<std::string>();
+            else type = openvdb::typeNameAsString<openvdb::Vec3f>();
+
+            replacement.reset(new openvdb::ax::ast::ExternalVariable(*path, type));
+        }
+
+        return replacement.release();
+    }
+};
+
+inline void convertASTKnownLookups(openvdb::ax::ast::Tree& tree)
+{
+    ConvertKnownLookups converter;
     tree.accept(converter);
 }
 
@@ -468,7 +554,12 @@ struct Chramp : public openvdb::ax::codegen::FunctionBase
 void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& reg,
                                     const openvdb::ax::FunctionOptions& options)
 {
-    if(!options.mLazyFunctions) {
+    // @note - we could alias matching functions such as ch and chv here, but we opt
+    // to use the modifier so that all supported VEX conversion is in one place. chramp
+    // is a re-implemented function and is not currently supported outside of the Houdini
+    // plugin
+
+    if (!options.mLazyFunctions) {
         reg.insertAndCreate("chramp", openvdb_ax_houdini::Chramp::create, options);
         reg.insertAndCreate("internal_chramp",
             openvdb_ax_houdini::Chramp::Internal::create, options, true);
