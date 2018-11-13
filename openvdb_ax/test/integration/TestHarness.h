@@ -118,16 +118,6 @@ struct AXTestHarness
         }
     }
 
-    /// @brief override of addInputAttributes for shprt which won't add to volumes
-    ///        necessary since there are no "short" volumes
-    void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<short>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<short>(names, values);
-        }
-    }
-
     /// @brief adds attributes to both to expected outptu data sets
     template <typename T>
     void addExpectedAttributes(const std::vector<std::string>& names,
@@ -242,10 +232,14 @@ private:
     void addInputVolumes(const std::vector<std::string>& names,
                          const std::vector<T>& values)
     {
-        using TreeT = typename openvdb::tree::Tree4<T, 5, 4, 3>::Type;
+        using GridType = typename openvdb::BoolGrid::ValueConverter<T>::Type;
+        if (!GridType::isRegistered()) {
+            throw std::runtime_error("Attempted to insert a volume of type \"" +
+                std::string(openvdb::typeNameAsString<T>()) + "\" which is not registered.");
+        }
 
         for (size_t i = 0; i < names.size(); i++) {
-            typename openvdb::Grid<TreeT>::Ptr grid = openvdb::Grid<TreeT>::create();
+            typename GridType::Ptr grid = GridType::create();
             grid->tree().setValue(openvdb::Coord(0, 0, 0), values[i]);
             grid->setName(names[i]);
             mInputVolumeGrids["one_voxel"].emplace_back(grid);
@@ -267,10 +261,14 @@ private:
     void addExpectedVolumes(const std::vector<std::string>& names,
                             const std::vector<T>& values)
     {
-        using TreeT = typename openvdb::tree::Tree4<T, 5, 4, 3>::Type;
+        using GridType = typename openvdb::BoolGrid::ValueConverter<T>::Type;
+        if (!GridType::isRegistered()) {
+            throw std::runtime_error("Attempted to insert a volume of type \"" +
+                std::string(openvdb::typeNameAsString<T>()) + "\" which is not registered.");
+        }
 
         for (size_t i = 0; i < names.size(); i++) {
-            typename openvdb::Grid<TreeT>::Ptr grid = openvdb::Grid<TreeT>::create();
+            typename GridType::Ptr grid = GridType::create();
             grid->tree().setValue(openvdb::Coord(0, 0, 0), values[i]);
             grid->setName(names[i] + "_expected");
             mOutputVolumeGrids["one_voxel"].emplace_back(grid);

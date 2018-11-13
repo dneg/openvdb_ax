@@ -51,7 +51,9 @@ public:
     CPPUNIT_TEST(testVectorAttributeImplicit);
     CPPUNIT_TEST(testAmbiguousScalarAttributes);
     CPPUNIT_TEST(testAmbiguousVectorAttributes);
-    CPPUNIT_TEST(testAttributesVol);
+    CPPUNIT_TEST(testAmbiguousScalarExternals);
+    CPPUNIT_TEST(testAmbiguousVectorExternals);
+    CPPUNIT_TEST(testAttributesVolume);
     CPPUNIT_TEST_SUITE_END();
 
     void testLocalVariables();
@@ -63,7 +65,9 @@ public:
     void testVectorAttributeImplicit();
     void testAmbiguousScalarAttributes();
     void testAmbiguousVectorAttributes();
-    void testAttributesVol();
+    void testAmbiguousScalarExternals();
+    void testAmbiguousVectorExternals();
+    void testAttributesVolume();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestDeclare);
@@ -104,7 +108,7 @@ TestDeclare::testAttributes()
 }
 
 void
-TestDeclare::testAttributesVol()
+TestDeclare::testAttributesVolume()
 {
     mHarness.testPoints(false);
     mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 4),
@@ -181,17 +185,29 @@ TestDeclare::testVectorAttributeImplicit()
 void
 TestDeclare::testAmbiguousScalarAttributes()
 {
-    mHarness.testVolumes(false);
     CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarAttributes"),
-        openvdb::TypeError);
+        openvdb::AXCompilerError);
 }
 
 void
 TestDeclare::testAmbiguousVectorAttributes()
 {
-    mHarness.testVolumes(false);
     CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarAttributes"),
-        openvdb::TypeError);
+        openvdb::AXCompilerError);
+}
+
+void
+TestDeclare::testAmbiguousScalarExternals()
+{
+    CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarExternals"),
+        openvdb::AXCompilerError);
+}
+
+void
+TestDeclare::testAmbiguousVectorExternals()
+{
+    CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarExternals"),
+        openvdb::AXCompilerError);
 }
 
 // Copyright (c) 2015-2018 DNEG Visual Effects

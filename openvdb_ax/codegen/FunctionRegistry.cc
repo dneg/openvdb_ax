@@ -185,13 +185,13 @@ void insertStandardFunctions(FunctionRegistry& registry)
 
     // indirect internals
 
-    registry.insert("internal_cross", CrossProd::Internal::create, false);
-    registry.insert("internal_normalize", Normalize::Internal::create, false);
-    registry.insert("internal_addtogroup", AddToGroup::Internal::create, false);
-    registry.insert("internal_ingroup", InGroup::Internal::create, false);
-    registry.insert("internal_removefromgroup", RemoveFromGroup::Internal::create, false);
-    registry.insert("internal_lookupf", LookupFloat::Internal::create, false);
-    registry.insert("internal_lookupvec3f", LookupVec3f::Internal::create, false);
+    registry.insert("internal_cross", CrossProd::Internal::create, true);
+    registry.insert("internal_normalize", Normalize::Internal::create, true);
+    registry.insert("internal_addtogroup", AddToGroup::Internal::create, true);
+    registry.insert("internal_ingroup", InGroup::Internal::create, true);
+    registry.insert("internal_removefromgroup", RemoveFromGroup::Internal::create, true);
+    registry.insert("internal_lookupf", LookupFloat::Internal::create, true);
+    registry.insert("internal_lookupvec3f", LookupVec3f::Internal::create, true);
 
     // volume functions
 

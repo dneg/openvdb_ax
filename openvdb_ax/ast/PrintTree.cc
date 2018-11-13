@@ -62,6 +62,7 @@ struct PrintVisitor : public ast::Visitor
     void visit(const ast::FunctionCall& node) override;
     void visit(const ast::Attribute& node) override;
     void visit(const ast::AttributeValue& node) override;
+    void visit(const ast::ExternalVariable& node) override;
     void visit(const ast::DeclareLocal& node) override;
     void visit(const ast::Local& node) override;
     void visit(const ast::LocalValue& node) override;
@@ -225,6 +226,12 @@ void PrintVisitor::visit(const ast::VectorPack& node)
     mOs << "VectorPack " << std::endl;
 }
 
+void PrintVisitor::visit(const ast::ExternalVariable& node)
+{
+    printIndent();
+    mOs << "External Variable " << node.mName << std::endl;
+}
+
 template <typename T>
 void PrintVisitor::visitValue(const ast::Value<T>& node)
 {
@@ -245,7 +252,7 @@ void PrintVisitor::printIndent()
 ////////////////////////////////////////////////////////////////////////////////
 
 
-void print(ast::Tree& tree, std::ostream& os)
+void print(const ast::Tree& tree, std::ostream& os)
 {
     PrintVisitor visitor(os);
     tree.accept(visitor);

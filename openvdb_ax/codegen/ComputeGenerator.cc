@@ -987,6 +987,24 @@ ComputeGenerator::visit(const ast::Value<ValueType>& node)
     mValues.push(store);
 }
 
+void ComputeGenerator::visit(const ast::ExternalVariable& node)
+{
+    const std::string globalName = getGlobalExternalAccess(node.mName, node.mType);
+    llvm::Value* ptrToAddress = this->globals().get(globalName);
+
+    if (!ptrToAddress) {
+        ptrToAddress = llvm::cast<llvm::GlobalVariable>
+            (mModule.getOrInsertGlobal(globalName, LLVMType<uintptr_t>::get(mContext)));
+        this->globals().insert(globalName, ptrToAddress);
+    }
+
+    llvm::Type* type = llvmTypeFromName(node.mType, mContext);
+    llvm::Value* address = mBuilder.CreateLoad(ptrToAddress);
+    llvm::Value* value = mBuilder.CreateIntToPtr(address, type->getPointerTo(0));
+
+    mValues.push(value);
+}
+
 void ComputeGenerator::visit(const ast::Tree& node)
 {
     assert(mBlocks.size() == 1);

@@ -59,39 +59,6 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-/// @brief  Parse a global variable name to figure out if it is an attribute access
-///         index. Returns true if it is a valid access and sets name and type to
-///         the corresponding values.
-///
-/// @param  global  The global token name
-/// @param  name    The name to set if the token is a valid attribute access
-/// @param  type    The type to set if the token is a valid attribute access
-///
-inline bool
-isGlobalAttributeAccess(const std::string& global,
-                        std::string& name,
-                        std::string& type)
-{
-    const size_t at = global.find("@");
-    if (at == std::string::npos) return false;
-    type = global.substr(0, at);
-    name = global.substr(at + 1, global.size());
-    return true;
-}
-
-/// @brief  Returns a global token name representing a valid attribute access from
-///         a given attribute name and type.
-/// @note   The type is not validated but must be one of the supported typenames.
-///         See llvmTypeFromName.
-///
-/// @param  name    The attribute name
-/// @param  type    The attribute type
-///
-inline std::string
-getGlobalAttributeAccess(const std::string& name, const std::string& type)
-{
-    return type + "@" + name;
-}
 
 /// Recursive llvm type mapping from pod types
 /// @note  llvm::Types do not store information about the value sign, only meta
@@ -118,7 +85,8 @@ struct LLVMType {
                 case 64: return llvm::Type::getDoubleTy(C);
             }
         }
-        OPENVDB_THROW(LLVMTypeError, "LLVMType called with an unsupported type");
+        OPENVDB_THROW(LLVMTypeError, "LLVMType called with an unsupported type \"" +
+            std::string(typeNameAsString<T>()) + "\".");
     }
 };
 
@@ -170,7 +138,6 @@ REGISTER_LLVM_TYPE_MAP(int8_t, llvm::Type::getInt8Ty, llvm::ConstantInt::getSign
 REGISTER_LLVM_TYPE_MAP(int16_t, llvm::Type::getInt16Ty, llvm::ConstantInt::getSigned);
 REGISTER_LLVM_TYPE_MAP(int32_t, llvm::Type::getInt32Ty, llvm::ConstantInt::getSigned);
 REGISTER_LLVM_TYPE_MAP(int64_t, llvm::Type::getInt64Ty, llvm::ConstantInt::getSigned);
-REGISTER_LLVM_TYPE_MAP(uint64_t, llvm::Type::getInt64Ty, llvm::ConstantInt::getSigned);
 REGISTER_LLVM_TYPE_MAP(float, llvm::Type::getFloatTy, llvm::ConstantFP::get);
 REGISTER_LLVM_TYPE_MAP(double, llvm::Type::getDoubleTy, llvm::ConstantFP::get);
 
@@ -189,6 +156,19 @@ struct LLVMType<void> {
     static inline llvm::Type*
     get(llvm::LLVMContext& C) {
         return llvm::Type::getVoidTy(C);
+    }
+};
+
+template <>
+struct LLVMType<uintptr_t> {
+    static inline llvm::Type*
+    get(llvm::LLVMContext& C) {
+        return llvm::Type::getIntNTy(C, /*bits*/sizeof(uintptr_t)*CHAR_BIT);
+    }
+    template <typename T>
+    static inline llvm::Constant*
+    get(llvm::LLVMContext& C, const T& value) {
+        return llvm::ConstantInt::get(LLVMType<uintptr_t>::get(C), reinterpret_cast<uintptr_t>(&value));
     }
 };
 
@@ -218,6 +198,7 @@ template <> struct LLVMType<math::Vec3<double>> : public LLVMType<double[3]> {};
 
 #undef REGISTER_LLVM_TYPE_MAP
 #undef REGISTER_OPENVDB_VECTOR_LLVM_TYPE_MAP
+
 
 /// @brief Returns an llvm integer Type given a requested size and context
 /// @param size    The size of the integer to request, i.e. bool - 1, int32 - 32 etc.
@@ -355,6 +336,102 @@ isArray3Type(llvm::Type* type)
 {
     return isArrayNType(type, 3);
 }
+
+
+namespace internal
+{
+
+inline bool isValidGlobalToken(const std::string& token)
+{
+    static const std::vector<char> sKeys { '@', '$' };
+    for (const char key : sKeys) {
+        size_t pos = token.find(key);
+        if (pos == std::string::npos) continue;
+        pos+=1;
+        for (const char key : sKeys) {
+            if (token.find(key, pos) != std::string::npos) return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+} // internal
+
+/// @brief  Parse a global variable name to figure out if it is an attribute access
+///         index. Returns true if it is a valid access and sets name and type to
+///         the corresponding values.
+///
+/// @param  global  The global token name
+/// @param  name    The name to set if the token is a valid attribute access
+/// @param  type    The type to set if the token is a valid attribute access
+///
+inline bool
+isGlobalAttributeAccess(const std::string& global,
+                        std::string& name,
+                        std::string& type)
+{
+    const size_t at = global.find("@");
+    if (at == std::string::npos) return false;
+    assert(internal::isValidGlobalToken(global));
+    type = global.substr(0, at);
+    name = global.substr(at + 1, global.size());
+    return true;
+}
+
+/// @brief  Parse a global variable name to figure out if it is an external variable
+///         access. Returns true if it is a valid access and sets name and type to
+///         the corresponding values.
+///
+/// @param  global  The global token name
+/// @param  name    The name to set if the token is a valid external variable access
+/// @param  type    The type to set if the token is a valid external variable access
+///
+inline bool
+isGlobalExternalAccess(const std::string& global,
+                       std::string& name,
+                       std::string& type)
+{
+    const size_t at = global.find("$");
+    if (at == std::string::npos) return false;
+    assert(internal::isValidGlobalToken(global));
+    type = global.substr(0, at);
+    name = global.substr(at + 1, global.size());
+    return true;
+}
+
+/// @brief  Returns a global token name representing a valid attribute access from
+///         a given attribute name and type.
+/// @note   The type is not validated but must be one of the supported typenames.
+///         See llvmTypeFromName.
+///
+/// @param  name    The attribute name
+/// @param  type    The attribute type
+///
+inline std::string
+getGlobalAttributeAccess(const std::string& name, const std::string& type)
+{
+    const std::string global = type + "@" + name;
+    assert(internal::isValidGlobalToken(global));
+    return global;
+}
+
+/// @brief  Returns a global token name representing a valid external variable access
+///         from a given name and type.
+/// @note   The type is not validated but must be one of the supported typenames.
+///         See llvmTypeFromName.
+///
+/// @param  name    The attribute name
+/// @param  type    The attribute type
+///
+inline std::string
+getGlobalExternalAccess(const std::string& name, const std::string& type)
+{
+    const std::string global = type + "$" + name;
+    assert(internal::isValidGlobalToken(global));
+    return global;
+}
+
 
 }
 }

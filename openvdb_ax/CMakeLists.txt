@@ -195,6 +195,7 @@ SET ( TEST_SOURCE_FILES
   test/frontend/TestConditionalStatementNode.cc
   test/frontend/TestCrementNode.cc
   test/frontend/TestDeclareLocalNode.cc
+  test/frontend/TestExternalVariableNode.cc
   test/frontend/TestFunctionCallNode.cc
   test/frontend/TestKeywordNode.cc
   test/frontend/TestLocalValueNode.cc
@@ -207,7 +208,6 @@ SET ( TEST_SOURCE_FILES
   test/integration/TestAssign.cc
   test/integration/TestBinary.cc
   test/integration/TestCast.cc
-  test/integration/TestChannelExpressions.cc
   test/integration/TestDeclare.cc
   test/integration/TestEditGroups.cc
   test/integration/TestEmpty.cc

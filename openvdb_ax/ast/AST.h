@@ -76,6 +76,7 @@ struct Cast;
 struct Variable;
 struct Attribute;
 struct AttributeValue;
+struct ExternalVariable;
 struct DeclareLocal;
 struct Local;
 struct LocalValue;
@@ -415,6 +416,26 @@ struct Attribute : public Variable
     const bool mTypeInferred;
 };
 
+struct ExternalVariable : public Variable
+{
+    using Ptr = std::shared_ptr<ExternalVariable>;
+    using UniquePtr = std::unique_ptr<ExternalVariable>;
+
+    ExternalVariable(const std::string& name, const std::string& type)
+        : Variable(name)
+        , mType(type) {}
+    ExternalVariable(const ExternalVariable& other)
+        : Variable(other.mName)
+        , mType(other.mType) {}
+    ~ExternalVariable() override = default;
+
+    void accept(Visitor& visitor) const override final;
+    Variable* accept(Modifier& visitor) override final;
+    ExternalVariable* copy() const override final { return new ExternalVariable(*this); }
+
+    const Name mType;
+};
+
 struct AttributeValue : public Expression
 {
     using Ptr = std::shared_ptr<AttributeValue>;
@@ -641,6 +662,7 @@ struct Visitor
     inline virtual void visit(const Return& node) {};
     inline virtual void visit(const Attribute& node) {};
     inline virtual void visit(const AttributeValue& node) {};
+    inline virtual void visit(const ExternalVariable& node) {};
     inline virtual void visit(const DeclareLocal& node) {};
     inline virtual void visit(const Local& node) {};
     inline virtual void visit(const LocalValue& node) {};
@@ -675,6 +697,7 @@ struct Modifier
     inline virtual Expression* visit(Return& node) { return nullptr; };
     inline virtual Variable*   visit(Attribute& node) { return nullptr; };
     inline virtual Expression* visit(AttributeValue& node) { return nullptr; };
+    inline virtual Variable*   visit(ExternalVariable& node) { return nullptr; };
     inline virtual Variable*   visit(DeclareLocal& node) { return nullptr; };
     inline virtual Variable*   visit(Local& node) { return nullptr; };
     inline virtual Expression* visit(LocalValue& node) { return nullptr; };

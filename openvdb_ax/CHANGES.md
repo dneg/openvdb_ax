@@ -1,6 +1,49 @@
 OpenVDB AX Version History
 ==========================
 
+Version 0.0.3 - November 13, 2018
+
+    New features:
+    - Introduced new $ syntax and back-end logic for fast lookups into AX Custom
+      Data. This syntax works identically to attribute access syntax with type
+      specifiers expected to be present when accessing non float data. For
+      literal path names, this can be up to x20 faster than using the lookup()
+      functions.
+    - New External Variable AST node, Code Generation/Visitor methods and
+      internal intrinsic functions for processing Custom Data lookups using $
+      syntax.
+    - Added a --print-ast command to the vdb_ax binary to output the built AST
+      from the provided code snippet.
+
+    Improvements:
+    - Removed the uint64_t LLVM Type specialization as all back-end values are
+      signed.
+    - Introduced a uintptr_t LLVM Type specialization for accessing pointers
+      to typed data.
+    - Consolidated attribute type checking with external variable type checking
+      in Compiler.cc into verifyTypedAccesses().
+    - Minor re-work to the PointDefaultModifier for conversion of default
+      attributes.
+
+    API Changes:
+    - ax::print() now takes a const ast::Tree reference.
+
+    Houdini:
+    - External variable $ syntax can now be used to access parameters on the AX
+      SOP e.g. ch("parm") -> $parm
+    - Known path lookups using supported Houdini channel functions (e.g. ch())
+      or AX lookup functions are optimized using the new external variable
+      syntax for speed gains of up to x20.
+    - Added optimised access to all available floating points Global and Local
+      Node HScript variables such as $F, $T etc.
+    - Back-ticks are no longer supported as the code is evaluated as a raw
+      string. This is to support optimizations for ch() and Houdini HScript $
+      parameters. These can be embedded without the need to re-compile the
+      string parameter, even if they are time dependent.
+    - Verbified the AX SOP so that it can be used in compile blocks and as a
+      verb through python.
+
+
 Version 0.0.2 - October 8, 2018
 
     Improvements:
