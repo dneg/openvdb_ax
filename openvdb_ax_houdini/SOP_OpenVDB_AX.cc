@@ -1253,9 +1253,14 @@ VDB_NODE_OR_CACHE(VDB_COMPILABLE_SOP, SOP_OpenVDB_AX)::evaluateExternalExpressio
                 // add all parms of this ramps multi parm as a dependency to this
                 // micronode if it exists
 
+#if UT_MAJOR_VERSION_INT <= 15
+                const OP_InterestRef ref(*this, OP_INTEREST_DATA);
+                OP_Node::addMultiparmInterests(ref, node, parm);
+#else
                 if (dep) {
                     OP_Node::addMultiparmInterests(*dep, node, parm);
                 }
+#endif
             }
         }
         else {
