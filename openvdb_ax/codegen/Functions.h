@@ -318,6 +318,7 @@ struct Print : public FunctionBase
 
     Print() : FunctionBase({
         DECLARE_FUNCTION_SIGNATURE(print<double>),
+        DECLARE_FUNCTION_SIGNATURE(print<float>),
         DECLARE_FUNCTION_SIGNATURE(print<int32_t>),
         DECLARE_FUNCTION_SIGNATURE(print_string)
     }) {}
@@ -432,7 +433,6 @@ protected:
         : FunctionBase(list) {}
 };
 
-
 struct LookupFloat : public Lookup
 {
     struct Internal : public FunctionBase {
@@ -475,7 +475,6 @@ struct LookupFloat : public Lookup
 
 struct LookupVec3f : public Lookup
 {
-
     struct Internal : public FunctionBase {
         DEFINE_IDENTIFIER_CONTEXT_DOC("internal_lookupvec3f", FunctionBase::All,
             "Internal function for looking up a custom vector float value.")
