@@ -1,6 +1,14 @@
 OpenVDB AX Version History
 ==========================
 
+Version 0.0.4 - In Development
+
+    Bug fixes:
+    - Compilation fixes for the Houdini AX SOP for Houdini 15.5 and earlier.
+
+    Improvements:
+    - Added a specialization for print for floats.
+
 Version 0.0.3 - November 13, 2018
 
     New features:
