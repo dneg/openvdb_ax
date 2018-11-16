@@ -46,8 +46,6 @@
 #include <openvdb_ax/compiler/PointExecutable.h>
 #include <openvdb_ax/compiler/VolumeExecutable.h>
 
-#include <openvdb_ax/deprecated/tools.h>
-
 #include <houdini_utils/ParmFactory.h>
 #include <houdini_utils/geometry.h>
 #include <openvdb_houdini/Utils.h>
