@@ -1,5 +1,5 @@
 
-int@int_test = 5 & 3;
+int@int_test1 = 5 & 3;
 int@int_test2 = 5 | 3;
 int@int_test3 = 5 ^ 3;
 int@int_test4 = (-5) & 3;

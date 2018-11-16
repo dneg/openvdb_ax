@@ -4,7 +4,7 @@ string space = " ";
 string test2 = "new value";
 string result = test + space + test2;
 
-string@string_test = result; // "test new value"
+string@string_test1 = result; // "test new value"
 string@string_test2 = test + space + test2; // "test new value"
 
 result = test + " " + test2;

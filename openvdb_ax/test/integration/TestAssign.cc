@@ -135,14 +135,14 @@ TestAssign::testAssignChains()
     // NOTE: Chained assignments don't work correctly for volume execution, so this test cannot be
     // run for volumes
     mHarness.testVolumes(false);
-    mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 6, false),
+    mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 6),
         {0.0f, 0.0f, 0.0f, 10.0f, 10.0f, 10.0f});
 
     std::vector<openvdb::Vec3f> vecAttributeValues{openvdb::Vec3f(0.f, 0.f, 0.f),
         openvdb::Vec3f(0.f, 0.f, 0.f), openvdb::Vec3f(0.f, 0.f, 0.f), openvdb::Vec3f(0.f, -3.f, 0.f),
         openvdb::Vec3f(0.f, -3.f, 0.f), openvdb::Vec3f(0.f, -3.f, 0.0f)};
 
-    mHarness.addAttributes(unittest_util::nameSequence("vec_float_test", 6, false),
+    mHarness.addAttributes(unittest_util::nameSequence("vec_float_test", 6),
         vecAttributeValues);
 
     mHarness.executeCode("test/snippets/assign/assignChains");

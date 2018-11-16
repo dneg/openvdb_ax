@@ -318,10 +318,7 @@ main(int argc, char *argv[])
             try {
                 pointExecutable->execute(*points);
 
-                const bool requiresDeletion =
-                    openvdb::ax::ast::callsFunction(*syntaxTree, "deletepoint");
-
-                if (requiresDeletion) {
+                if (openvdb::ax::ast::callsFunction(*syntaxTree, "deletepoint")) {
                     openvdb::points::deleteFromGroup(points->tree(), "dead", false, false);
                 }
             }

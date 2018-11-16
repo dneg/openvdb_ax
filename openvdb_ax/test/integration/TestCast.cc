@@ -171,11 +171,11 @@ TestCast::castLiteral()
 void
 TestCast::castImplicitAssign()
 {
-    mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 3, false), {10.0f, 0.0f, 5.2f});
+    mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 3), {10.0f, 0.0f, 5.2f});
     mHarness.addAttributes<openvdb::Vec3f>({"vec_float_test1", "vec_float_test2"},
         {openvdb::Vec3f(1.0f, 1.0f, 1.0f), openvdb::Vec3f(openvdb::Vec3d(1.0, 3.4, 6.0))});
     mHarness.addAttribute("vec_double_test1", openvdb::Vec3d(openvdb::Vec3i(3, 5, -6)));
-    mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3, false), {0, 0, 5});
+    mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3), {0, 0, 5});
     mHarness.addAttribute<long>("long_test1", 2147483648l);
 
     mHarness.executeCode("test/snippets/cast/castImplicitAssign");

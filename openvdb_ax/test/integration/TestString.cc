@@ -88,7 +88,7 @@ TestString::testAssignFromLocals()
 void
 TestString::testAssignFromAttributes()
 {
-    mHarness.addInputAttributes<std::string>({"string_test"}, {"test"});
+    mHarness.addInputAttributes<std::string>({"string_test1"}, {"test"});
     mHarness.addExpectedAttributes<std::string>(unittest_util::nameSequence("string_test", 6),
         {"new value", "test", "new value", "new value", "", ""});
     mHarness.executeCode("test/snippets/string/assignFromAttributes");
@@ -109,7 +109,7 @@ TestString::testBinaryConcat()
 void
 TestString::testAssignNewOverwrite()
 {
-    mHarness.addExpectedAttributes<std::string>({"string_test", "string_test2"},
+    mHarness.addExpectedAttributes<std::string>({"string_test1", "string_test2"},
         {"next_value", "new_value"});
     mHarness.executeCode("test/snippets/string/assignNewOverwrite");
 

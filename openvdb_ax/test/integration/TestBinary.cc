@@ -106,7 +106,7 @@ TestBinary::testRelational()
 {
     std::vector<bool> attrValues{true, false, true, false, true, false, false, true, false, true, true,
                                 false, true, false, true, false, false, true, false, true};
-    mHarness.addAttributes(unittest_util::nameSequence("bool_test", 20, false), attrValues);
+    mHarness.addAttributes(unittest_util::nameSequence("bool_test", 20), attrValues);
     mHarness.executeCode("test/snippets/binary/binaryRelational");
 
     AXTESTS_STANDARD_ASSERT();
@@ -133,7 +133,7 @@ TestBinary::testVectorRelational()
 {
     std::vector<bool> attrValues{true, false, false, false, false, false, true, true, true, true,
                                  true, false, false, false, false, false, true, true, true, true};
-    mHarness.addAttributes(unittest_util::nameSequence("bool_test", 20, false), attrValues);
+    mHarness.addAttributes(unittest_util::nameSequence("bool_test", 20), attrValues);
     mHarness.executeCode("test/snippets/binary/binaryVectorRelational");
 
     AXTESTS_STANDARD_ASSERT();

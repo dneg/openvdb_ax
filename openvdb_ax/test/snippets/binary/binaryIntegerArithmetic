@@ -1,5 +1,5 @@
 
-int@int_test = 2 + 1;
+int@int_test1 = 2 + 1;
 
 int@int_test2 = 2 * 2;
 

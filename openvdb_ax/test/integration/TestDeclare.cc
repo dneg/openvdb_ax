@@ -137,7 +137,7 @@ TestDeclare::testNewAttributes()
     mHarness.addExpectedAttribute("long_test", long(3));
     mHarness.addExpectedAttribute("double_test", 0.3);
 
-    mHarness.executeCode("test/snippets/declare/declareNewAttributes");
+    mHarness.executeCode("test/snippets/declare/declareAttributes");
 
     AXTESTS_STANDARD_ASSERT();
 }

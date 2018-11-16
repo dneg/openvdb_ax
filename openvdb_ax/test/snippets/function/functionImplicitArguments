@@ -1,5 +1,5 @@
 
-double@double_test = min(-1.5, 15l);
+double@double_test1 = min(-1.5, 15l);
 
 double@double_test2 = max(-15s, 105);
 
