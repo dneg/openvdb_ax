@@ -98,17 +98,15 @@ using CodeTests = std::vector<std::pair<std::string, ExpectedBase::Ptr>>;
 
 
 inline std::vector<std::string>
-nameSequence(const std::string& base, const int number, const bool firstPrefixEmpty = true)
+nameSequence(const std::string& base, const int number)
 {
     std::vector<std::string> names;
-    if(number <= 0) return names;
+    if (number <= 0) return names;
     names.reserve(number);
 
     for (int i = 1; i <= number; i++) {
         names.emplace_back(base + std::to_string(i));
     }
-
-    if (firstPrefixEmpty) names[0] = base;
 
     return names;
 }

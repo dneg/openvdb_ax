@@ -1,5 +1,5 @@
-@float_test;
-int@int_test;
+@float_test1;
+int@int_test1;
 
 short@short_test = 1s;
 int@int_test2 = 5;

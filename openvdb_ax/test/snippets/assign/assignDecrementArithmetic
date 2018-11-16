@@ -2,5 +2,5 @@
 @float_test2 = 0.5f;
 @float_test4 = 0.5f;
 
-@float_test = --@float_test2;
+@float_test1 = --@float_test2;
 @float_test3 = @float_test4--;

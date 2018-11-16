@@ -1,5 +1,5 @@
 
-double@double_test = sqrt(9.0);
+double@double_test1 = sqrt(9.0);
 
 double@double_test2 = cos(0.0);
 

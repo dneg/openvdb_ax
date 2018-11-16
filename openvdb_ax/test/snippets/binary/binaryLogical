@@ -2,7 +2,7 @@
 bool true_value = true;
 bool false_value = false;
 
-bool@bool_test = true_value && true_value;
+bool@bool_test1 = true_value && true_value;
 bool@bool_test2 = false_value && true_value;
 bool@bool_test3 = false_value && false_value;
 
