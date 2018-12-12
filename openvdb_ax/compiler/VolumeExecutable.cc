@@ -67,12 +67,18 @@ using ReturnT = FunctionTraitsT::ReturnType;
 /// The arguments of the generated function
 struct VolumeFunctionArguments
 {
-    struct Accessors { using UniquePtr = std::unique_ptr<Accessors>; };
+    struct Accessors
+    {
+        using UniquePtr = std::unique_ptr<Accessors>;
+        virtual ~Accessors() = default;
+    };
 
     template <typename TreeT>
-    struct TypedAccessor : public Accessors
+    struct TypedAccessor final : public Accessors
     {
         using UniquePtr = std::unique_ptr<TypedAccessor<TreeT>>;
+
+        ~TypedAccessor() override final = default;
 
         inline void*
         init(TreeT& tree) {

@@ -1112,9 +1112,17 @@ struct Fit : public FunctionBase
         // args[3] = outMin
         // args[4] = outMax
 
-        // See if the input range has a valid magnitude .i.e. the values are not the same
 
         std::vector<llvm::Value*> argcopy(args);
+
+        // select the precision at which to perform
+
+        llvm::Type* precision = argcopy[0]->getType();
+        if (precision->isIntegerTy()) {
+            precision = LLVMType<double>::get(builder.getContext());
+        }
+
+        // See if the input range has a valid magnitude .i.e. the values are not the same
 
         llvm::Value* isInputRangeValid =
             binaryOperator(argcopy[1], argcopy[2], ast::tokens::NOTEQUALS, builder);
@@ -1134,12 +1142,7 @@ struct Fit : public FunctionBase
             argcopy[0] = clampOp.execute({ argcopy[0], minInputRange, maxInputRange }, globals, builder, M);
         }
 
-        // Cast argcopy to FP precision. Check arg[0] as if clamp has been called
-        // with external functions it may be a float type (not double)
-
-        llvm::Type* precision = LLVMType<double>::get(builder.getContext());
-        if (!argcopy[0]->getType()->isIntegerTy()) precision = argcopy[0]->getType();
-        assert(precision->isFloatingPointTy());
+        // cast all (the following requires floating point precision)
 
         for (auto& arg : argcopy) arg = arithmeticConversion(arg, precision, builder);
 

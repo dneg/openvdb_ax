@@ -123,8 +123,8 @@ void
 TestFunction::testFunctionFit()
 {
     std::vector<double> values{23.0, -23.0, -25.0, -15.0, -15.0, -18.0, -24.0, 0.0, 10.0,
-        -5.0, 0.0, -1.0};
-    mHarness.addAttributes<double>(unittest_util::nameSequence("double_test", 12), values);
+        -5.0, 0.0, -1.0, 4.5, 4.5, 4.5, 4.5, 4.5};
+    mHarness.addAttributes<double>(unittest_util::nameSequence("double_test", 17), values);
 
     mHarness.executeCode("test/snippets/function/functionFit");
 

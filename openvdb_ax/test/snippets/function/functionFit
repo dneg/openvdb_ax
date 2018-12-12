@@ -34,3 +34,11 @@ double@double_test10 = fit(-3, 10, 0, -1, -5);
 
 double@double_test11 = fit(2,5,0,0,0);
 double@double_test12 = fit(10,0,0,0,-2);
+
+// test different argument type combinations
+
+double@double_test13 = fit(2.5, 2.0, 3.0f, 4.0f, 5.0f);
+double@double_test14 = fit(2.5f, 2.0f, 3.0f, 4.0f, 5.0f);
+double@double_test15 = fit(2.5, 2, 3.0f, 4.0f, 5.0);
+double@double_test16 = fit(2.5f, 2, 3.0f, 4.0f, 5.0f);
+double@double_test17 = fit(2.5, 2, 3.0, 4.0, 5.0);

@@ -70,7 +70,11 @@ struct PointFunctionArguments
 {
     /// @brief  Base untyped handle struct for container storage
     ///
-    struct Handles { using UniquePtr = std::unique_ptr<Handles>; };
+    struct Handles
+    {
+        using UniquePtr = std::unique_ptr<Handles>;
+        virtual ~Handles() = default;
+    };
 
     /// @brief  A wrapper around a VDB Points Attribute Handle, allowing for
     ///         typed storage of a read or write handle. This is used for
@@ -78,13 +82,15 @@ struct PointFunctionArguments
     ///         generated point functions
     ///
     template <typename ValueT>
-    struct TypedHandle : public Handles
+    struct TypedHandle final : public Handles
     {
         using UniquePtr = std::unique_ptr<TypedHandle<ValueT>>;
         using HandleTraits = points::point_conversion_internal::ConversionTraits<ValueT>;
         using HandleT = typename HandleTraits::Handle;
 
         using LeafT = points::PointDataTree::LeafNodeType;
+
+        ~TypedHandle() override final = default;
 
         inline void*
         initReadHandle(const LeafT& leaf, const size_t pos) {
