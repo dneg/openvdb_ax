@@ -1,9 +1,12 @@
 OpenVDB AX Version History
 ==========================
 
-Version 0.0.4 - In Development
+Version 0.0.4 - December 12, 2018
 
     Bug fixes:
+    - Fixed a memory leak in Point and Volume Executable objects.
+    - Fixed an issue with fit() which could use an incorrect precision for
+      floating point arguments.
     - Compilation fixes for the Houdini AX SOP for Houdini 15.5 and earlier.
 
     Improvements:
