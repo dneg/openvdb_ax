@@ -7,6 +7,7 @@ This page holds the latest details on work in progress, completed goals and futu
 A list of completed features/milestones that previously appeared on the OpenVDB AX Roadmap
 
 * Travis support for OpenVDB AX core library.
+* Improved syntax and performance for the access of Custom Data (custom user parameters).
 
 ## Current goals
 
@@ -24,7 +25,6 @@ Most current work is aimed at our first stable release of OpenVDB AX. This is pr
 * CMake support for building OpenVDB AX on OSX.
 * Noise functions supported by AX.
 * Support for string variables and string point attributes.
-* Improved syntax and performance for the access of Custom Data (custom user parameters).
 * Bison/Flex CMake Support for re-generating language grammar and lexer files.
 
 ## Further down the road...

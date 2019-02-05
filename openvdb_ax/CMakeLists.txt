@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2018 DNEG Visual Effects
+# Copyright (c) 2015-2019 DNEG
 #
 # All rights reserved. This software is distributed under the
 # Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -6,7 +6,7 @@
 # Redistributions of source code must retain the above copyright
 # and license notice and the following restrictions and disclaimer.
 #
-# *     Neither the name of DNEG Visual Effects nor the names
+# *     Neither the name of DNEG nor the names
 # of its contributors may be used to endorse or promote products derived
 # from this software without specific prior written permission.
 #
@@ -69,9 +69,6 @@ FIND_PACKAGE ( LLVM REQUIRED )
 
 IF (OPENVDB_AX_BUILD_DOCS)
   FIND_PACKAGE ( Doxygen REQUIRED )
-ENDIF ()
-IF (OPENVDB_AX_BUILD_UNITTESTS)
-  FIND_PACKAGE ( CPPUnit REQUIRED )
 ENDIF ()
 
 IF ( NOT OPENVDB_AX_BUILD_HOUDINI_SOP )
@@ -183,67 +180,8 @@ TARGET_LINK_LIBRARIES ( vdb_ax
   stdc++
   )
 
-
-SET ( TEST_SOURCE_FILES
-  test/backend/TestFunctionBase.cc
-  test/backend/TestFunctionSignature.cc
-  test/backend/TestSymbolTable.cc
-  test/frontend/TestAttributeAssignExpressionNode.cc
-  test/frontend/TestAttributeValueNode.cc
-  test/frontend/TestBinaryOperatorNode.cc
-  test/frontend/TestCastNode.cc
-  test/frontend/TestConditionalStatementNode.cc
-  test/frontend/TestCrementNode.cc
-  test/frontend/TestDeclareLocalNode.cc
-  test/frontend/TestExternalVariableNode.cc
-  test/frontend/TestFunctionCallNode.cc
-  test/frontend/TestKeywordNode.cc
-  test/frontend/TestLocalValueNode.cc
-  test/frontend/TestSyntaxFailures.cc
-  test/frontend/TestUnaryOperatorNode.cc
-  test/frontend/TestValueNode.cc
-  test/frontend/TestVectorPack.cc
-  test/frontend/TestVectorUnpack.cc
-  test/integration/CompareGrids.cc
-  test/integration/TestAssign.cc
-  test/integration/TestBinary.cc
-  test/integration/TestCast.cc
-  test/integration/TestDeclare.cc
-  test/integration/TestEditGroups.cc
-  test/integration/TestEmpty.cc
-  test/integration/TestFunction.cc
-  test/integration/TestGroups.cc
-  test/integration/TestHarness.cc
-  test/integration/TestKeyword.cc
-  # test/integration/TestString.cc @todo: reenable string tests with string support
-  test/integration/TestUnary.cc
-  test/integration/TestWorldSpaceAccessors.cc
-  test/main.cc
-  )
-
-SET_SOURCE_FILES_PROPERTIES ( ${TEST_SOURCE_FILES}
-  PROPERTIES
-  COMPILE_FLAGS "-DOPENVDB_USE_BLOSC"
-  )
-
 IF ( OPENVDB_AX_BUILD_UNITTESTS )
-
-  # this copies the AX snippets into the build directory so that the test executable
-  # can find them correctly
-  EXECUTE_PROCESS(COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/test/snippets ${CMAKE_CURRENT_BINARY_DIR}/test/snippets)
-
-  ADD_EXECUTABLE ( vdb_ax_test
-    ${TEST_SOURCE_FILES}
-    )
-
-  TARGET_LINK_LIBRARIES ( vdb_ax_test
-    ${CPPUnit_cppunit_LIBRARY}
-    openvdb_ax_shared
-    stdc++
-    )
-
-  ADD_TEST ( vdb_ax_unit_test vdb_ax_test )
-
+    ADD_SUBDIRECTORY(test)
 ENDIF (OPENVDB_AX_BUILD_UNITTESTS)
 
 # Doxygen docmentation

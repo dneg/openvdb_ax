@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2018 DNEG Visual Effects
+// Copyright (c) 2015-2019 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -8,7 +8,7 @@
 // Redistributions of source code must retain the above copyright
 // and license notice and the following restrictions and disclaimer.
 //
-// *     Neither the name of DNEG Visual Effects nor the names
+// *     Neither the name of DNEG nor the names
 // of its contributors may be used to endorse or promote products derived
 // from this software without specific prior written permission.
 //
@@ -82,8 +82,8 @@ public:
                      const CustomData::ConstPtr& customData,
                      const std::vector<std::map<std::string, uint64_t>>& functionAddresses,
                      const std::vector<std::string>& assignedVolumes)
-        : mExecutionEngine(exeEngine)
-        , mContext(context)
+        : mContext(context)
+        , mExecutionEngine(exeEngine)
         , mVolumeRegistry(volumeRegistry)
         , mCustomData(customData)
         , mBlockFunctionAddresses(functionAddresses)
@@ -96,10 +96,10 @@ public:
 
 private:
 
-    // these 2 shared pointers exist _only_ for object lifetime management
-    // as these objects must not be destroyed before this one
-    const std::shared_ptr<const llvm::ExecutionEngine> mExecutionEngine;
+    // The Context and ExecutionEngine must exist _only_ for object lifetime
+    // management. The ExecutionEngine must be destroyed before the Context
     const std::shared_ptr<const llvm::LLVMContext> mContext;
+    const std::shared_ptr<const llvm::ExecutionEngine> mExecutionEngine;
     const Registry::ConstPtr mVolumeRegistry;
     const CustomData::ConstPtr mCustomData;
     const std::vector<std::map<std::string, uint64_t> > mBlockFunctionAddresses;
@@ -112,6 +112,6 @@ private:
 
 #endif // OPENVDB_AX_COMPILER_VOLUME_EXECUTABLE_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2018 DNEG Visual Effects
+// Copyright (c) 2015-2019 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
