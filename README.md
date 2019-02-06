@@ -10,7 +10,7 @@
 
 ## Introduction
 
-OpenVDB AX is an open source C++ library that provides a powerful and easy way of interacting with [OpenVDB](http://www.openvdb.org/) point and volume data. This exposes an expression language to allow fast, custom manipulation of point attributes and voxel values using a collection of mathematical functions. Expressions are quickly JIT-compiled and to offer great performance that in many cases rival custom C++ operators. It is developed and maintained by DNEG Visual Effects, providing a flexible and portable way to work with OpenVDB data.
+OpenVDB AX is an open source C++ library that provides a powerful and easy way of interacting with [OpenVDB](http://www.openvdb.org/) point and volume data. This exposes an expression language to allow fast, custom manipulation of point attributes and voxel values using a collection of mathematical functions. Expressions are quickly JIT-compiled and to offer great performance that in many cases rival custom C++ operators. It is developed and maintained by DNEG, providing a flexible and portable way to work with OpenVDB data.
 
 
 ## Development repository

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2018 DNEG Visual Effects
+// Copyright (c) 2015-2019 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -8,7 +8,7 @@
 // Redistributions of source code must retain the above copyright
 // and license notice and the following restrictions and disclaimer.
 //
-// *     Neither the name of DNEG Visual Effects nor the names
+// *     Neither the name of DNEG nor the names
 // of its contributors may be used to endorse or promote products derived
 // from this software without specific prior written permission.
 //
@@ -1126,6 +1126,6 @@ TestFunctionSignature::testLLVMFunction()
     CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<double(*)[2]>::get(state.context())), functionType->getParamType(5));
 }
 
-// Copyright (c) 2015-2018 DNEG Visual Effects
+// Copyright (c) 2015-2019 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

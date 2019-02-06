@@ -1,6 +1,15 @@
 OpenVDB AX Version History
 ==========================
 
+Version 0.0.5 - WIP
+
+    Bug fixes:
+    - Fixed a crash which could occur when destructing AX executables. This was
+      due to the destruction order of LLVM objects which have since been reversed.
+
+    Improvements:
+    - Moved testing CMake config into its own CMakeLists.txt.
+
 Version 0.0.4 - December 12, 2018
 
     Bug fixes:

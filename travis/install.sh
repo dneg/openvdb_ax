@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2015-2018 DNEG Visual Effects
+# Copyright (c) 2015-2019 DNEG
 #
 # All rights reserved. This software is distributed under the
 # Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -8,7 +8,7 @@
 # Redistributions of source code must retain the above copyright
 # and license notice and the following restrictions and disclaimer.
 #
-# *     Neither the name of DNEG Visual Effects nor the names
+# *     Neither the name of DNEG nor the names
 # of its contributors may be used to endorse or promote products derived
 # from this software without specific prior written permission.
 #
@@ -64,7 +64,7 @@ echo "Installing openvdb_ax..."
 sudo make install -j2 &>/dev/null
 
 # Tests require running from the same root as the test snippets.
-cd openvdb_ax
+cd openvdb_ax/test
 
 # Don't use ctest as we don't get much info even with verbose flags.
 ./vdb_ax_test -v

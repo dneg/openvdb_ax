@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2018 DNEG Visual Effects
+// Copyright (c) 2015-2019 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -8,7 +8,7 @@
 // Redistributions of source code must retain the above copyright
 // and license notice and the following restrictions and disclaimer.
 //
-// *     Neither the name of DNEG Visual Effects nor the names
+// *     Neither the name of DNEG nor the names
 // of its contributors may be used to endorse or promote products derived
 // from this software without specific prior written permission.
 //
@@ -58,6 +58,6 @@ void print(const ast::Tree& tree, std::ostream& os = std::cout);
 
 #endif // OPENVDB_AX_AST_PRINT_TREE_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2018 DNEG Visual Effects
+// Copyright (c) 2015-2019 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
