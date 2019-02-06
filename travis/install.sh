@@ -64,7 +64,7 @@ echo "Installing openvdb_ax..."
 sudo make install -j2 &>/dev/null
 
 # Tests require running from the same root as the test snippets.
-cd openvdb_ax
+cd openvdb_ax/test
 
 # Don't use ctest as we don't get much info even with verbose flags.
 ./vdb_ax_test -v
