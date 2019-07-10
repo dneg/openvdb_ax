@@ -32,7 +32,7 @@
 os: linux
 
 sudo: required
-dist: trusty
+dist: xenial
 
 language: cpp
 
@@ -40,41 +40,19 @@ compiler: gcc
 
 addons:
   apt:
-    sources:
-    # Required for LLVM 5.0.
-    - llvm-toolchain-trusty-5.0
     packages:
     - cmake
     - doxygen
-    - libboost-iostreams1.55-dev
-    - libboost-random1.55-dev
-    - libboost-system1.55-dev
-    - libboost-thread1.55-dev
+    - libboost-iostreams-dev
+    - libboost-random-dev
+    - libboost-system-dev
+    - libboost-thread-dev
     - libcppunit-dev
     - libghc-zlib-dev
-    - libilmbase-dev
-    - libllvm5.0
-    - libopenexr-dev
     - libtbb-dev
-    - llvm-5.0
-    - llvm-5.0-dev
-
-before_install:
-    # TODO: Investigate why OpenVDB's CMake excludes system paths
-    # as this wouldn't be required otherwise
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libHalf.a /usr/lib/libHalf.a
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libHalf.so /usr/lib/libHalf.so
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIex.a /usr/lib/libIex.a
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIex.so /usr/lib/libIex.so
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmImf.a /usr/lib/libIlmImf.a
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmImf.so /usr/lib/libIlmImf.so
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmThread.a /usr/lib/libIlmThread.a
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libIlmThread.so /usr/lib/libIlmThread.so
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libImath.a /usr/lib/libImath.a
-    - sudo ln -s /usr/lib/x86_64-linux-gnu/libImath.so /usr/lib/libImath.so
+    - libblosc-dev
 
 install:
-    - travis/install-blosc.sh
     - travis/install-openvdb.sh
 
 script: travis/install.sh

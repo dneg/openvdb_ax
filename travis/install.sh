@@ -32,44 +32,25 @@
 
 echo "Building openvdb_ax..."
 
-export ILMBASE_ROOT=/usr
-export OPENEXR_ROOT=/usr
-export BOOST_ROOT=/usr
-export TBB_ROOT=/usr
-export BLOSC_ROOT=/usr
-export LLVM_ROOT=/usr
-export CPPUNIT_ROOT=/usr
-export OPENVDB_ROOT=/usr
+# Working Directory - /home/travis/build/dneg/openvdb_ax/
 
 mkdir build
 cd build
 
-# Temporarily change the /usr/bin/llvm-config symlink so CMake chooses
-# the correct version of LLVM.
-ORIGINAL_LLVM_CONFIG=`readlink /usr/bin/llvm-config`
-sudo ln -sfn /usr/bin/llvm-config-5.0 /usr/bin/llvm-config
-
 cmake \
-    -D OPENVDB_ABI_VERSION_NUMBER=4 \
+    -D CMAKE_CXX_COMPILER=g++ \
+    -D CMAKE_C_COMPILER=gcc \
     -D OPENVDB_BUILD_AX=ON \
     -D OPENVDB_BUILD_AX_DOCS=ON \
     -D OPENVDB_BUILD_AX_UNITTESTS=ON \
     -D OPENVDB_BUILD_AX_BINARIES=ON \
     -D OPENVDB_BUILD_AX_GRAMMAR=OFF \
+    -D OPENVDB_BUILD_AX_PYTHON_MODULE=OFF \
     -D OPENVDB_CXX_STRICT=ON \
     ../
 
 make -j2
-
 echo "Installing openvdb_ax..."
-
 sudo make install -j2 &>/dev/null
 
-# Tests require running from the same root as the test snippets.
-cd openvdb_ax/test
-
-# Don't use ctest as we don't get much info even with verbose flags.
-./vdb_ax_test -v
-
-# Reset the symlink for /usr/bin/llvm-config to original setting.
-sudo ln -sfn $ORIGINAL_LLVM_CONFIG /usr/bin/llvm-config
+ctest -V

@@ -32,12 +32,7 @@
 
 echo "Building and installing openvdb..."
 
-export BLOSC_ROOT=/usr
-export BOOST_ROOT=/usr
-export GLFW_ROOT=/usr
-export ILMBASE_ROOT=/usr
-export OPENEXR_ROOT=/usr
-export TBB_ROOT=/usr
+# Working Directory - /home/travis/build/dneg/openvdb_ax/
 
 git clone https://github.com/AcademySoftwareFoundation/openvdb.git openvdb
 mkdir openvdb/build
@@ -46,9 +41,9 @@ cd openvdb/build
 cmake \
     -D CMAKE_CXX_COMPILER=g++ \
     -D CMAKE_C_COMPILER=gcc \
-    -D OPENVDB_ABI_VERSION_NUMBER=4 \
-    -D USE_GLFW3=OFF \
+    -D DISABLE_DEPENDENCY_VERSION_CHECKS=ON \
     -D OPENVDB_BUILD_CORE=ON \
+    -D OPENVDB_CORE_STATIC=OFF \
     -D OPENVDB_BUILD_BINARIES=OFF \
     -D OPENVDB_BUILD_PYTHON_MODULE=OFF \
     -D OPENVDB_BUILD_UNITTESTS=OFF \
@@ -58,6 +53,5 @@ cmake \
     -D CMAKE_INSTALL_PREFIX=/usr \
     ../
 
-sudo make -j2
-
+make -j2
 sudo make install -j2

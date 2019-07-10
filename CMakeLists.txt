@@ -43,7 +43,7 @@ option(OPENVDB_BUILD_AX_UNITTESTS "Build the OpenVDB AX unit tests" OFF)
 option(OPENVDB_BUILD_AX_DOCS "Build the OpenVDB AX documentation" OFF)
 option(USE_CCACHE "Build using Ccache if found on the path" ON)
 option(USE_HOUDINI "Build the library against a Houdini installation." OFF)
-option(USE_SYSTEM_LIBRARY_PATHS "Build with system library paths" OFF)
+option(USE_SYSTEM_LIBRARY_PATHS "Build with system library paths" ON)
 
 ###### Deprecated options
 
