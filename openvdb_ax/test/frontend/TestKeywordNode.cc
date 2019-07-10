@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,69 +38,63 @@
 
 #include <string>
 
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
+
 namespace {
-
-enum BehaviourFlags
-{
-    Pass = unittest_util::ExpectedBase::Pass,    // else Fails
-};
-
-#define EXPECTED_PASS(Count) \
-    unittest_util::ExpectedBase::Ptr(new unittest_util::ExpectedType<>(BehaviourFlags::Pass, Count))
 
 static const unittest_util::CodeTests tests =
 {
-    { "return;", EXPECTED_PASS(1) },
-};
-
-struct ReturnVisitor : public openvdb::ax::ast::Visitor
-{
-    ~ReturnVisitor() override = default;
-    inline virtual void
-    visit(const openvdb::ax::ast::Return& node) override final {
-        ++mCount;
-        mNode = &node;
-    }
-    size_t mCount = 0;
-    const openvdb::ax::ast::Return* mNode = nullptr;
+    { "return;", Node::Ptr(new Keyword(KeywordToken::RETURN)) },
+    { "break;", Node::Ptr(new Keyword(KeywordToken::BREAK)) },
+    { "continue;", Node::Ptr(new Keyword(KeywordToken::CONTINUE)) }
 };
 
 }
 
 class TestKeywordNode : public CppUnit::TestCase
 {
- 	public:
+public:
 
- 	CPPUNIT_TEST_SUITE(TestKeywordNode);
- 	CPPUNIT_TEST(testSyntax);
- 	CPPUNIT_TEST(testASTNode);
- 	CPPUNIT_TEST_SUITE_END();
+    CPPUNIT_TEST_SUITE(TestKeywordNode);
+    CPPUNIT_TEST(testSyntax);
+    CPPUNIT_TEST(testASTNode);
+    CPPUNIT_TEST_SUITE_END();
 
- 	void testSyntax() { TEST_SYNTAX(tests); }
- 	void testASTNode();
+    void testSyntax() { TEST_SYNTAX_PASSES(tests); }
+    void testASTNode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestKeywordNode);
 
 void TestKeywordNode::testASTNode()
 {
-	using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second;
-        if (behaviour->fails()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        ReturnVisitor visitor;
-        tree->accept(visitor);
-
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected AST node count", code),
-            behaviour->count(), visitor.mCount);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
+        const Keyword* resultAsKeyword = static_cast<const Keyword*>(result);
+        CPPUNIT_ASSERT(resultAsKeyword);
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
-            static_cast<bool>(visitor.mNode));
+            Node::KeywordNode == result->nodetype());
+
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
+
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Return code", code) + os.str());
+        }
     }
 }
 

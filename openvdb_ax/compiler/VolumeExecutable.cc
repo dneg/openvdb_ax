@@ -77,16 +77,12 @@ struct VolumeFunctionArguments
     struct TypedAccessor final : public Accessors
     {
         using UniquePtr = std::unique_ptr<TypedAccessor<TreeT>>;
-
+        TypedAccessor(TreeT& tree)
+            : mAccessor(new tree::ValueAccessor<TreeT>(tree)) {}
         ~TypedAccessor() override final = default;
 
-        inline void*
-        init(TreeT& tree) {
-            mAccessor.reset(new tree::ValueAccessor<TreeT>(tree));
-            return static_cast<void*>(mAccessor.get());
-        }
-
-        std::unique_ptr<tree::ValueAccessor<TreeT>> mAccessor;
+        inline void* get() const { return static_cast<void*>(mAccessor.get()); }
+        const std::unique_ptr<tree::ValueAccessor<TreeT>> mAccessor;
     };
 
 
@@ -98,6 +94,8 @@ struct VolumeFunctionArguments
         : mCustomData(customData)
         , mCoord()
         , mCoordWS()
+        , mIdx(0)
+        , mAccessor()
         , mVoidAccessors()
         , mAccessors()
         , mVoidTransforms() {}
@@ -117,24 +115,17 @@ struct VolumeFunctionArguments
             reinterpret_cast<FunctionTraitsT::Arg<1>::Type>(mCoord.data()),
             reinterpret_cast<FunctionTraitsT::Arg<2>::Type>(mCoordWS.asV()),
             static_cast<FunctionTraitsT::Arg<3>::Type>(mVoidAccessors.data()),
-            static_cast<FunctionTraitsT::Arg<4>::Type>(mVoidTransforms.data()));
+            static_cast<FunctionTraitsT::Arg<4>::Type>(mVoidTransforms.data()),
+            static_cast<FunctionTraitsT::Arg<5>::Type>(mIdx),
+            mAccessor);
     }
 
     template <typename TreeT>
     inline void
     addAccessor(TreeT& tree)
     {
-        typename TypedAccessor<TreeT>::UniquePtr accessor(new TypedAccessor<TreeT>());
-        mVoidAccessors.emplace_back(accessor->init(tree));
-        mAccessors.emplace_back(std::move(accessor));
-    }
-
-    template <typename TreeT>
-    inline void
-    addConstAccessor(const TreeT& tree)
-    {
-        typename TypedAccessor<const TreeT>::UniquePtr accessor(new TypedAccessor<const TreeT>());
-        mVoidAccessors.emplace_back(accessor->init(tree));
+        typename TypedAccessor<TreeT>::UniquePtr accessor(new TypedAccessor<TreeT>(tree));
+        mVoidAccessors.emplace_back(accessor->get());
         mAccessors.emplace_back(std::move(accessor));
     }
 
@@ -147,6 +138,8 @@ struct VolumeFunctionArguments
     const CustomData::ConstPtr mCustomData;
     openvdb::Coord mCoord;
     openvdb::math::Vec3<float> mCoordWS;
+    size_t mIdx;
+    void *mAccessor;
 
 private:
     std::vector<void*> mVoidAccessors;
@@ -154,67 +147,92 @@ private:
     std::vector<void*> mVoidTransforms;
 };
 
-template <typename ValueType>
+template <typename GridT>
 inline void
 retrieveAccessorTyped(VolumeFunctionArguments& args,
                       openvdb::GridBase::Ptr grid)
 {
-    using GridType = typename openvdb::BoolGrid::ValueConverter<ValueType>::Type;
-    typename GridType::Ptr typed = openvdb::StaticPtrCast<GridType>(grid);
+    typename GridT::Ptr typed = openvdb::StaticPtrCast<GridT>(grid);
     args.addAccessor(typed->tree());
+}
+
+inline bool supported(const ast::tokens::CoreType type)
+{
+    switch (type) {
+        case ast::tokens::BOOL    : return true;
+        case ast::tokens::INT     : return true;
+        case ast::tokens::LONG    : return true;
+        case ast::tokens::FLOAT   : return true;
+        case ast::tokens::DOUBLE  : return true;
+        case ast::tokens::VEC3I   : return true;
+        case ast::tokens::VEC3F   : return true;
+        case ast::tokens::VEC3D   : return true;
+        case ast::tokens::UNKNOWN :
+        default                   :
+            return false;
+    }
 }
 
 inline void
 retrieveAccessor(VolumeFunctionArguments& args,
                  const openvdb::GridBase::Ptr grid,
-                 const std::string& valueType)
+                 const ast::tokens::CoreType& type)
 {
-    if (valueType == typeNameAsString<bool>())                      retrieveAccessorTyped<bool>(args, grid);
-    else if (valueType == typeNameAsString<int16_t>())              retrieveAccessorTyped<int16_t>(args, grid);
-    else if (valueType == typeNameAsString<int32_t>())              retrieveAccessorTyped<int32_t>(args, grid);
-    else if (valueType == typeNameAsString<int64_t>())              retrieveAccessorTyped<int64_t>(args, grid);
-    else if (valueType == typeNameAsString<float>())                retrieveAccessorTyped<float>(args, grid);
-    else if (valueType == typeNameAsString<double>())               retrieveAccessorTyped<double>(args, grid);
-    else if (valueType == typeNameAsString<math::Vec3<int32_t>>())  retrieveAccessorTyped<math::Vec3<int32_t>>(args, grid);
-    else if (valueType == typeNameAsString<math::Vec3<float>>())    retrieveAccessorTyped<math::Vec3<float>>(args, grid);
-    else if (valueType == typeNameAsString<math::Vec3<double>>())   retrieveAccessorTyped<math::Vec3<double>>(args, grid);
-    else {
-        OPENVDB_THROW(TypeError, "Could not retrieve attribute '" + grid->getName()
-            + "' as it has an unknown value type '" + valueType + "'");
+    // assert so the executer can be marked as noexcept (assuming nothing throws in compute)
+    assert(supported(type) && "Could not retrieve accessor from unsupported type");
+    switch (type) {
+        case ast::tokens::BOOL    : return retrieveAccessorTyped<BoolGrid>(args, grid);
+        case ast::tokens::INT     : return retrieveAccessorTyped<Int32Grid>(args, grid);
+        case ast::tokens::LONG    : return retrieveAccessorTyped<Int64Grid>(args, grid);
+        case ast::tokens::FLOAT   : return retrieveAccessorTyped<FloatGrid>(args, grid);
+        case ast::tokens::DOUBLE  : return retrieveAccessorTyped<DoubleGrid>(args, grid);
+        case ast::tokens::VEC3I   : return retrieveAccessorTyped<Vec3IGrid>(args, grid);
+        case ast::tokens::VEC3F   : return retrieveAccessorTyped<Vec3fGrid>(args, grid);
+        case ast::tokens::VEC3D   : return retrieveAccessorTyped<Vec3dGrid>(args, grid);
+        case ast::tokens::UNKNOWN :
+        default                   : return;
     }
 }
 
-template <typename TreeT>
+template <typename TreeT, typename ValueIterT>
 struct VolumeExecuterOp
 {
     using LeafManagerT = typename tree::LeafManager<TreeT>;
+    using LeafNodeT = typename TreeT::LeafNodeType;
+    using IterTraitsT = typename tree::IterTraits<LeafNodeT, ValueIterT>;
 
-    VolumeExecuterOp(const VolumeRegistry& volumeRegistry,
+    VolumeExecuterOp(const AttributeRegistry& attributeRegistry,
                      const CustomData::ConstPtr& customData,
                      const math::Transform& assignedVolumeTransform,
                      KernelFunctionPtr computeFunction,
-                     openvdb::GridPtrVec& grids)
-        : mVolumeRegistry(volumeRegistry)
+                     const openvdb::GridPtrVec& grids,
+                     openvdb::tree::ValueAccessor<TreeT> acc,
+                     const size_t idx)
+        : mAttributeRegistry(attributeRegistry)
         , mCustomData(customData)
         , mComputeFunction(computeFunction)
         , mGrids(grids)
-        , mTargetVolumeTransform(assignedVolumeTransform) {
+        , mTargetVolumeTransform(assignedVolumeTransform)
+        , mIdx(idx)
+        , mAccessor(acc) {
             assert(!mGrids.empty());
         }
 
     void operator()(const typename LeafManagerT::LeafRange& range) const
     {
         VolumeFunctionArguments args(mCustomData);
+        args.mIdx = mIdx;
+        args.mAccessor = const_cast<void*>(static_cast<const void*>(&mAccessor));
 
         size_t location(0);
-        for (const auto& iter : mVolumeRegistry.volumeData()) {
-            retrieveAccessor(args, mGrids[location], iter.mType);
+        for (const auto& iter : mAttributeRegistry.data()) {
+            retrieveAccessor(args, mGrids[location], iter.type());
             args.addTransform(mGrids[location]->transformPtr());
             ++location;
         }
 
         for (auto leaf = range.begin(); leaf; ++leaf) {
-            for (auto voxel = leaf->cbeginValueOn(); voxel; ++voxel) {
+            for (ValueIterT voxel = IterTraitsT::begin(*leaf); voxel; ++voxel) {
                 args.mCoord = voxel.getCoord();
                 args.mCoordWS = mTargetVolumeTransform.indexToWorld(args.mCoord);
                 args.bind(mComputeFunction)();
@@ -223,156 +241,178 @@ struct VolumeExecuterOp
     }
 
 private:
-    const VolumeRegistry&       mVolumeRegistry;
+    const AttributeRegistry&    mAttributeRegistry;
     const CustomData::ConstPtr  mCustomData;
     KernelFunctionPtr           mComputeFunction;
     const openvdb::GridPtrVec&  mGrids;
     const math::Transform&      mTargetVolumeTransform;
+    const size_t mIdx;
+    openvdb::tree::ValueAccessor<TreeT> mAccessor;
+
+
 };
 
-void registerVolumes(const GridPtrVec &grids, GridPtrVec &writeableGrids, GridPtrVec &usableGrids,
-                     const VolumeRegistry::VolumeDataVec& volumeData)
+void registerVolumes(const GridPtrVec& grids,
+    GridPtrVec& writeableGrids,
+    GridPtrVec& readGrids,
+    const AttributeRegistry& registry)
 {
-    for (auto& iter : volumeData) {
+    for (auto& iter : registry.data()) {
 
         openvdb::GridBase::Ptr matchedGrid;
         bool matchedName(false);
+        ast::tokens::CoreType type = ast::tokens::UNKNOWN;
+
         for (const auto grid : grids) {
-            if (grid->getName() != iter.mName) continue;
+            if (grid->getName() != iter.name()) continue;
             matchedName = true;
-            if (grid->valueType() != iter.mType) continue;
+            type = ast::tokens::tokenFromTypeString(grid->valueType());
+            if (type != iter.type()) continue;
             matchedGrid = grid;
             break;
         }
 
         if (!matchedName && !matchedGrid) {
-            OPENVDB_THROW(LookupError, "Missing grid \"@" + iter.mName + "\".");
+            OPENVDB_THROW(LookupError, "Missing grid \"@" + iter.name() + "\".");
         }
-
         if (matchedName && !matchedGrid) {
-            OPENVDB_THROW(TypeError, "Mismatching grid access type. \"@" + iter.mName +
-                "\" exists but has been accessed with type \"" + iter.mType + "\".");
+            OPENVDB_THROW(TypeError, "Mismatching grid access type. \"@" + iter.name() +
+                "\" exists but has been accessed with type \"" +
+                ast::tokens::typeStringFromToken(iter.type()) + "\".");
+        }
+        assert(matchedGrid);
+
+        if (!supported(type)) {
+            OPENVDB_THROW(TypeError, "Could not register volume '"
+                + matchedGrid->getName() + "' as it has an unknown or unsupported value type '"
+                + matchedGrid->valueType() + "'");
         }
 
-        assert(matchedGrid);
-        usableGrids.push_back(matchedGrid);
+        // Populate the write/read grids based on the access registry. If a
+        // grid is being read from, written to and has non self usage, (influences
+        // another grids value which isn't it's own) it must be deep copied
 
-        if (iter.mWriteable) {
+        if (iter.writes() && iter.reads() && iter.affectsothers()) {
+            readGrids.push_back(matchedGrid->deepCopyGrid());
             writeableGrids.push_back(matchedGrid);
+        }
+        else if (iter.writes()) {
+            assert(!iter.affectsothers());
+            readGrids.push_back(matchedGrid);
+            writeableGrids.push_back(matchedGrid);
+        }
+        else if (iter.reads()) {
+            assert(!iter.affectsothers());
+            readGrids.push_back(matchedGrid);
         }
     }
 }
 
-} // anonymous namespace
+template<typename LeafT>
+struct ValueOnIter { using Iterator = typename LeafT::ValueOnIter; };
 
-void VolumeExecutable::execute(const openvdb::GridPtrVec& grids) const
+template<typename LeafT>
+struct ValueAllIter { using Iterator = typename LeafT::ValueAllIter; };
+
+template<typename LeafT>
+struct ValueOffIter { using Iterator = typename LeafT::ValueOffIter; };
+
+template <template <typename> class IterT, typename GridT>
+inline void run(openvdb::GridBase& grid,
+    const openvdb::GridPtrVec& readGrids,
+    KernelFunctionPtr kernel,
+    const AttributeRegistry::ConstPtr registry,
+    const CustomData::ConstPtr custom)
 {
-    openvdb::GridPtrVec usableGrids, writeableGrids;
+    using TreeType = typename GridT::TreeType;
+    using LeafNodeType = typename TreeType::LeafNodeType;
+    using IterType = IterT<LeafNodeType>;
 
-    registerVolumes(grids, writeableGrids, usableGrids, mVolumeRegistry->volumeData());
+    const ast::tokens::CoreType type =
+            ast::tokens::tokenFromTypeString(grid.valueType());
+    const int64_t idx = registry->accessIndex(grid.getName(), type);
+    assert(idx != -1);
 
-    const int numBlocks = mBlockFunctionAddresses.size();
+    GridT& typed = static_cast<GridT&>(grid);
+    tree::LeafManager<TreeType> leafManager(typed.tree());
+    VolumeExecuterOp<TreeType, typename IterType::Iterator>
+        executerOp(*registry, custom, grid.transform(),
+            kernel, readGrids, typed.getAccessor(), idx);
 
-    for (int i = 0; i < numBlocks; i++) {
+    tbb::parallel_for(leafManager.leafRange(), executerOp);
+}
 
-        const std::map<std::string, uint64_t>& blockFunctions = mBlockFunctionAddresses.at(i);
-
-        const std::string funcName(codegen::VolumeKernel::getDefaultName() + std::to_string(i));
-        auto iter = blockFunctions.find(funcName);
-
-        KernelFunctionPtr compute = nullptr;
-        if (iter != blockFunctions.cend() && (iter->second != uint64_t(0))) {
-            compute = reinterpret_cast<KernelFunctionPtr>(iter->second);
-        }
-
-        if (!compute) {
-            OPENVDB_THROW(AXCompilerError, "No code has been successfully compiled for execution.");
-        }
-
-        const std::string& currentVolumeAssigned = mAssignedVolumes[i];
-        math::Transform::ConstPtr writeTransform = nullptr;
-
-        // pointer to the grid which is being written to in the current block
-        openvdb::GridBase::Ptr gridToModify = nullptr;
-
-        for (const auto& grid : writeableGrids) {
-            if (grid->getName() == currentVolumeAssigned) {
-                writeTransform = grid->transformPtr();
-                gridToModify = grid;
-                break;
-            }
-        }
+template <template <typename> class IterT>
+inline void run(const openvdb::GridPtrVec& writeableGrids,
+                const openvdb::GridPtrVec& readGrids,
+                KernelFunctionPtr kernel,
+                const AttributeRegistry::ConstPtr registry,
+                const CustomData::ConstPtr custom)
+{
+    for (const auto& grid : writeableGrids) {
 
         // We execute over the topology of the grid currently being modified.  To do this, we need
         // a typed tree and leaf manager
 
-        if (gridToModify->isType<BoolGrid>()) {
-            BoolGrid::Ptr typed = StaticPtrCast<BoolGrid>(gridToModify);
-            tree::LeafManager<BoolTree> leafManager(typed->tree());
-            VolumeExecuterOp<BoolTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        if (grid->isType<BoolGrid>()) {
+            run<IterT, BoolGrid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<Int32Grid>()) {
-            Int32Grid::Ptr typed = StaticPtrCast<Int32Grid>(gridToModify);
-            tree::LeafManager<Int32Tree> leafManager(typed->tree());
-            VolumeExecuterOp<Int32Tree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                 compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<Int32Grid>()) {
+            run<IterT, Int32Grid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<Int64Grid>()) {
-            Int64Grid::Ptr typed = StaticPtrCast<Int64Grid>(gridToModify);
-            tree::LeafManager<Int64Tree> leafManager(typed->tree());
-            VolumeExecuterOp<Int64Tree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<Int64Grid>()) {
+            run<IterT, Int64Grid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<FloatGrid>()) {
-            FloatGrid::Ptr typed = StaticPtrCast<FloatGrid>(gridToModify);
-            tree::LeafManager<FloatTree> leafManager(typed->tree());
-            VolumeExecuterOp<FloatTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<FloatGrid>()) {
+            run<IterT, FloatGrid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<DoubleGrid>()) {
-            DoubleGrid::Ptr typed = StaticPtrCast<DoubleGrid>(gridToModify);
-            tree::LeafManager<DoubleTree> leafManager(typed->tree());
-            VolumeExecuterOp<DoubleTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<DoubleGrid>()) {
+            run<IterT, DoubleGrid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<Vec3IGrid>()) {
-            Vec3IGrid::Ptr typed = StaticPtrCast<Vec3IGrid>(gridToModify);
-            tree::LeafManager<Vec3ITree> leafManager(typed->tree());
-            VolumeExecuterOp<Vec3ITree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<Vec3IGrid>()) {
+            run<IterT, Vec3IGrid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<Vec3fGrid>()) {
-            Vec3fGrid::Ptr typed = StaticPtrCast<Vec3fGrid>(gridToModify);
-            tree::LeafManager<Vec3fTree> leafManager(typed->tree());
-            VolumeExecuterOp<Vec3fTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<Vec3fGrid>()) {
+            run<IterT, Vec3fGrid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<Vec3dGrid>()) {
-            Vec3dGrid::Ptr typed = StaticPtrCast<Vec3dGrid>(gridToModify);
-            tree::LeafManager<Vec3dTree> leafManager(typed->tree());
-            VolumeExecuterOp<Vec3dTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<Vec3dGrid>()) {
+            run<IterT, Vec3dGrid>(*grid, readGrids, kernel, registry, custom);
         }
-        else if (gridToModify->isType<MaskGrid>()) {
-            MaskGrid::Ptr typed = StaticPtrCast<MaskGrid>(gridToModify);
-            tree::LeafManager<MaskTree> leafManager(typed->tree());
-            VolumeExecuterOp<MaskTree> executerOp(*mVolumeRegistry, mCustomData, *writeTransform,
-                compute, usableGrids);
-            tbb::parallel_for(leafManager.leafRange(), executerOp);
+        else if (grid->isType<MaskGrid>()) {
+            run<IterT, MaskGrid>(*grid, readGrids, kernel, registry, custom);
         }
         else {
-            OPENVDB_THROW(TypeError, "Could not retrieve volume '" + gridToModify->getName()
-                                     + "' as it has an unknown value type");
+            OPENVDB_THROW(TypeError, "Could not retrieve volume '" + grid->getName()
+                + "' as it has an unknown or unsupported value type '" + grid->valueType()
+                + "'");
         }
+    }
+}
+} // anonymous namespace
+
+void VolumeExecutable::execute(const openvdb::GridPtrVec& grids,
+                               const IterType iterType) const
+{
+    openvdb::GridPtrVec readGrids, writeableGrids;
+
+    registerVolumes(grids, writeableGrids, readGrids, *mAttributeRegistry);
+
+    KernelFunctionPtr kernel = nullptr;
+    const auto iter = mFunctionAddresses.find(codegen::VolumeKernel::getDefaultName());
+    if (iter != mFunctionAddresses.end()) {
+        kernel = reinterpret_cast<KernelFunctionPtr>(iter->second);
+    }
+    if (!kernel) {
+        OPENVDB_THROW(AXCompilerError,
+            "No code has been successfully compiled for execution.");
+    }
+
+    if (iterType == IterType::ON)       run<ValueOnIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
+    else if(iterType == IterType::OFF)  run<ValueOffIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
+    else if (iterType == IterType::ALL) run<ValueAllIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
+    else {
+        OPENVDB_THROW(AXExecutionError,
+            "Unrecognised voxel iterator.");
     }
 }
 

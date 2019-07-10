@@ -40,9 +40,10 @@
 #define OPENVDB_AX_HOUDINI_AX_UTILS_HAS_BEEN_INCLUDED
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Visitor.h>
 #include <openvdb_ax/ast/Scanners.h>
 #include <openvdb_ax/codegen/FunctionTypes.h>
-#include <openvdb_ax/codegen/FunctionRegistry.h>
+#include <openvdb_ax/codegen/Functions.h>
 #include <openvdb_ax/codegen/Utils.h>
 #include <openvdb_ax/compiler/Compiler.h>
 #include <openvdb_ax/compiler/CustomData.h>
@@ -96,9 +97,9 @@ inline void findDollarExpressions(const openvdb::ax::ast::Tree& tree,
 inline void convertASTFromVEX(openvdb::ax::ast::Tree& tree,
                        const TargetType targetType);
 
-/// @brief  Converts lookup functions within a Syntax Tree to ExternalVariable nodes
+/// @brief  Converts external functions within a Syntax Tree to ExternalVariable nodes
 ///         if the argument is a string literal. This method is much faster than using
-///         the lookup functions but uses $ AX syntax which isn't typical of a Houdini
+///         the external functions but uses $ AX syntax which isn't typical of a Houdini
 ///         session.
 ///
 /// @param  tree        The AST to convert
@@ -112,62 +113,64 @@ inline void convertASTKnownLookups(openvdb::ax::ast::Tree& tree);
 /// @param  reg   The function registry to add register the new functions into
 /// @param  options The function options
 inline void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& reg,
-                                        const openvdb::ax::FunctionOptions& options);
+                                        const openvdb::ax::FunctionOptions* options = nullptr);
 
 
 ///////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
 /// @brief AST scanner to find channel expressions and them to the expression set
-struct FindChannelExpressions : public openvdb::ax::ast::Visitor
+struct FindChannelExpressions :
+    public openvdb::ax::ast::Visitor<FindChannelExpressions>
 {
+    using openvdb::ax::ast::Visitor<FindChannelExpressions>::traverse;
+    using openvdb::ax::ast::Visitor<FindChannelExpressions>::visit;
+
     FindChannelExpressions(ChannelExpressionSet& expressions)
         : mExpressions(expressions) {}
-    virtual ~FindChannelExpressions() = default;
+    ~FindChannelExpressions() = default;
 
     static const std::string*
-    getChannelPath(const openvdb::ax::ast::ExpressionList::Ptr args)
+    getChannelPath(const openvdb::ax::ast::ExpressionList* args)
     {
         assert(args);
-        const std::vector<openvdb::ax::ast::Expression::Ptr>& inputs = args->mList;
-        if (inputs.empty()) return nullptr;
-
-        const openvdb::ax::ast::Expression* const firstInput = inputs.front().get();
+        if (args->empty()) return nullptr; // avoid dync if nullptr
         const openvdb::ax::ast::Value<std::string>* const path =
-            dynamic_cast<const openvdb::ax::ast::Value<std::string>* const>(firstInput);
+            dynamic_cast<const openvdb::ax::ast::Value<std::string>*>(args->child(0));
         if (!path) return nullptr;
-        return &(path->mValue);
+        return &(path->value());
     }
 
     /// @brief  Add channel expression function calls
     /// @param  node The FunctionCall AST node being visited
-    void visit(const openvdb::ax::ast::FunctionCall& node) override final
+    bool visit(const openvdb::ax::ast::FunctionCall* node)
     {
         std::string type;
 
-        if (node.mFunction == "lookupf" ||
-            node.mFunction == "ch") {
+        if (node->name() == "external" ||
+            node->name() == "ch") {
             type = openvdb::typeNameAsString<float>();
         }
-        else if (node.mFunction == "lookupvec3f" ||
-                 node.mFunction == "chv") {
+        else if (node->name() == "externalv" ||
+                 node->name() == "chv") {
             type = openvdb::typeNameAsString<openvdb::Vec3f>();
         }
-        else if (node.mFunction == "chramp") {
+        else if (node->name() == "chramp") {
             type = "ramp";
         }
 
-        if (type.empty()) return;
+        if (type.empty()) return true;
 
         // Get channel arguments. If there are incorrect arguments, defer to
         // the compiler code generation function error system to report proper
         // errors later
 
-        const openvdb::ax::ast::ExpressionList::Ptr args = node.mArguments;
+        const openvdb::ax::ast::ExpressionList* args = node->args();;
         const std::string* path = getChannelPath(args);
-        if (!path) return;
+        if (!path) return true;
 
         mExpressions.emplace(type, *path);
+        return true;
     }
 
 private:
@@ -178,7 +181,7 @@ inline void findChannelExpressions(const openvdb::ax::ast::Tree& tree,
                                    ChannelExpressionSet& exprSet)
 {
     FindChannelExpressions op(exprSet);
-    tree.accept(op);
+    op.traverse(&tree);
 }
 
 
@@ -189,8 +192,9 @@ inline void findDollarExpressions(const openvdb::ax::ast::Tree& tree,
                                   ChannelExpressionSet& exprSet)
 {
     openvdb::ax::ast::visitNodeType<openvdb::ax::ast::ExternalVariable>(tree,
-        [&](const openvdb::ax::ast::ExternalVariable& node) {
-            exprSet.emplace(node.mType, node.mName);
+        [&](const openvdb::ax::ast::ExternalVariable& node) -> bool {
+            exprSet.emplace(node.typestr(), node.name());
+            return true;
         });
 }
 
@@ -202,109 +206,116 @@ inline void findDollarExpressions(const openvdb::ax::ast::Tree& tree,
 ///        data lookups. Replaces volume intrinsics @P, @ix, @iy, @iz with AX function
 ///        calls. In the future this may be used to translate VEX syntax to an AX AST
 ///        and back to text for in application conversion to AX syntax.
-struct ConvertFromVEX : public openvdb::ax::ast::Modifier
+struct ConvertFromVEX :
+    public openvdb::ax::ast::Visitor<ConvertFromVEX, false>
 {
-    ConvertFromVEX(const TargetType targetType)
-        : mTargetType(targetType) {}
-    virtual ~ConvertFromVEX() = default;
+    using openvdb::ax::ast::Visitor<ConvertFromVEX, false>::traverse;
+    using openvdb::ax::ast::Visitor<ConvertFromVEX, false>::visit;
+
+    ConvertFromVEX(const TargetType targetType,
+        const std::vector<const openvdb::ax::ast::Variable*>& write)
+        : mTargetType(targetType)
+        , mWrite(write) {}
+    ~ConvertFromVEX() = default;
 
     /// @brief  Convert channel function calls to internally supported functions
     /// @param  node  The FunctionCall AST node being visited
-    openvdb::ax::ast::Expression*
-    visit(openvdb::ax::ast::FunctionCall& node) override final
+    bool visit(openvdb::ax::ast::FunctionCall* node)
     {
-        openvdb::ax::ast::FunctionCall::UniquePtr replacement;
-
         std::string identifier;
-        if (node.mFunction == "ch")       identifier = "lookupf";
-        else if (node.mFunction == "chv") identifier = "lookupvec3f";
+        if (node->name() == "ch")       identifier = "external";
+        else if (node->name() == "chv") identifier = "externalv";
+        else return true;
 
-        if (!identifier.empty()) {
-            // Copy the arguments
-            openvdb::ax::ast::ExpressionList::UniquePtr args(node.mArguments->copy());
-            replacement.reset(new openvdb::ax::ast::FunctionCall(identifier, args.release()));
+        openvdb::ax::ast::ExpressionList::UniquePtr args(node->args()->copy());
+        openvdb::ax::ast::FunctionCall::UniquePtr
+            replacement(new openvdb::ax::ast::FunctionCall(identifier, args.release()));
+
+        if (!node->replace(replacement.get())) {
+            throw std::runtime_error("Unable to convert AX snippet to VEX. Function \"" +
+                node->name() + "\" produced errors.");
         }
-
-        return replacement.release();
+        replacement.release();
+        return true;
     }
 
     /// @brief  Convert Houdini instrinsic volume attribute read accesses
     /// @param  node  The AttributeValue AST node being visited
-    openvdb::ax::ast::Expression*
-    visit(openvdb::ax::ast::AttributeValue& node) override final
+    bool visit(openvdb::ax::ast::Attribute* node)
     {
+        if (mTargetType != TargetType::VOLUMES) return true;
+
+        if (node->name() != "P"  && node->name() != "ix" &&
+            node->name() != "iy" && node->name() != "iz") {
+            return true;
+        }
+
+        if (std::find(mWrite.cbegin(), mWrite.cend(), node) != mWrite.cend()) {
+            throw std::runtime_error("Unable to write to a volume name \"@" +
+                node->name() + "\". This is a keyword identifier");
+        }
+
         openvdb::ax::ast::FunctionCall::UniquePtr replacement;
-
-        if (mTargetType == TargetType::VOLUMES) {
-            if (node.mAttribute->mName == "P") {
-                replacement.reset(new openvdb::ax::ast::FunctionCall("getvoxelpws"));
-            }
-            else if (node.mAttribute->mName == "ix") {
-                replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordx"));
-            }
-            else if (node.mAttribute->mName == "iy") {
-                replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordy"));
-            }
-            else if (node.mAttribute->mName == "iz") {
-                replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordz"));
-            }
+        if (node->name() == "P") {
+            replacement.reset(new openvdb::ax::ast::FunctionCall("getvoxelpws"));
+        }
+        else if (node->name() == "ix") {
+            replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordx"));
+        }
+        else if (node->name() == "iy") {
+            replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordy"));
+        }
+        else if (node->name() == "iz") {
+            replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordz"));
         }
 
-        return replacement.release();
-    }
-
-    /// @brief  Check Houdini instrinsic volume attribute write accesses
-    /// @param  node The Attribute AST node being visited
-    openvdb::ax::ast::Variable*
-    visit(openvdb::ax::ast::Attribute& node) override final
-    {
-        if (mTargetType == TargetType::VOLUMES)
-        {
-            if (node.mName == "P"  || node.mName == "ix" ||
-                node.mName == "iy" || node.mName == "iz") {
-                throw std::runtime_error("Unable to write to a volume name \"@" +
-                    node.mName + "\". This is a keyword identifier");
-            }
+        if (!node->replace(replacement.get())) {
+            throw std::runtime_error("Unable to convert AX snippet to VEX. Attribute \"" +
+                node->name() + "\" produced errors.");
         }
-
-        return nullptr;
+        replacement.release();
+        return true;
     }
 
 private:
     const TargetType mTargetType;
+    const std::vector<const openvdb::ax::ast::Variable*>& mWrite;
 };
 
 inline void convertASTFromVEX(openvdb::ax::ast::Tree& tree,
                        const TargetType targetType)
 {
-    ConvertFromVEX converter(targetType);
-    tree.accept(converter);
+    std::vector<const openvdb::ax::ast::Variable*> write;
+    openvdb::ax::ast::catalogueVariables(tree, nullptr, &write, &write,
+        /*locals*/false, /*attributes*/true);
+    ConvertFromVEX converter(targetType, write);
+    converter.traverse(&tree);
 }
 
 
 ///////////////////////////////////////////////////////////////////////////
 
-/// @brief  Convert any lookup or channel functions to ExternalVariable nodes
+/// @brief  Convert any external or channel functions to ExternalVariable nodes
 ///         if the path is a string literal
-struct ConvertKnownLookups : public openvdb::ax::ast::Modifier
+struct ConvertKnownExternalLookups :
+    public openvdb::ax::ast::Visitor<ConvertKnownExternalLookups, false>
 {
-    ConvertKnownLookups() = default;
-    virtual ~ConvertKnownLookups() = default;
+    using openvdb::ax::ast::Visitor<ConvertKnownExternalLookups, false>::traverse;
+    using openvdb::ax::ast::Visitor<ConvertKnownExternalLookups, false>::visit;
+
+    ConvertKnownExternalLookups() = default;
+    ~ConvertKnownExternalLookups() = default;
 
     /// @brief  Performs the function call to external variable conversion
     /// @param  node  The FunctionCall AST node being visited
-    openvdb::ax::ast::Expression*
-    visit(openvdb::ax::ast::FunctionCall& node) override final
+    bool visit(openvdb::ax::ast::FunctionCall* node)
     {
-        const bool isFloatLookup(node.mFunction == "lookupf");
-        const bool isStringLookup(false /*node.mFunction == "lookups"*/);
-        const bool isVec3fLookup(node.mFunction == "lookupvec3f");
+        const bool isFloatLookup(node->name() == "external");
+        const bool isVec3fLookup(node->name() == "externalv");
+        if (!isFloatLookup && !isVec3fLookup) return true;
 
-        if (!isFloatLookup && !isStringLookup && !isVec3fLookup) return nullptr;
-
-        openvdb::ax::ast::ExternalVariable::UniquePtr replacement;
         const std::string* path =
-            FindChannelExpressions::getChannelPath(node.mArguments);
+            FindChannelExpressions::getChannelPath(node->args());
 
         // If for any reason we couldn't validate or get the channel path from the
         // first argument, fall back to the internal lookup functions. These will
@@ -313,23 +324,24 @@ struct ConvertKnownLookups : public openvdb::ax::ast::Modifier
         // (although are much slower)
 
         if (path) {
-
             std::string type;
             if (isFloatLookup) type = openvdb::typeNameAsString<float>();
-            else if (isStringLookup) type = openvdb::typeNameAsString<std::string>();
             else type = openvdb::typeNameAsString<openvdb::Vec3f>();
 
+            openvdb::ax::ast::ExternalVariable::UniquePtr replacement;
             replacement.reset(new openvdb::ax::ast::ExternalVariable(*path, type));
+            node->replace(replacement.get());
+            replacement.release();
         }
 
-        return replacement.release();
+        return true;
     }
 };
 
 inline void convertASTKnownLookups(openvdb::ax::ast::Tree& tree)
 {
-    ConvertKnownLookups converter;
-    tree.accept(converter);
+    ConvertKnownExternalLookups converter;
+    converter.traverse(&tree);
 }
 
 
@@ -360,7 +372,9 @@ public:
     }
     virtual std::string str() const { return "<compiler ramp data>"; }
     virtual bool asBool() const { return true; }
-    virtual openvdb::Index32 size() const { return mData.size(); }
+    virtual openvdb::Index32 size() const {
+        return static_cast<openvdb::Index32>(mData.size());
+    }
 
     //////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////
@@ -395,9 +409,6 @@ struct Chramp : public openvdb::ax::codegen::FunctionBase
 
     struct Internal : public FunctionBase
     {
-        inline FunctionBase::Context context() const override final {
-            return FunctionBase::All;
-        }
         inline const std::string identifier() const override final {
             return std::string("internal_chramp");
         }
@@ -411,7 +422,7 @@ struct Chramp : public openvdb::ax::codegen::FunctionBase
         }
 
         Internal() : FunctionBase({
-                DECLARE_FUNCTION_SIGNATURE_OUTPUT(sample_map, 1)
+                DECLARE_FUNCTION_SIGNATURE_OUTPUT(sample_map)
             }) {}
 
     private:
@@ -506,9 +517,6 @@ struct Chramp : public openvdb::ax::codegen::FunctionBase
         }
     };
 
-    inline FunctionBase::Context context() const override final {
-        return openvdb::ax::codegen::FunctionBase::All;
-    }
     inline const std::string identifier() const override final {
         return std::string("chramp");
     }
@@ -534,15 +542,14 @@ struct Chramp : public openvdb::ax::codegen::FunctionBase
     llvm::Value*
     generate(const std::vector<llvm::Value*>& args,
          const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>& builder,
-         llvm::Module& M) const override {
+         llvm::IRBuilder<>& builder) const override {
 
         std::vector<llvm::Value*> internalArgs(args);
         internalArgs.emplace_back(globals.at("custom_data"));
 
         std::vector<llvm::Value*> results;
         Internal func;
-        func.execute(internalArgs, globals, builder, M, &results);
+        func.execute(internalArgs, globals, builder, &results);
         return results.front();
      }
 };
@@ -552,17 +559,17 @@ struct Chramp : public openvdb::ax::codegen::FunctionBase
 
 
 void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& reg,
-                                    const openvdb::ax::FunctionOptions& options)
+                                    const openvdb::ax::FunctionOptions* options)
 {
     // @note - we could alias matching functions such as ch and chv here, but we opt
     // to use the modifier so that all supported VEX conversion is in one place. chramp
     // is a re-implemented function and is not currently supported outside of the Houdini
     // plugin
 
-    if (!options.mLazyFunctions) {
-        reg.insertAndCreate("chramp", openvdb_ax_houdini::Chramp::create, options);
+    if (options && !options->mLazyFunctions) {
+        reg.insertAndCreate("chramp", openvdb_ax_houdini::Chramp::create, *options);
         reg.insertAndCreate("internal_chramp",
-            openvdb_ax_houdini::Chramp::Internal::create, options, true);
+            openvdb_ax_houdini::Chramp::Internal::create, *options, true);
     }
     else {
         reg.insert("chramp", openvdb_ax_houdini::Chramp::create);

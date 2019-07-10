@@ -44,6 +44,8 @@
 #include "Types.h"
 #include "Utils.h"
 
+#include <openvdb_ax/compiler/AttributeRegistry.h>
+
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
@@ -100,7 +102,6 @@ struct PointRangeKernel : public PointKernel
 ///////////////////////////////////////////////////////////////////////////
 
 
-
 /// @brief Visitor object which will generate llvm IR for a syntax tree which has been generated from
 ///        AX that targets point grids.  The IR will represent  2 functions : one that executes over
 ///        single points and one that executes over a collection of points.  This is primarily used by the
@@ -109,33 +110,27 @@ struct PointComputeGenerator : public ComputeGenerator
 {
     /// @brief Constructor
     /// @param module           llvm Module for generating IR
-    /// @param customData       Custom data to be referenced from compiled AX code
     /// @param options          Options for the function registry behaviour
     /// @param functionRegistry Function registry object which will be used when generating IR
     ///                         for function calls
     /// @param warnings         Vector which will hold compiler warnings.  If null, no warnings will
     ///                         be stored.
     PointComputeGenerator(llvm::Module& module,
-                          const FunctionOptions& options,
-                          FunctionRegistry& functionRegistry,
-                          std::vector<std::string>* const warnings = nullptr);
+       const FunctionOptions& options,
+       FunctionRegistry& functionRegistry,
+       std::vector<std::string>* const warnings = nullptr);
 
     ~PointComputeGenerator() override = default;
 
-protected:
+    using ComputeGenerator::traverse;
+    using ComputeGenerator::visit;
 
-    void init(const ast::Tree& node) override;
-    void visit(const ast::AssignExpression& node) override;
-    void visit(const ast::Crement& node) override;
-    void visit(const ast::FunctionCall& node) override;
-    void visit(const ast::Attribute& node) override;
-    void visit(const ast::AttributeValue& node) override;
+    AttributeRegistry::Ptr generate(const ast::Tree& node);
+    bool visit(const ast::Attribute*) override;
 
 private:
-
-    // Track how many attributes have been visisted so we can choose the correct
-    // code path
-    size_t mAttributeVisitCount;
+    llvm::Value* attributeHandleFromToken(const std::string&);
+    void getAttributeValue(const std::string& globalName, llvm::Value* location);
 };
 
 }

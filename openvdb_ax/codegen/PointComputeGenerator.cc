@@ -39,6 +39,7 @@
 #include "Utils.h"
 
 #include <openvdb_ax/Exceptions.h>
+#include <openvdb_ax/ast/Scanners.h>
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/IR/BasicBlock.h>
@@ -90,10 +91,9 @@ PointComputeGenerator::PointComputeGenerator(llvm::Module& module,
                                              const FunctionOptions& options,
                                              FunctionRegistry& functionRegistry,
                                              std::vector<std::string>* const warnings)
-    : ComputeGenerator(module, options, functionRegistry, warnings)
-    , mAttributeVisitCount(0) {}
+    : ComputeGenerator(module, options, functionRegistry, warnings) {}
 
-void PointComputeGenerator::init(const ast::Tree&)
+AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
 {
     // Override the ComputeGenerators default init() with the custom
     // functions requires for Point execution
@@ -186,376 +186,196 @@ void PointComputeGenerator::init(const ast::Tree&)
         mBuilder.ClearInsertionPoint();
     }
 
-    mBlocks.push(llvm::BasicBlock::Create(mContext,
-        "entry_" + PointKernel::getDefaultName(), mFunction));
-    mBuilder.SetInsertPoint(mBlocks.top());
-}
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(mContext,
+        "entry_" + PointKernel::getDefaultName(), mFunction);
+    mBuilder.SetInsertPoint(entry);
 
-void PointComputeGenerator::visit(const ast::AssignExpression& node)
-{
-    // Enum of supported assignments within the PointComputeGenerator
+    // build the attribute registry
 
-    enum AssignmentType
-    {
-        UNSUPPORTED = 0,
-        STRING_EQ_STRING,
-        ARRAY_EQ_ARRAY,
-        SCALAR_EQ_ARRAY,
-        ARRAY_EQ_SCALAR,
-        SCALAR_EQ_SCALAR
-    };
+    AttributeRegistry::Ptr registry = AttributeRegistry::create(tree);
 
-    // if not assigning to an attribute, use the base implementation
-    if (mAttributeVisitCount == 0) {
-        ComputeGenerator::visit(node);
-        return;
+    // Visit all attributes and allocate them in local IR memory - assumes attributes
+    // have been verified by the ax compiler
+    // @note  Call all attribute allocs at the start of this block so that llvm folds
+    // them into the function prologue (as a static allocation)
+
+    SymbolTable* localTable = this->mSymbolTables.getOrInsert(1);
+
+    // run allocations and update the symbol table
+
+    for (const AttributeRegistry::AccessData& data : registry->data()) {
+        llvm::Value* value = mBuilder.CreateAlloca(llvmTypeFromToken(data.type(), mContext));
+        assert(llvm::cast<llvm::AllocaInst>(value)->isStaticAlloca());
+        localTable->insert(data.tokenname(), value);
     }
 
-    --mAttributeVisitCount;
+    // insert getters for read variables
 
-    // values are not loaded. rhs is always a pointer to a scalar or array,
-    // where as the lhs is always void* to the attribute handle or the leaf data
-
-    llvm::Value* handlePtr = mValues.top(); mValues.pop(); // lhs
-    llvm::Value* rhs = mValues.top(); mValues.pop();
-
-    assert(rhs && rhs->getType()->isPointerTy() &&
-           "Right Hand Size input to AssignExpression is not a pointer type.");
-    assert(handlePtr && handlePtr->getType()->isPointerTy() &&
-           "Left Hand Size input to AssignExpression is not a pointer type.");
-
-    // Push the original RHS value back onto stack to allow for multiple
-    // assignment statements to be chained together
-
-    mValues.push(rhs);
-
-    // LHS is always a pointer to an attribute here. Find the value type requested
-    // from the AST node
-
-    assert(node.mVariable);
-    const ast::Attribute* const attribute =
-        static_cast<const ast::Attribute* const>(node.mVariable.get());
-    assert(attribute);
-
-    const std::string& type = attribute->mType;
-    const bool usingPosition = (attribute->mName == "P");
-
-    // attribute should already exist
-    assert(usingPosition || this->globals().exists(getGlobalAttributeAccess(attribute->mName, type)));
-
-    const bool lhsIsString = type == "string";
-
-    llvm::Type* rhsType = rhs->getType()->getContainedType(0);
-    llvm::Type* lhsType = llvmTypeFromName(type, mContext);
-
-    // convert rhs to match lhs for all supported assignments:
-    // (scalar=scalar, vector=vector, scalar=vector, vector=scalar etc)
-
-    AssignmentType assignmentType = UNSUPPORTED;
-    if (isCharType(lhsType, mContext) && isCharType(rhsType, mContext)) {
-        assignmentType = STRING_EQ_STRING;
-    }
-    else if (!(isCharType(lhsType, mContext) && isCharType(rhsType, mContext))) {
-        const bool lhsIsArray = isArrayType(lhsType);
-        const bool rhsIsArray = isArrayType(rhsType);
-        if (lhsIsArray && rhsIsArray)        assignmentType = ARRAY_EQ_ARRAY;
-        else if (!lhsIsArray && rhsIsArray)  assignmentType = SCALAR_EQ_ARRAY;
-        else if (lhsIsArray && !rhsIsArray)  assignmentType = ARRAY_EQ_SCALAR;
-        else                                 assignmentType = SCALAR_EQ_SCALAR;
+    for (const AttributeRegistry::AccessData& data : registry->data()) {
+        if (!data.reads()) continue;
+        const std::string token = data.tokenname();
+        this->getAttributeValue(token, localTable->get(token));
     }
 
-    switch (assignmentType) {
-        case STRING_EQ_STRING : {
-            // rhs is a pointer to start of char buffer which is already the correct
-            // argument format for set point string
-            break;
-        }
-        case ARRAY_EQ_ARRAY : {
-            const size_t lhsSize = lhsType->getArrayNumElements();
-            const size_t rhsSize = rhsType->getArrayNumElements();
-            if (lhsSize != rhsSize) {
-                OPENVDB_THROW(LLVMArrayError, "Unable to assign vector/array "
-                    "attributes with mismatching sizes");
+    // full code generation
+
+    this->traverse(&tree);
+
+    // insert set code
+
+    std::vector<const AttributeRegistry::AccessData*> write;
+    for (const AttributeRegistry::AccessData& access : registry->data()) {
+        if (access.writes()) write.emplace_back(&access);
+    }
+    if (write.empty()) return registry;
+
+    for (auto block = mFunction->begin(); block != mFunction->end(); ++block) {
+
+        // Only inset set calls if theres a valid return instruction in this block
+
+        llvm::Instruction* inst = block->getTerminator();
+        if (!inst || !llvm::isa<llvm::ReturnInst>(inst)) continue;
+        mBuilder.SetInsertPoint(inst);
+
+        // Insert set attribute instructions before termination
+
+        for (const AttributeRegistry::AccessData* access : write) {
+
+            const std::string token = access->tokenname();
+            llvm::Value* value = localTable->get(token);
+
+            // Expected to be used more than one (i.e. should never be zero)
+            assert(value->hasNUsesOrMore(1));
+
+            // Check to see if this value is still being used - it may have
+            // been cleaned up due to returns. If there's only one use, it's
+            // the original get of this attribute.
+            if (value->hasOneUse()) {
+                // @todo  The original get can also be optimized out in this case
+                // this->globals().remove(variable.first);
+                // mModule.getGlobalVariable(variable.first)->eraseFromParent();
+                continue;
             }
 
-            // vector = vector - convert rhs to matching lhs type if necessary
-            llvm::Type* lhsElementType = lhsType->getArrayElementType();
-            rhs = arrayCast(rhs, lhsElementType, mBuilder);
-            break;
-        }
-        case SCALAR_EQ_ARRAY : {
-            // take the first value of the array
-            rhs = arrayIndexUnpack(rhs, 0, mBuilder);
-            rhs = mBuilder.CreateLoad(rhs);
-            rhs = arithmeticConversion(rhs, lhsType, mBuilder);
-            break;
-        }
-        case ARRAY_EQ_SCALAR : {
-            // convert rhs to a vector of the same value
-            rhs = mBuilder.CreateLoad(rhs);
-            llvm::Type* lhsElementType = lhsType->getArrayElementType();
-            rhs = arithmeticConversion(rhs, lhsElementType, mBuilder);
-            rhs = arrayPack(rhs, mBuilder, lhsType->getArrayNumElements());
-            break;
-        }
-        case SCALAR_EQ_SCALAR : {
-            // load and implicit conversion
-            rhs = mBuilder.CreateLoad(rhs);
-            rhs = arithmeticConversion(rhs, lhsType, mBuilder);
-            break;
-        }
-        default : {
-            OPENVDB_THROW(LLVMCastError, "Unsupported implicit cast in assignment.");
+            llvm::Type* type = value->getType()->getPointerElementType();
+            llvm::Type* strType = LLVMType<std::string>::get(mContext);
+            const bool usingString = type == strType;
+
+            llvm::Value* handlePtr = this->attributeHandleFromToken(token);
+            const FunctionBase::Ptr function = this->getFunction("setattribute", mOptions, true);
+
+            // load the result (if its a scalar)
+            if (type->isIntegerTy() || type->isFloatingPointTy()) {
+                value = mBuilder.CreateLoad(value);
+            }
+
+            // construct function arguments
+            std::vector<llvm::Value*> args {
+                handlePtr, // handle
+                mLLVMArguments.get("point_index"), // point index
+                value // set value
+            };
+
+            if (usingString) {
+                // get the string pointer
+                value = mBuilder.CreateStructGEP(strType, value, 0); // char**
+                value = mBuilder.CreateLoad(value); // char*
+                args[2] = value;
+                args.emplace_back(mLLVMArguments.get("leaf_data"));
+            }
+
+            function->execute(args, mLLVMArguments.map(), mBuilder);
         }
     }
 
-    // construct function arguments
-    std::vector<llvm::Value*> argumentValues;
-    argumentValues.reserve(lhsIsString ? 4 : 3);
-
-    // push back remaining argument types and values
-    argumentValues.emplace_back(handlePtr);
-    argumentValues.emplace_back(mLLVMArguments.get("point_index")); // point index
-    argumentValues.emplace_back(rhs);
-
-    if (lhsIsString) {
-        argumentValues.emplace_back(mLLVMArguments.get("leaf_data")); // new point data
-    }
-
-    if (usingPosition) {
-        const FunctionBase::Ptr function = this->getFunction("setpointpws", mOptions, true);
-        function->execute(argumentValues, mLLVMArguments.map(), mBuilder, mModule);
-    }
-    else {
-        const FunctionBase::Ptr function = this->getFunction("setattribute", mOptions, true);
-        function->execute(argumentValues, mLLVMArguments.map(), mBuilder, mModule);
-    }
+    return registry;
 }
 
-void PointComputeGenerator::visit(const ast::Crement& node)
+bool PointComputeGenerator::visit(const ast::Attribute* node)
 {
-    // if not visiting an attribute, use base implementation
-    if (mAttributeVisitCount == 0) {
-        ComputeGenerator::visit(node);
-        return;
-    }
-
-    --mAttributeVisitCount;
-
-    llvm::Value* rhs = mValues.top(); mValues.pop();
-    llvm::Value* lhs = mValues.top(); mValues.pop();
-
-    rhs = mBuilder.CreateLoad(rhs);
-    llvm::Type* type = rhs->getType();
-
-    // if we are post incrementing (i.e. i++) store the current
-    // value to push back into the stack afterwards
-
-    llvm::Value* temp = nullptr;
-    if (node.mPost) {
-        temp = mBuilder.CreateAlloca(type);
-        mBuilder.CreateStore(rhs, temp);
-    }
-
-    // decide whether adding or subtracting
-    // (We use the add instruction in both cases!)
-
-    int oneOrMinusOne;
-    if (node.mOperation == ast::Crement::Increment) oneOrMinusOne = 1;
-    else if (node.mOperation == ast::Crement::Decrement) oneOrMinusOne = -1;
-    else OPENVDB_THROW(LLVMTokenError, "Unrecognised crement operation token");
-
-    // add or subtract one from the variable
-
-    if (!isCharType(type, mContext) && type->isIntegerTy() && !type->isIntegerTy(1)) {
-        rhs = mBuilder.CreateAdd(rhs, llvm::ConstantInt::get(type, oneOrMinusOne));
-    }
-    else if (!isCharType(type, mContext) && type->isFloatingPointTy()) {
-        rhs = mBuilder.CreateFAdd(rhs, llvm::ConstantFP::get(type, oneOrMinusOne));
-    }
-    else {
-        OPENVDB_THROW(LLVMTypeError, "Variable \"" + node.mVariable->mName +
-            "\" is an unsupported type for crement. Must be scalar.");
-    }
-
-    assert(node.mVariable);
-
-    std::vector<llvm::Value*> argumentValues;
-    argumentValues.reserve(3);
-
-    argumentValues.emplace_back(lhs);
-    argumentValues.emplace_back(mLLVMArguments.get("point_index"));
-    argumentValues.emplace_back(rhs);
-
-    // @TODO: if supporting vector crement, reenable this
-    // const ast::Attribute* const attribute =
-    //     static_cast<const ast::Attribute* const>(node.mVariable.get());
-    // assert(attribute);
-    // if (attribute->mName == "P") {
-    //     const FunctionBase::Ptr function = getFunctionFromRegistry("__setpointpws", mOptions);
-    //     function->execute(argumentValues, mLLVMArguments.map(), mBuilder, mModule);
-    // } else {
-    const FunctionBase::Ptr function = this->getFunction("setattribute", mOptions, true);
-    function->execute(argumentValues, mLLVMArguments.map(), mBuilder, mModule);
-
-    // decide what to put on the expression stack
-
-    if (node.mPost) {
-        // post-increment: put the original value on the expression stack
-        mValues.push(temp);
-    }
-    else {
-        // pre-increment: put the incremented value on the expression stack
-        lhs = mBuilder.CreateAlloca(type);
-        mBuilder.CreateStore(rhs, lhs);
-        mValues.push(lhs);
-    }
+    const std::string globalName =
+        getGlobalAttributeAccess(node->name(), node->typestr());
+    SymbolTable* localTable = this->mSymbolTables.getOrInsert(1);
+    llvm::Value* value = localTable->get(globalName);
+    assert(value);
+    mValues.push(value);
+    return true;
 }
 
-void PointComputeGenerator::visit(const ast::FunctionCall& node)
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
+void PointComputeGenerator::getAttributeValue(const std::string& globalName, llvm::Value* location)
 {
-    assert(node.mArguments.get() && ("Uninitialized expression list for " +
-           node.mFunction).c_str());
+    std::string name, type;
+    isGlobalAttributeAccess(globalName, name, type);
 
-    const FunctionBase::Ptr function =
-        this->getFunction(node.mFunction, mOptions, /*no internal access*/false);
+    llvm::Value* handlePtr = this->attributeHandleFromToken(globalName);
 
-    if (function->context() & FunctionBase::Base) {
-        ComputeGenerator::visit(node);
-        return;
-    }
-
-    if (!(function->context() & FunctionBase::Point)) {
-        OPENVDB_THROW(LLVMContextError, "\"" + node.mFunction +
-            "\" called within an invalid context");
-    }
-
-    const size_t args = node.mArguments->mList.size();
-
-    std::vector<llvm::Value*> arguments;
-    argumentsFromStack(mValues, args, arguments);
-    parseDefaultArgumentState(arguments, mBuilder);
-
-    std::vector<llvm::Value*> results;
-    llvm::Value* result = function->execute(arguments, mLLVMArguments.map(), mBuilder, mModule, &results);
-    llvm::Type* resultType = result->getType();
-
-    if (resultType != LLVMType<void>::get(mContext)) {
-        // only required to allocate new data for the result type if its NOT a pointer
-        if (!resultType->isPointerTy()) {
-            llvm::Value* resultStore = mBuilder.CreateAlloca(resultType);
-            mBuilder.CreateStore(result, resultStore);
-            result = resultStore;
-        }
-        mValues.push(result);
-    }
-
-    for (auto& v : results) mValues.push(v);
-}
-
-void PointComputeGenerator::visit(const ast::Attribute& node)
-{
-    if (node.mType == "string") {
-        OPENVDB_THROW(AXCompilerError, "Access to string attributes not yet supported.");
-    }
-    if (node.mName == "P") {
-        // if accessing position the ptr we push back is actually to the leaf_data
-        llvm::Value* leafDataPtr = mLLVMArguments.get("leaf_data");
-        ++mAttributeVisitCount;
-
-        mValues.push(leafDataPtr);
-    }
-    else {
-        // Visiting an attribute - get the attribute handle out of a vector of void pointers
-        // mLLVMArguments.get("attribute_handles") is a void pointer to a vector of void
-        // pointers (void**)
-
-        // insert the attribute into the map of global variables and get a unique global representing
-        // the location which will hold the attribute handle offset.
-
-        const std::string globalName = getGlobalAttributeAccess(node.mName, node.mType);
-
-        llvm::Value* index = llvm::cast<llvm::GlobalVariable>
-            (mModule.getOrInsertGlobal(globalName, LLVMType<int64_t>::get(mContext)));
-        this->globals().insert(globalName, index);
-
-        // index into the void* array of handles and load the value.
-        // The result is a loaded void* value
-
-        index = mBuilder.CreateLoad(index);
-        llvm::Value* handlePtr = mBuilder.CreateGEP(mLLVMArguments.get("attribute_handles"), index);
-        handlePtr = mBuilder.CreateLoad(handlePtr);
-
-        // indicate the next value is an attribute
-
-        ++mAttributeVisitCount;
-
-        // push back the handle pointer
-
-        mValues.push(handlePtr);
-    }
-
-}
-
-void PointComputeGenerator::visit(const ast::AttributeValue& node)
-{
-    assert(mAttributeVisitCount != 0 &&
-        "Expected attribute is marked as a local");
-    assert(node.mAttribute &&
-        "No attribute data initialized for attribute value");
-
-    // get the values and remove the attribute flag
-
-    llvm::Value* handlePtr = mValues.top(); mValues.pop();
-    --mAttributeVisitCount;
-
-    const std::string& name = node.mAttribute->mName;
-    const std::string& type = node.mAttribute->mType;
-
-    const bool usingPosition = name == "P";
-
-    // attribute should have already been inserted - see visit(ast::Attribute)
-
-    assert(usingPosition || this->globals().exists(getGlobalAttributeAccess(name, type)));
-
-    llvm::Type* returnType = llvmTypeFromName(type, mContext);
-
-    llvm::Value* returnValue = nullptr;
     std::vector<llvm::Value*> args;
 
-    const bool usingString(!usingPosition && type == "string");
-    if (usingString) {
-        OPENVDB_THROW(AXCompilerError, "Access to string attributes not yet supported.");
-        // const FunctionBase::Ptr function = this->getFunction("strattribsize", mOptions, true);
-        // llvm::Value* size =
-        //     function->execute({handlePtr, mLLVMArguments.get("point_index"), mLLVMArguments.get("leaf_data")},
-        //         mLLVMArguments.map(), mBuilder, mModule, nullptr, true);
+    const bool usingString = type == "string";
 
-        // returnValue = mBuilder.CreateAlloca(returnType, size);
-        // args.reserve(4);
+    if (usingString) {
+        const FunctionBase::Ptr function = this->getFunction("strattribsize", mOptions, true);
+        llvm::Value* size =
+            function->execute({handlePtr, mLLVMArguments.get("point_index"), mLLVMArguments.get("leaf_data")},
+                mLLVMArguments.map(), mBuilder, nullptr, true);
+
+        // re-allocate the string array and store the size. The copying will be performed by
+        // the getattribute function
+        llvm::Type* strType = LLVMType<std::string>::get(mContext);
+        llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), size);
+        llvm::Value* lstrptr = mBuilder.CreateStructGEP(strType, location, 0); // char**
+        llvm::Value* lsize = mBuilder.CreateStructGEP(strType, location, 1); // int64_t*
+        mBuilder.CreateStore(string, lstrptr);
+        mBuilder.CreateStore(size, lsize);
+
+        // get_atribute_string takes the allocated char* array
+        location = string;
+        args.reserve(4);
     }
     else {
-        returnValue = mBuilder.CreateAlloca(returnType);
         args.reserve(3);
     }
 
     args.emplace_back(handlePtr);
     args.emplace_back(mLLVMArguments.get("point_index"));
-    args.emplace_back(returnValue);
+    args.emplace_back(location);
 
     if (usingString) args.emplace_back(mLLVMArguments.get("leaf_data"));
 
-    if (usingPosition) {
-        const FunctionBase::Ptr function = this->getFunction("getpointpws", mOptions, true);
-        function->execute(args, mLLVMArguments.map(), mBuilder, mModule, nullptr, /*add output args*/false);
-    }
-    else {
-        const FunctionBase::Ptr function = this->getFunction("getattribute", mOptions, true);
-        function->execute(args, mLLVMArguments.map(), mBuilder, mModule, nullptr, /*add output args*/false);
-    }
-
-    mValues.push(returnValue);
+    const FunctionBase::Ptr function = this->getFunction("getattribute", mOptions, true);
+    function->execute(args, mLLVMArguments.map(), mBuilder, nullptr, /*add output args*/false);
 }
+
+llvm::Value* PointComputeGenerator::attributeHandleFromToken(const std::string& token)
+{
+    // Visiting an attribute - get the attribute handle out of a vector of void pointers
+    // mLLVMArguments.get("attribute_handles") is a void pointer to a vector of void
+    // pointers (void**)
+
+    // insert the attribute into the map of global variables and get a unique global representing
+    // the location which will hold the attribute handle offset.
+
+    llvm::Value* index = llvm::cast<llvm::GlobalVariable>
+        (mModule.getOrInsertGlobal(token, LLVMType<int64_t>::get(mContext)));
+    this->globals().insert(token, index);
+
+    // index into the void* array of handles and load the value.
+    // The result is a loaded void* value
+
+    index = mBuilder.CreateLoad(index);
+    llvm::Value* handlePtr =
+        mBuilder.CreateGEP(mLLVMArguments.get("attribute_handles"), index);
+
+    // return loaded void** = void*
+    return mBuilder.CreateLoad(handlePtr);
+}
+
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
 
 }
 }

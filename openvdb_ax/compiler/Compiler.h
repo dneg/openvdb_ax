@@ -108,6 +108,7 @@ public:
     /// @param data External/custom data which is to be referenced by the executable object. It
     ///        allows one to reference data held elsewhere, such as inside of a DCC, inside of the
     ///        executable
+    /// @param compilerErrors A vector of strings where errors are inserted into
     template <typename ExecutableT>
     typename ExecutableT::Ptr
     compile(const ast::Tree& syntaxTree,
@@ -119,6 +120,7 @@ public:
     /// @param data External/custom data which is to be referenced by the executable object. It
     ///        allows one to reference data held elsewhere, such as inside of a DCC, from inside
     ///        the AX code
+    /// @param compilerErrors A vector of strings where errors are inserted into
     /// @details The parser provided at the compiler's construction is used to convert the string
     ///          into an AST.
     template <typename ExecutableT>

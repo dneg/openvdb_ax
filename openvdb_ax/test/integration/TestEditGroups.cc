@@ -134,7 +134,7 @@ TestEditGroups::testAddToRemoveFromGroup()
     // now check 2 new attributes added to tree
     openvdb::points::AttributeHandle<int> testResultAttributeHandle1(*attributeSet.get("newTestAttribute1"));
     openvdb::points::AttributeHandle<int> testResultAttributeHandle2(*attributeSet.get("newTestAttribute2"));
-    for (size_t i = 0;i < 4; i++) {
+    for (openvdb::Index i = 0;i < 4; i++) {
         CPPUNIT_ASSERT(testResultAttributeHandle1.get(i));
     }
 

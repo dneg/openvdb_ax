@@ -264,37 +264,40 @@ INCLUDE_NAMES := Exceptions.h \
                  ast/PrintTree.h \
                  ast/Scanners.h \
                  ast/Tokens.h \
+                 ast/Visitor.h \
                  codegen/ComputeGenerator.h \
                  codegen/FunctionRegistry.h \
                  codegen/Functions.h \
                  codegen/FunctionTypes.h \
+                 codegen/OpenSimplexNoise.h \
                  codegen/PointComputeGenerator.h \
                  codegen/PointFunctions.h \
-                 codegen/SymbolTable.h \
                  codegen/Types.h \
                  codegen/Utils.h \
                  codegen/VolumeComputeGenerator.h \
-                 codegen/VolumeFunctions.h \
                  compiler/Compiler.h \
                  compiler/CompilerOptions.h \
                  compiler/CustomData.h \
                  compiler/LeafLocalData.h \
                  compiler/PointExecutable.h \
-                 compiler/TargetRegistry.h \
+                 compiler/AttributeRegistry.h \
                  compiler/VolumeExecutable.h \
 #
 
 SRC_NAMES := ast/AST.cc \
              ast/PrintTree.cc \
+             ast/Scanners.cc \
              grammar/axlexer.cc \
              grammar/axparser.cc \
              codegen/ComputeGenerator.cc \
              codegen/FunctionRegistry.cc \
              codegen/FunctionTypes.cc \
-             codegen/Functions.cc \
+             codegen/OpenSimplexNoise.cc \
              codegen/PointComputeGenerator.cc \
              codegen/PointFunctions.cc \
+             codegen/StandardFunctions.cc \
              codegen/VolumeComputeGenerator.cc \
+             codegen/VolumeFunctions.cc \
              compiler/Compiler.cc \
              compiler/PointExecutable.cc \
              compiler/VolumeExecutable.cc \
@@ -341,9 +344,9 @@ TEST_SRC_NAMES := \
     test/integration/TestGroups.cc \
     test/integration/TestHarness.cc \
     test/integration/TestKeyword.cc \
+    test/integration/TestString.cc \
     test/integration/TestUnary.cc \
     test/integration/TestWorldSpaceAccessors.cc \
-    # test/integration/TestString.cc \ @todo: reeanable string tests with string support
 #
 
 DOC_FILES := doc/doc.txt doc/language.txt doc/functions.txt doc/codeexamples.txt
@@ -435,6 +438,7 @@ grammar:
 	@echo "Rebuilding axlexer and axparser files"
 	$(FLEX_BIN) -o grammar/axlexer.cc grammar/axlexer.l
 	$(BISON_BIN) grammar/axparser.y --defines=grammar/axparser.h -o grammar/axparser.cc
+
 
 grammar/axlexer.cc: grammar/axlexer.l
 	$(FLEX_BIN) -o grammar/axlexer.cc grammar/axlexer.l

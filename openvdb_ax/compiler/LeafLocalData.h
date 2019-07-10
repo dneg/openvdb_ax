@@ -67,9 +67,6 @@ struct LeafLocalData
     using PointStringMap = std::map<uint64_t, std::string>;
     using StringArrayMap = std::map<points::AttributeArray*, PointStringMap>;
 
-    using PositionT = openvdb::Vec3f;
-    using PositionVector = std::vector<PositionT>;
-
     using LeafNode = openvdb::points::PointDataTree::LeafNodeType;
 
     /// @brief  Construct a new data object to keep track of various data objects
@@ -83,8 +80,7 @@ struct LeafLocalData
         , mArrays()
         , mOffset(0)
         , mHandles()
-        , mStringMap()
-        , mPositions() {}
+        , mStringMap() {}
 
     ////////////////////////////////////////////////////////////////////////
 
@@ -106,7 +102,8 @@ struct LeafLocalData
             points::point_group_internal::GroupInfo::groupBits();
 
         if (mArrays.empty() || mOffset == maxGroupsInArray) {
-            mArrays.emplace_back(new GroupArrayT(mPointCount));
+            assert(mPointCount < static_cast<size_t>(std::numeric_limits<openvdb::Index>::max()));
+            mArrays.emplace_back(new GroupArrayT(static_cast<openvdb::Index>(mPointCount)));
             mOffset = 0;
         }
 
@@ -228,66 +225,6 @@ struct LeafLocalData
         return mStringMap;
     }
 
-
-    ////////////////////////////////////////////////////////////////////////
-
-    /// Position methods
-
-    /// @brief Initialises the position vector for the all of the points in the leaf
-    ///        that are included in the filter, other points have values of zero initialised
-
-    /// @tparam FilterT    The filter type of the filter argument
-    /// @param  leaf       The leaf node whose positions to cache
-    /// @param  transform  The world-space transform of the grid
-    /// @param  filter     A filter on the leaf to determine which points we need positions for
-
-    template<typename FilterT = openvdb::points::NullFilter>
-    inline void initPositions(const LeafNode& leaf, const openvdb::math::Transform& transform,
-                              FilterT filter = FilterT()) {
-
-        mPositions.reserve(mPointCount);
-
-        const openvdb::points::AttributeSet& attributeSet = leaf.attributeSet();
-        const size_t pos = attributeSet.find("P");
-        assert(pos != openvdb::points::AttributeSet::INVALID_POS);
-
-        const openvdb::points::AttributeHandle<openvdb::Vec3f>::Ptr
-            position = openvdb::points::AttributeHandle<openvdb::Vec3f>::create(leaf.constAttributeArray(pos));
-
-        filter.reset(leaf);
-
-        for (auto voxel = leaf.cbeginValueAll(); voxel; ++voxel) {
-            const openvdb::Coord& coord = voxel.getCoord();
-            auto iter = leaf.beginIndexVoxel(coord);
-            for (; iter; ++iter) {
-                if (filter.valid(iter)) {
-                    mPositions.emplace_back(transform.indexToWorld(coord.asVec3d() + position->get(*(iter))));
-                }
-                else mPositions.emplace_back(PositionT::zero());
-            }
-        }
-    }
-
-    /// @brief  Updates the position value in the the position vector
-    ///
-    /// @param  pos   The position to be assigned
-    /// @param  index The index of the element the vector to assign to
-    ///
-
-    inline void setPosition(const PositionT& pos, const size_t index) {
-        mPositions[index] = pos;
-    }
-
-    /// @brief  Returns a const reference to the position vector
-    ///
-    /// @note   The position vector must have been initialised
-    ///
-
-    inline const PositionVector& getPositions() const {
-        return mPositions;
-    }
-
-
 private:
 
     const size_t mPointCount;
@@ -295,7 +232,6 @@ private:
     points::GroupType mOffset;
     std::map<std::string, std::unique_ptr<GroupHandleT>> mHandles;
     StringArrayMap mStringMap;
-    PositionVector mPositions;
 };
 
 }

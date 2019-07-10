@@ -34,7 +34,7 @@
 #include "VolumeExecutable.h"
 
 #include <openvdb_ax/ast/Scanners.h>
-#include <openvdb_ax/codegen/FunctionRegistry.h>
+#include <openvdb_ax/codegen/Functions.h>
 #include <openvdb_ax/codegen/PointComputeGenerator.h>
 #include <openvdb_ax/codegen/VolumeComputeGenerator.h>
 #include <openvdb_ax/Exceptions.h>
@@ -55,6 +55,7 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/SourceMgr.h> // SMDiagnostic
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Config/llvm-config.h>
 
 // @note  As of adding support for LLVM 5.0 we not longer explicitly
 // perform standrd compiler passes (-std-compile-opts) based on the changes
@@ -72,8 +73,11 @@
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Mangler.h>
 
 #include <tbb/mutex.h>
+
+#include <unordered_map>
 
 
 namespace openvdb {
@@ -126,10 +130,16 @@ void initialize()
     llvm::initializeAnalysis(registry);
     llvm::initializeTransformUtils(registry);
     llvm::initializeInstCombine(registry);
+#if LLVM_VERSION_MAJOR > 6
+    llvm::initializeAggressiveInstCombine(registry);
+#endif
     llvm::initializeInstrumentation(registry);
     llvm::initializeTarget(registry);
     // For codegen passes, only passes that do IR to IR transformation are
     // supported.
+#if LLVM_VERSION_MAJOR > 5
+    llvm::initializeExpandMemCmpPassPass(registry);
+#endif
     llvm::initializeScalarizeMaskedMemIntrinPass(registry);
     llvm::initializeCodeGenPreparePass(registry);
     llvm::initializeAtomicExpandPass(registry);
@@ -140,10 +150,27 @@ void initialize()
     llvm::initializeSjLjEHPreparePass(registry);
     llvm::initializePreISelIntrinsicLoweringLegacyPassPass(registry);
     llvm::initializeGlobalMergePass(registry);
+#if LLVM_VERSION_MAJOR > 6
+    llvm::initializeIndirectBrExpandPassPass(registry);
+#endif
+#if LLVM_VERSION_MAJOR > 7
+    llvm::initializeInterleavedLoadCombinePass(registry);
+#endif
     llvm::initializeInterleavedAccessPass(registry);
+#if LLVM_VERSION_MAJOR > 5
+    llvm::initializeEntryExitInstrumenterPass(registry);
+    llvm::initializePostInlineEntryExitInstrumenterPass(registry);
+#else
     llvm::initializeCountingFunctionInserterPass(registry);
+#endif
     llvm::initializeUnreachableBlockElimLegacyPassPass(registry);
     llvm::initializeExpandReductionsPass(registry);
+#if LLVM_VERSION_MAJOR > 6
+    llvm::initializeWasmEHPreparePass(registry);
+#endif
+#if LLVM_VERSION_MAJOR > 5
+    llvm::initializeWriteBitcodePassPass(registry);
+#endif
 
     sIsInitialized = true;
 }
@@ -153,6 +180,7 @@ void uninitialize()
     tbb::mutex::scoped_lock lock(sInitMutex);
     if (!sIsInitialized) return;
 
+    // @todo consider replacing with storage to Support/InitLLVM
     llvm::llvm_shutdown();
 
     sIsInitialized = false;
@@ -262,6 +290,26 @@ void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
                                llvm::ExecutionEngine& engine,
                                llvm::Module& module)
 {
+    /// @note  This is a copy of ExecutionEngine::getMangledName. LLVM's ExecutionEngine
+    ///   provides two signatures for updating global mappings, one which takes a void* and
+    ///   another which takes a uint64_t address. When providing function mappings,
+    ///   it is potentially unsafe to cast pointers-to-functions to pointers-to-objects
+    ///   as they are not guaranteed to have the same size on some (albiet non "standard")
+    ///   platforms. getMangledName is protected, so a copy exists here to allows us to
+    ///   call the uint64_t method.
+    /// @note  This is only caught by -pendantic so this work around may be overkill
+    auto getMangledName = [](const llvm::GlobalValue* GV,
+                        const llvm::ExecutionEngine& E) -> std::string
+    {
+        llvm::SmallString<128> FullName;
+        const llvm::DataLayout& DL =
+            GV->getParent()->getDataLayout().isDefault()
+                ? E.getDataLayout()
+                : GV->getParent()->getDataLayout();
+        llvm::Mangler::getNameWithPrefix(FullName, GV->getName(), DL);
+        return FullName.str();
+    };
+
     /// @note  Could use InstallLazyFunctionCreator here instead as follows:
     ///
     /// engine.InstallLazyFunctionCreator([](const std::string& name) -> void * {
@@ -274,7 +322,6 @@ void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
     ///
     /// @note  Depending on how functions are inserted into LLVM (Linkage Type) in
     ///        the future, InstallLazyFunctionCreator may be required
-
     for (const auto& iter : registry.map()) {
         const codegen::FunctionBase::Ptr function = iter.second.function();
         if (!function) continue;
@@ -283,18 +330,23 @@ void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
         for (const codegen::FunctionSignatureBase::Ptr& signature : list) {
 
             // If a function pointer exists, the function has external linkage
-            void* functionPtr = signature->functionPointer();
+            codegen::FunctionSignatureBase::VoidFPtr functionPtr = signature->functionPointer();
             if (!functionPtr) continue;
 
             // llvmFunction may not exists if compiled without mLazyFunctions
             const llvm::Function* llvmFunction = module.getFunction(signature->symbolName());
             if (!llvmFunction) continue;
 
+            const std::string mangled =
+                getMangledName(llvm::cast<llvm::GlobalValue>(llvmFunction), engine);
+
             // error if updateGlobalMapping returned a previously mapped address, as we've
             // overwritten something
 
-            const uint64_t oldAddress = engine.updateGlobalMapping(llvmFunction, functionPtr);
-            if (oldAddress != 0 && reinterpret_cast<void*>(oldAddress) != functionPtr) {
+            const uint64_t address = reinterpret_cast<uint64_t>(functionPtr);
+            const uint64_t oldAddress = engine.updateGlobalMapping(mangled, address);
+
+            if (oldAddress != 0 && oldAddress != address) {
                 OPENVDB_THROW(LLVMFunctionError, "Function registry mapping error - multiple functions "
                     "are using the same symbol \"" + signature->symbolName() + "\".");
             }
@@ -352,15 +404,16 @@ void verifyTypedAccesses(const ast::Tree& tree)
     std::unordered_map<std::string, std::string> nameType;
 
     auto attributeOp =
-        [&nameType](const ast::Attribute& node) {
-            auto iter = nameType.find(node.mName);
+        [&nameType](const ast::Attribute& node) -> bool {
+            auto iter = nameType.find(node.name());
             if (iter == nameType.end()) {
-                nameType[node.mName] = node.mType;
+                nameType[node.name()] = node.typestr();
             }
-            else if (iter->second != node.mType) {
+            else if (iter->second != node.typestr()) {
                 OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous @ parameters. "
-                    "\"" + node.mName + "\" has been accessed with different types.");
+                    "\"" + node.name() + "\" has been accessed with different types.");
             }
+            return true;
         };
 
     ast::visitNodeType<ast::Attribute>(tree, attributeOp);
@@ -368,91 +421,86 @@ void verifyTypedAccesses(const ast::Tree& tree)
     nameType.clear();
 
     auto externalOp =
-        [&nameType](const ast::ExternalVariable& node) {
-            auto iter = nameType.find(node.mName);
+        [&nameType](const ast::ExternalVariable& node) -> bool {
+            auto iter = nameType.find(node.name());
             if (iter == nameType.end()) {
-                nameType[node.mName] = node.mType;
+                nameType[node.name()] = node.typestr();
             }
-            else if (iter->second != node.mType) {
+            else if (iter->second != node.typestr()) {
                 OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous $ parameters. "
-                    "\"" + node.mName + "\" has been accessed with different types.");
+                    "\"" + node.name() + "\" has been accessed with different types.");
             }
 
             // Error on string lookups as we don't support these
             // @todo ... support these
-            if (node.mType == openvdb::typeNameAsString<std::string>()) {
+            if (node.typestr() == openvdb::typeNameAsString<std::string>()) {
                 OPENVDB_THROW(AXCompilerError, "Failed to compile string $ parameter "
-                    "\"" + node.mName + "\". string lookups are not currently supported.");
+                    "\"" + node.name() + "\". string lookups are not currently supported.");
             }
+            return true;
         };
 
     ast::visitNodeType<ast::ExternalVariable>(tree, externalOp);
 }
 
-template <typename RegistryT>
-inline typename RegistryT::Ptr
-registerAccesses(const codegen::SymbolTable& globals, const ast::Tree& tree)
+inline void
+registerAccesses(const codegen::SymbolTable& globals, const AttributeRegistry& registry)
 {
-    // get the attributes targets
-
-    std::set<std::string> targets;
-
-    auto op =
-        [&targets](const ast::AssignExpression& node) {
-            const auto attribute =
-                std::dynamic_pointer_cast<ast::Attribute>(node.mVariable);
-            if (!attribute) return;
-            targets.insert(attribute->mName);
-        };
-
-    ast::visitNodeType<ast::AssignExpression>(tree, op);
-
-    typename RegistryT::Ptr registry(new RegistryT);
-
     std::string name, type;
 
     for (const auto& global : globals.map()) {
 
         // detect if this global variable is an attribute access
-
         const std::string& token = global.first;
-        if (!codegen::isGlobalAttributeAccess(token, name, type)) continue;
+        if (!ast::Attribute::nametypeFromToken(token, &name, &type)) continue;
 
-        // select whether we are writing to this attribute.
-
-        bool write = targets.count(name);
+        const ast::tokens::CoreType typetoken =
+            ast::tokens::tokenFromTypeString(type);
 
         // add the access to the registry - this will force the executables
         // to always request or create the data type
 
-        const size_t index = registry->addData(name, type, write);
+        const size_t index = registry.accessIndex(name, typetoken);
 
         // should always be a GlobalVariable.
         assert(llvm::isa<llvm::GlobalVariable>(global.second));
 
         // Assign the attribute index global a valid index.
         // @note executionEngine->addGlobalMapping() can also be used if the indices
-        // every need to vary positions without having to force a recompile (previously
+        // ever need to vary positions without having to force a recompile (previously
         // was used unnecessarily)
 
-        llvm::GlobalVariable* variable = llvm::cast<llvm::GlobalVariable>(global.second);
+        llvm::GlobalVariable* variable =
+            llvm::cast<llvm::GlobalVariable>(global.second);
         assert(variable->getValueType()->isIntegerTy(64));
 
         variable->setInitializer(llvm::ConstantInt::get(variable->getValueType(), index));
         variable->setConstant(true); // is not written to at runtime
     }
+}
 
-    return registry;
+template <typename T>
+inline llvm::Constant*
+initializeMetadataPtr(CustomData& data,
+    const std::string& name,
+    llvm::LLVMContext& C)
+{
+    TypedMetadata<T>* meta = data.getOrInsertData<TypedMetadata<T>>(name);
+    if (meta) return codegen::LLVMType<uintptr_t>::get(C, meta->value());
+    return nullptr;
 }
 
 inline void
 registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& data, llvm::LLVMContext& C)
 {
-    std::string name, type;
+    std::string name, typestr;
     for (const auto& global : globals.map()) {
 
         const std::string& token = global.first;
-        if (!codegen::isGlobalExternalAccess(token, name, type)) continue;
+        if (!ast::ExternalVariable::nametypeFromToken(token, &name, &typestr)) continue;
+
+        const ast::tokens::CoreType typetoken =
+            ast::tokens::tokenFromTypeString(typestr);
 
         // if we have any external variables, the custom data must be initialized to at least hold
         // zero values (initialized by the default metadata types)
@@ -463,58 +511,40 @@ registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& da
 
         llvm::GlobalVariable* variable = llvm::cast<llvm::GlobalVariable>(global.second);
         assert(variable->getValueType() == codegen::LLVMType<uintptr_t>::get(C));
-        llvm::Constant* initializer = nullptr;
 
-        if (type == typeNameAsString<bool>()) {
-            TypedMetadata<bool>* meta =
-                data->getOrInsertData<TypedMetadata<bool>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<int16_t>()) {
-            TypedMetadata<int16_t>* meta =
-                data->getOrInsertData<TypedMetadata<int16_t>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<int32_t>()) {
-            TypedMetadata<int32_t>* meta =
-                data->getOrInsertData<TypedMetadata<int32_t>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<int64_t>()) {
-            TypedMetadata<int64_t>* meta =
-                data->getOrInsertData<TypedMetadata<int64_t>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<float>()) {
-            TypedMetadata<float>* meta =
-                 data->getOrInsertData<TypedMetadata<float>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<double>()) {
-            TypedMetadata<double>* meta =
-                data->getOrInsertData<TypedMetadata<double>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<math::Vec3<int32_t>>()) {
-            TypedMetadata<math::Vec3<int32_t>>*
-                meta = data->getOrInsertData<TypedMetadata<math::Vec3<int32_t>>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<math::Vec3<float>>()) {
-            TypedMetadata<math::Vec3<float>>*
-                meta = data->getOrInsertData<TypedMetadata<math::Vec3<float>>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else if (type == typeNameAsString<math::Vec3<double>>()) {
-            TypedMetadata<math::Vec3<double>>*
-                meta = data->getOrInsertData<TypedMetadata<math::Vec3<double>>>(name);
-            if (meta) initializer = codegen::LLVMType<uintptr_t>::get(C, meta->value());
-        }
-        else {
-            // grammar guarantees this is unreachable as long as all types are supported
-            OPENVDB_THROW(AXCompilerError, "Unsupported $ parameter type \"" + type + "\".");
-        }
+        auto initializerFromToken =
+            [&](const ast::tokens::CoreType type) -> llvm::Constant* {
+            switch (type) {
+                case ast::tokens::BOOL    : return initializeMetadataPtr<bool>(*data, name, C);
+                case ast::tokens::CHAR    : return initializeMetadataPtr<char>(*data, name, C);
+                case ast::tokens::SHORT   : return initializeMetadataPtr<int16_t>(*data, name, C);
+                case ast::tokens::INT     : return initializeMetadataPtr<int32_t>(*data, name, C);
+                case ast::tokens::LONG    : return initializeMetadataPtr<int64_t>(*data, name, C);
+                case ast::tokens::FLOAT   : return initializeMetadataPtr<float>(*data, name, C);
+                case ast::tokens::DOUBLE  : return initializeMetadataPtr<double>(*data, name, C);
+                case ast::tokens::VEC2I   : return initializeMetadataPtr<math::Vec2<int32_t>>(*data, name, C);
+                case ast::tokens::VEC2F   : return initializeMetadataPtr<math::Vec2<float>>(*data, name, C);
+                case ast::tokens::VEC2D   : return initializeMetadataPtr<math::Vec2<double>>(*data, name, C);
+                case ast::tokens::VEC3I   : return initializeMetadataPtr<math::Vec3<int32_t>>(*data, name, C);
+                case ast::tokens::VEC3F   : return initializeMetadataPtr<math::Vec3<float>>(*data, name, C);
+                case ast::tokens::VEC3D   : return initializeMetadataPtr<math::Vec3<double>>(*data, name, C);
+                case ast::tokens::VEC4I   : return initializeMetadataPtr<math::Vec4<int32_t>>(*data, name, C);
+                case ast::tokens::VEC4F   : return initializeMetadataPtr<math::Vec4<float>>(*data, name, C);
+                case ast::tokens::VEC4D   : return initializeMetadataPtr<math::Vec4<double>>(*data, name, C);
+                case ast::tokens::MAT3F   : return initializeMetadataPtr<math::Mat3<float>>(*data, name, C);
+                case ast::tokens::MAT3D   : return initializeMetadataPtr<math::Mat3<double>>(*data, name, C);
+                case ast::tokens::MAT4F   : return initializeMetadataPtr<math::Mat4<float>>(*data, name, C);
+                case ast::tokens::MAT4D   : return initializeMetadataPtr<math::Mat4<double>>(*data, name, C);
+                //case ast::tokens::STRING  : @todo
+                case ast::tokens::UNKNOWN :
+                default      : {
+                    // grammar guarantees this is unreachable as long as all types are supported
+                    OPENVDB_THROW(LLVMTypeError, "Attribute Type unsupported or not recognised");
+                }
+            }
+        };
 
+        llvm::Constant* initializer = initializerFromToken(typetoken);
         if (!initializer) {
             OPENVDB_THROW(AXCompilerError, "Custom data \"" + name + "\" already exists with a "
                 "different type.");
@@ -525,222 +555,30 @@ registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& da
     }
 }
 
-/// @brief Modifier class that "disables" attribute assignment statements inside of an AST.
-class ModifyVolumeAssignments : public ast::Modifier
+struct PointDefaultModifier :
+    public openvdb::ax::ast::Visitor<PointDefaultModifier, /*non-const*/false>
 {
-public:
+    using openvdb::ax::ast::Visitor<PointDefaultModifier, false>::traverse;
+    using openvdb::ax::ast::Visitor<PointDefaultModifier, false>::visit;
 
-    ModifyVolumeAssignments()
-        : mTargetVolAssignmentExpression(0)
-        , mCurrentVolAssignmentExpression(0)
-        , mVolumesAssigned()
-        , mVolumeAssignmentFound(false) {}
-
-    virtual ~ModifyVolumeAssignments() = default;
-
-    virtual ast::Expression* visit(ast::AssignExpression& node) override
-    {
-        // by default, return nullptr (no replacement). This only changes if we run into an
-        // attribute/volume assign
-
-        ast::Expression::UniquePtr replacement = nullptr;
-
-        // extract the "variable" being assigned to
-
-        const ast::Attribute::Ptr attribute =
-            std::dynamic_pointer_cast<ast::Attribute>(node.mVariable);
-
-        // in this case, we are assigning to an "attribute" rather than a local variable
-
-        if (attribute) {
-            // the "current" volume assignment is the next after the initial one
-            if (mCurrentVolAssignmentExpression == mTargetVolAssignmentExpression) {
-                // flag that a new assignment has been found
-                mVolumeAssignmentFound = true;
-                // track the name of the attribute
-                mVolumesAssigned.push_back(attribute->mName);
-            }
-            else {
-               replacement.reset(new ast::AttributeValue(attribute->copy()));
-            }
-
-            mCurrentVolAssignmentExpression++;
-        }
-
-        return replacement.release();
-    }
-
-
-    void restart()
-    {
-        mVolumeAssignmentFound = false;
-        mCurrentVolAssignmentExpression = 0;
-    }
-
-    void incrementTargetVolumeAssignment()
-    {
-        ++mTargetVolAssignmentExpression;
-    }
-
-    /// Returns true if an attribute assignment was actually found during AST traversal
-    bool volumeAssignmentFound() const
-    {
-        return mVolumeAssignmentFound;
-    }
-
-    /// apends the list of names of volumes that have been assigned to during previous
-    /// AST traversals
-    void appendVolumesAssigned(std::vector<std::string>& volumes) const
-    {
-        for (const auto& name : mVolumesAssigned) {
-            volumes.push_back(name);
-        }
-    }
-
-private:
-
-    int mTargetVolAssignmentExpression;
-    int mCurrentVolAssignmentExpression;
-    std::vector<std::string> mVolumesAssigned;
-    bool mVolumeAssignmentFound;
-};
-
-/// @brief class that encapsulates blocks of code generated for volume code.
-class VolumeCodeBlocks
-{
-public:
-
-    VolumeCodeBlocks()
-        : mBlockFunctionNames()
-        , mBlockFunctionAddresses()
-        , mVolumesAssigned() {}
-
-    ~VolumeCodeBlocks() = default;
-
-    int numBlocks() const
-    {
-        return mBlockFunctionNames.size();
-    }
-
-    void getVolumesAssigned(std::vector<std::string>& volumeNames) const
-    {
-        for (const auto& name : mVolumesAssigned) {
-            volumeNames.push_back(name);
-        }
-    }
-
-    void
-    compileBlocks(const ast::Tree& syntaxTree,
-                  llvm::Module& module,
-                  const FunctionOptions& options,
-                  codegen::SymbolTable& globals,
-                  codegen::FunctionRegistry& functionRegistry,
-                  std::vector<std::string>* warnings)
-    {
-        ModifyVolumeAssignments modifier;
-        int volumeCount = 0;
-
-        do {
-            openvdb::SharedPtr<ast::Tree> tree(syntaxTree.copy());
-
-            modifier.restart();
-            tree->accept(modifier);
-
-            const std::string functionName =
-                codegen::VolumeKernel::getDefaultName() + std::to_string(volumeCount);
-
-            codegen::VolumeComputeGenerator codeGenerator(module, options, functionRegistry, warnings);
-            codeGenerator.setFunctionName(functionName);
-            tree->accept(codeGenerator);
-
-            mBlockFunctionNames.push_back(std::vector<std::string>());
-            mBlockFunctionNames.back().emplace_back(functionName);
-
-            // insert any accessed globals into the final global table - different
-            // block excutions may access different globals but, as it's all compiled
-            // into the same module, we need to track them all
-
-            const codegen::SymbolTable& accessedGlobals = codeGenerator.globals();
-            for (const auto& global : accessedGlobals.map()) {
-                globals.insert(global.first, global.second);
-            }
-
-            // increment "initial"/"base" volume assignment if we found another assignment
-            if (modifier.volumeAssignmentFound()) {
-                modifier.incrementTargetVolumeAssignment();
-            }
-
-            ++volumeCount;
-        }
-        while (volumeCount < 1000 && modifier.volumeAssignmentFound());
-
-        // mNumBlocks = volumeCount - 1;
-
-        // copy names of volumes which were assigned to
-        modifier.appendVolumesAssigned(mVolumesAssigned);
-    }
-
-    const std::map<std::string, uint64_t>& functionsForBlock(const int i) const
-    {
-        assert(mBlockFunctionAddresses.size() > size_t(i));
-        return mBlockFunctionAddresses.at(i);
-    }
-
-    const std::vector<std::string>&  functionNamesForBlock(const int i) const
-    {
-        assert(mBlockFunctionAddresses.size() > size_t(i));
-        return mBlockFunctionNames.at(i);
-    }
-
-    void generateLLVMFunctions(llvm::ExecutionEngine& executionEngine)
-    {
-        mBlockFunctionAddresses.resize(mVolumesAssigned.size());
-        const int numBlocks = mVolumesAssigned.size();
-
-        for (int i = 0; i < numBlocks; i++) {
-            for (const std::string& name : mBlockFunctionNames[i]) {
-                const uint64_t address = executionEngine.getFunctionAddress(name);
-                if (!address) {
-                    OPENVDB_THROW(AXCompilerError, "Failed to compile compute function \"" + name + "\"");
-                }
-                mBlockFunctionAddresses[i][name] = address;
-            }
-        }
-    }
-
-    std::vector<std::map<std::string, uint64_t> > functionsForAllBlocks() const
-    {
-        return mBlockFunctionAddresses;
-    }
-
-private:
-    std::vector<std::vector<std::string> > mBlockFunctionNames;
-    std::vector<std::map<std::string, uint64_t> > mBlockFunctionAddresses;
-    std::vector<std::string> mVolumesAssigned;
-};
-
-
-struct PointDefaultModifier : public openvdb::ax::ast::Modifier
-{
     PointDefaultModifier() = default;
     virtual ~PointDefaultModifier() = default;
 
-    const std::set<std::string> vectorDefaults {"P", "v", "N", "Cd"};
+    const std::set<std::string> autoVecAttribs {"P", "v", "N", "Cd"};
 
-    /// @brief  Convert default attribute calls to use vector types for above attributes
-    openvdb::ax::ast::Attribute*
-    visit(openvdb::ax::ast::Attribute& node) override final
-    {
-        openvdb::ax::ast::Attribute::UniquePtr replacement;
+    bool visit(ast::Attribute* attrib) {
+        if (!attrib->inferred()) return true;
+        if (autoVecAttribs.find(attrib->name()) == autoVecAttribs.end()) return true;
 
-        if (node.mTypeInferred) {
-            // if the user hasn't defined specific type, then allow conversion to vector
-            if (vectorDefaults.find(node.mName) != vectorDefaults.end()) {
-                replacement.reset(new openvdb::ax::ast::Attribute(node.mName, "vec3s", true));
-            }
+        openvdb::ax::ast::Attribute::UniquePtr
+            replacement(new openvdb::ax::ast::Attribute(attrib->name(), ast::tokens::VEC3F, true));
+        if (!attrib->replace(replacement.get())) {
+            OPENVDB_THROW(AXExecutionError,
+                "Auto conversion of inferred attributes failed.");
         }
+        replacement.release();
 
-        return replacement.release();
+        return true;
     }
 };
 
@@ -756,7 +594,7 @@ Compiler::Compiler(const CompilerOptions& options,
     , mFunctionRegistry()
 {
     mContext.reset(new llvm::LLVMContext);
-    mFunctionRegistry = codegen::createStandardRegistry(options.mFunctionOptions);
+    mFunctionRegistry = codegen::createDefaultRegistry(&options.mFunctionOptions);
 }
 
 Compiler::UniquePtr Compiler::create(const CompilerOptions &options,
@@ -780,7 +618,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
 {
     openvdb::SharedPtr<ast::Tree> tree(syntaxTree.copy());
     PointDefaultModifier modifier;
-    tree->accept(modifier);
+    modifier.traverse(tree.get());
 
     verifyTypedAccesses(*tree);
 
@@ -791,25 +629,18 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     codegen::PointComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,
             *mFunctionRegistry, warnings);
-    tree->accept(codeGenerator);
+
+    AttributeRegistry::Ptr registry = codeGenerator.generate(*tree);
 
     // map accesses (always do this prior to optimising as globals may be removed)
 
-    AttributeRegistry::Ptr registry =
-        registerAccesses<AttributeRegistry>(codeGenerator.globals(), *tree);
+    registerAccesses(codeGenerator.globals(), *registry);
 
     CustomData::Ptr validCustomData(customData);
     registerExternalGlobals(codeGenerator.globals(), validCustomData, *mContext);
 
-    // as P is accessed specially and not accessed via a global, need to add it to the registry
-
-    if (ast::usesAttribute(*tree, "P")) {
-        registry->addData("P", "vec3s", ast::writesToAttribute(*tree, "P"));
-    }
-
     // optimise
 
-    // get module, verify and create execution engine
     llvm::Module* modulePtr = module.get();
     optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
 
@@ -841,7 +672,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
         codegen::PointRangeKernel::getDefaultName()
     };
 
-    std::map<std::string, uint64_t> functionMap;
+    std::unordered_map<std::string, uint64_t> functionMap;
 
     for (const std::string& name : functionNames) {
         const uint64_t address = executionEngine->getFunctionAddress(name);
@@ -869,19 +700,18 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
 
-    VolumeCodeBlocks volumeCodeBlocks;
-    codegen::SymbolTable globals;
+    codegen::VolumeComputeGenerator
+        codeGenerator(*module, mCompilerOptions.mFunctionOptions,
+            *mFunctionRegistry, warnings);
 
-    volumeCodeBlocks.compileBlocks(syntaxTree, *module,
-        mCompilerOptions.mFunctionOptions, globals, *mFunctionRegistry, warnings);
+    AttributeRegistry::Ptr registry = codeGenerator.generate(syntaxTree);
 
     // map accesses (always do this prior to optimising as globals may be removed)
 
-    const VolumeRegistry::Ptr registry =
-        registerAccesses<VolumeRegistry>(globals, syntaxTree);
+    registerAccesses(codeGenerator.globals(), *registry);
 
     CustomData::Ptr validCustomData(customData);
-    registerExternalGlobals(globals, validCustomData, *mContext);
+    registerExternalGlobals(codeGenerator.globals(), validCustomData, *mContext);
 
     llvm::Module* modulePtr = module.get();
     optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
@@ -906,14 +736,19 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 
     executionEngine->finalizeObject();
 
-    volumeCodeBlocks.generateLLVMFunctions(*executionEngine);
-    std::vector<std::string> volumesAssigned;
-    volumeCodeBlocks.getVolumesAssigned(volumesAssigned);
+    const std::string name = codegen::VolumeKernel::getDefaultName();
+    const uint64_t address = executionEngine->getFunctionAddress(name);
+    if (!address) {
+        OPENVDB_THROW(AXCompilerError, "Failed to compile compute function \"" + name + "\"");
+    }
+
+    std::unordered_map<std::string, uint64_t> functionMap;
+    functionMap[name] = address;
 
     // create final executable object
     VolumeExecutable::Ptr
         executable(new VolumeExecutable(executionEngine, mContext, registry, validCustomData,
-            volumeCodeBlocks.functionsForAllBlocks(), volumesAssigned));
+            functionMap));
     return executable;
 }
 

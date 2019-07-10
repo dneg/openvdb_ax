@@ -1,2 +1,0 @@
-@foo = lookupf("float1");
-v@v = lookupvec3f("vector1");

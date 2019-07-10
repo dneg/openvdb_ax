@@ -32,6 +32,7 @@
 
 #include <openvdb_ax/test/util.h>
 #include <openvdb_ax/compiler/CustomData.h>
+#include <openvdb_ax/codegen/OpenSimplexNoise.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -61,10 +62,13 @@ public:
     CPPUNIT_TEST(testFunctionNormalize);
     CPPUNIT_TEST(testFunctionRand);
     CPPUNIT_TEST(testFunctionPow);
+    CPPUNIT_TEST(testFunctionPrescale);
+    CPPUNIT_TEST(testFunctionDeterminant);
     CPPUNIT_TEST(testFunctionVolumeIndexCoords);
     CPPUNIT_TEST(testFunctionVolumePWS);
     CPPUNIT_TEST(testFunctionDeletePoint);
-    CPPUNIT_TEST(testFunctionLookup);
+    CPPUNIT_TEST(testFunctionExternal);
+    CPPUNIT_TEST(testFunctionSimplexNoise);
     CPPUNIT_TEST_SUITE_END();
 
     void testFunctionAbs();
@@ -82,10 +86,13 @@ public:
     void testFunctionNormalize();
     void testFunctionRand();
     void testFunctionPow();
+    void testFunctionPrescale();
+    void testFunctionDeterminant();
     void testFunctionVolumeIndexCoords();
     void testFunctionVolumePWS();
     void testFunctionDeletePoint();
-    void testFunctionLookup();
+    void testFunctionExternal();
+    void testFunctionSimplexNoise();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestFunction);
@@ -257,10 +264,71 @@ void
 TestFunction::testFunctionPow()
 {
     mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 5),
-        {1.0, pow(3.0, -2.1), pow(4.7f, -4.3f), pow(4.7f, 3), 0.00032f});
-    mHarness.addAttribute<int>("int_test1", pow(3, 5));
+        {
+            1.0f,
+            static_cast<float>(openvdb::math::Pow(3.0, -2.1)),
+            openvdb::math::Pow(4.7f, -4.3f),
+            openvdb::math::Pow(4.7f, 3),
+            0.00032f
+        });
+
+    mHarness.addAttribute<int>("int_test1", static_cast<int>(openvdb::math::Pow(3, 5)));
 
     mHarness.executeCode("test/snippets/function/functionPow");
+
+    AXTESTS_STANDARD_ASSERT();
+}
+
+void
+TestFunction::testFunctionPrescale()
+{
+    mHarness.testVolumes(false);
+    std::vector<openvdb::math::Mat4s> inputValues = {
+        openvdb::math::Mat4s::identity(),
+        openvdb::math::Mat4s::identity(),
+        openvdb::math::Mat4s::identity(),
+        openvdb::math::Mat4s(100.0, 100.0, 100.0, 100.0,
+                             200.0, 200.0, 200.0, 200.0,
+                             300.0, 300.0, 300.0, 300.0,
+                             400.0, 400.0, 400.0, 400.0)
+    };
+
+    std::vector<openvdb::math::Mat4s> outputValues {
+        openvdb::math::Mat4s(10.0, 0.0,  0.0,  0.0,
+                             0.0,  11.0, 0.0,  0.0,
+                             0.0,  0.0,  12.0, 0.0,
+                             0.0,  0.0,  0.0,  1.0),
+        openvdb::math::Mat4s(-1.0,  0.0,  0.0,  0.0,
+                             0.0, -2.0,  0.0,  0.0,
+                             0.0,  0.0, -3.0,  0.0,
+                             0.0,  0.0,  0.0,  1.0),
+        openvdb::math::Mat4s(0.0, 0.0, 0.0, 0.0,
+                             0.0, 0.0, 0.0, 0.0,
+                             0.0, 0.0, 0.0, 0.0,
+                             0.0, 0.0, 0.0, 1.0),
+        openvdb::math::Mat4s(1.0, 1.0, 1.0, 1.0,
+                             20.0,   20.0,   20.0,   20.0,
+                             3000.0, 3000.0, 3000.0, 3000.0,
+                             400.0,  400.0,  400.0,  400.0)
+    };
+
+    mHarness.addAttributes<openvdb::math::Mat4s>(unittest_util::nameSequence("mat", 4),
+        inputValues, outputValues);
+
+    mHarness.executeCode("test/snippets/function/functionPrescale");
+
+    AXTESTS_STANDARD_ASSERT();
+}
+
+void
+TestFunction::testFunctionDeterminant()
+{
+    mHarness.addAttribute<float>("det3_float",  600.0f);
+    mHarness.addAttribute<double>("det3_double", 600.0);
+    mHarness.addAttribute<float>("det4_float",  24.0f);
+    mHarness.addAttribute<double>("det4_double",  2400.0);
+
+    mHarness.executeCode("test/snippets/function/functionDeterminant");
 
     AXTESTS_STANDARD_ASSERT();
 }
@@ -366,7 +434,7 @@ TestFunction::testFunctionDeletePoint()
 }
 
 void
-TestFunction::testFunctionLookup()
+TestFunction::testFunctionExternal()
 {
     mHarness.addAttribute<float>("foo", 2.0f);
     mHarness.addAttribute<openvdb::Vec3f>("v", openvdb::Vec3f(1.0f, 2.0f, 3.0f));
@@ -383,7 +451,7 @@ TestFunction::testFunctionLookup()
     data->insertData("float1", customFloatData.copy());
     data->insertData("vector1", customVecData.copy());
 
-    mHarness.executeCode("test/snippets/function/functionLookup", nullptr, nullptr, data);
+    mHarness.executeCode("test/snippets/function/functionExternal", nullptr, nullptr, data);
     AXTESTS_STANDARD_ASSERT_HARNESS(mHarness)
 
     mHarness.reset();
@@ -395,7 +463,7 @@ TestFunction::testFunctionLookup()
 
     data->reset();
 
-    const std::string code = unittest_util::loadText("test/snippets/function/functionLookup");
+    const std::string code = unittest_util::loadText("test/snippets/function/functionExternal");
     Compiler compiler;
     PointExecutable::Ptr pointExecutable = compiler.compile<PointExecutable>(code, data);
     VolumeExecutable::Ptr volumeExecutable = compiler.compile<VolumeExecutable>(code, data);
@@ -415,6 +483,31 @@ TestFunction::testFunctionLookup()
     }
 
     AXTESTS_STANDARD_ASSERT_HARNESS(mHarness)
+}
+
+
+void
+TestFunction::testFunctionSimplexNoise()
+{
+    mHarness.testVolumes(false);
+
+    const OSN::OSNoise noiseGenerator;
+
+    double noise1 = noiseGenerator.eval<double>(1.0, 2.0, 3.0);
+    mHarness.addAttribute<double>("noise1", (noise1 + 1.0) * 0.5);
+
+    double noise2 = noiseGenerator.eval<double>(1.0, 2.0, 0.0);
+    mHarness.addAttribute<double>("noise2", (noise2 + 1.0) * 0.5);
+
+    double noise3 = noiseGenerator.eval<double>(1.0, 0.0, 0.0);
+    mHarness.addAttribute<double>("noise3", (noise3 + 1.0) * 0.5);
+
+    double noise4 = noiseGenerator.eval<double>(4.0, 14.0, 114.0);
+    mHarness.addAttribute<double>("noise4", (noise4 + 1.0) * 0.5);
+
+    mHarness.executeCode("test/snippets/function/functionSimplexNoise");
+
+    AXTESTS_STANDARD_ASSERT();
 }
 
 // Copyright (c) 2015-2019 DNEG

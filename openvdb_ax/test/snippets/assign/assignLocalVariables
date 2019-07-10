@@ -1,7 +1,7 @@
 
 float abc = 0.2f;
-float def = 0.8f;
+float deg = 0.8f;
 
-abc = def;
+abc = deg;
 
 @float_test = abc;

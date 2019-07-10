@@ -46,7 +46,6 @@
 
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 
 // Note: As of LLVM 5.0, the llvm::Type::dump() method isn't being
 // picked up correctly by the linker. dump() is internally implemented
@@ -134,37 +133,6 @@ llvmPointerFromAddress(const ValueT* const& ptr,
         llvm::ConstantInt::get(llvm::Type::getIntNTy(builder.getContext(), sizeof(uintptr_t)*8),
                                reinterpret_cast<uintptr_t>(ptr));
     return builder.CreateIntToPtr(address, LLVMType<ValueT*>::get(builder.getContext()));
-}
-
-/// @brief  Insert a std::string object into IR and return the pointer to it's allocation
-/// @note   Includes the null terminator
-///
-/// @param  string   The string to insert
-/// @param  builder  The current llvm IRBuilder
-///
-inline llvm::Value*
-llvmStringToValue(const std::string& string, llvm::IRBuilder<>& builder)
-{
-    // @todo  replace with llvm::ConstantDataArray::getString
-
-    llvm::LLVMContext& C = builder.getContext();
-
-    const size_t stringSize = string.size();
-    llvm::Type* charType = LLVMType<char>::get(C);
-
-    llvm::Value* size = llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), stringSize + 1);
-    llvm::Value* store = builder.CreateAlloca(charType, size);
-
-    // loop for <= size to include null terminator
-
-    for (size_t i = 0; i <= string.size(); ++i) {
-        llvm::Value* value =
-            llvm::ConstantInt::get(charType, uint64_t(string[i]), /*signed*/false);
-        llvm::Value* target = builder.CreateConstGEP1_64(store, i);
-        builder.CreateStore(value, target);
-    }
-
-    return store;
 }
 
 /// @brief  Returns the highest order type from two LLVM Scalar types
@@ -543,7 +511,7 @@ arithmeticConversion(std::vector<llvm::Value*>& values,
 ///         are guaranteed to match. Both values must be scalar LLVM types
 ///
 /// @param valueA   The first llvm value
-/// @param valueA   The second llvm value
+/// @param valueB   The second llvm value
 /// @param builder  The current llvm IRBuilder
 ///
 inline void
@@ -759,7 +727,7 @@ arrayPack(llvm::Value* value,
 /// @brief  Pack a vector of loaded llvm scalar values into a new array of
 ///         equal size and return a pointer to the newly allocated array.
 ///
-/// @param value    A vector of loaded llvm scalar values to pack
+/// @param values   A vector of loaded llvm scalar values to pack
 /// @param builder  The current llvm IRBuilder
 ///
 inline llvm::Value*
@@ -785,7 +753,7 @@ arrayPack(const std::vector<llvm::Value*>& values,
 ///         and casts all types to the highest order type present. All llvm
 ///         values in values are expected to be loaded scalar types
 ///
-/// @param value    A vector of loaded llvm scalar values to pack
+/// @param values   A vector of loaded llvm scalar values to pack
 /// @param builder  The current llvm IRBuilder
 ///
 inline llvm::Value*

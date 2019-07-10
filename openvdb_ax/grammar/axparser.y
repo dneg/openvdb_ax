@@ -32,331 +32,333 @@
     #include <stdio.h>
     #include <iostream>
 
+    #include <openvdb/Platform.h> // for OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
     #include <openvdb_ax/ast/AST.h>
     #include <openvdb_ax/ast/Tokens.h>
 
-    extern int yylex(void);
+    /// @note  Bypasses bison conversion warnings in yyparse
+    OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
+
+    extern int axlex();
 
     using namespace openvdb::ax::ast;
 
     void yyerror(Tree** tree, const char* s);
 
-    // @note  Component expressions are currently fully unpacked, processed, packed, and then
-    //        vector assigned. This should not be the case for locals.
-    // @todo  Fix this by allowing direct assignment to local array elements and better
-    //        handling of attribute elements
-    Expression*
-    buildComponentExpression(const std::unique_ptr<tokens::OperatorToken> op,
-                             Variable::UniquePtr lhs,         // The attribute/local vector value being assigned (Attribute/Local)
-                             Expression::UniquePtr lhsValue,  // The attribute/local vector value being assigned (AttibuteValue/LocalValue)
-                             const int16_t index,
-                             Expression::UniquePtr rhs)       // The RHS expression
-    {
-        assert(index >= 0 && index <= 2);
-
-        if (op) {
-            rhs.reset(new BinaryOperator(*op, new VectorUnpack(lhsValue->copy(), index), rhs.release()));
-        }
-
-        Expression::UniquePtr elements[3];
-        if (index == 0) elements[0].reset(rhs.release());
-        else            elements[0].reset(new VectorUnpack(lhsValue->copy(), 0));
-        if (index == 1) elements[1].reset(rhs.release());
-        else            elements[1].reset(new VectorUnpack(lhsValue->copy(), 1));
-        if (index == 2) elements[2].reset(rhs.release());
-        else            elements[2].reset(new VectorUnpack(lhsValue->copy(), 2));
-
-        VectorPack::UniquePtr packed(new VectorPack(elements[0].release(), elements[1].release(), elements[2].release()));
-        return new AssignExpression(lhs.release(), packed.release());
-    }
-
-    Expression*
-    buildAttributeComponentExpression(tokens::OperatorToken* op,
-                                      Attribute* attribute,
-                                      const int16_t index,
-                                      Expression* expression)
-    {
-        return buildComponentExpression(std::unique_ptr<tokens::OperatorToken>(op),
-            Variable::UniquePtr(attribute),
-            Expression::UniquePtr(new AttributeValue(attribute->copy())),
-            index,
-            Expression::UniquePtr(expression));
-    }
-
-    Expression* buildLocalComponentExpression(tokens::OperatorToken* op,
-                                              Local* local,
-                                              const int16_t index,
-                                              Expression* expression)
-    {
-        return buildComponentExpression(std::unique_ptr<tokens::OperatorToken>(op),
-            Variable::UniquePtr(local),
-            Expression::UniquePtr(new LocalValue(local->copy())),
-            index,
-            Expression::UniquePtr(expression));
-    }
-
-    Attribute* buildAttribute(const std::string& name)
-    {
-        // remap position, velocity, normal and color to vec3s
-        if (name == "P" || name == "v" || name == "N" || name == "Cd") {
-            return new Attribute(name, openvdb::typeNameAsString<openvdb::Vec3s>());
-        }
-        else {
-            return new Attribute(name, openvdb::typeNameAsString<float>());
-        }
+    inline tokens::CoreType getDeclarationType(const Statement* const statement) {
+        assert(statement->nodetype() == Node::DeclareLocalNode ||
+            statement->nodetype() == Node::AssignExpressionNode);
+        return statement->nodetype() == Node::DeclareLocalNode ? static_cast<const DeclareLocal*>(statement)->type() :
+            static_cast<const DeclareLocal*>(static_cast<const AssignExpression*>(statement)->lhs())->type();
     }
 %}
 
-%error-verbose
+/* Option 'parse.error verbose' tells bison to output verbose parsing errors
+ * as a char* array to yyerror (axerror). Note that this is in lieu of doing
+ * more specific error handling ourselves, as the actual tokens are printed
+ * which is confusing.
+ * @todo Implement a proper error handler
+ */
+%define parse.error verbose
+
+/* Option 'api.prefix {ax}' matches the prefix option in the lexer to produce
+ * prefixed C++ symbols (where 'yy' is replaced with 'ax') so we can link
+ * with other flex-generated lexers in the same application.
+ */
+%define api.prefix {ax}
+
+/* Tell bison to track grammar locations
+ */
 %locations
 
 %union
 {
-    const char* value_string;
+    const char* string;
     uint64_t index;
 
     openvdb::ax::ast::Tree* tree;
     openvdb::ax::ast::ValueBase* value;
-    openvdb::ax::ast::VectorUnpack* vector_unpack;
-    openvdb::ax::ast::Block* block;
     openvdb::ax::ast::Statement* statement;
+    openvdb::ax::ast::StatementList* statementlist;
+    openvdb::ax::ast::Block* block;
     openvdb::ax::ast::Expression* expression;
     openvdb::ax::ast::ExpressionList* expressionlist;
     openvdb::ax::ast::Variable* variable;
     openvdb::ax::ast::ExternalVariable* external;
     openvdb::ax::ast::Attribute* attribute;
-    openvdb::ax::ast::AttributeValue* attributevalue;
     openvdb::ax::ast::DeclareLocal* declare_local;
     openvdb::ax::ast::Local* local;
 }
 
-%start statements
-
 %token TRUE FALSE
 %token SEMICOLON AT DOLLAR
 %token IF ELSE
-%token RETURN
-%token EQUALS PLUSEQUALS MINUSEQUALS MULTIPLYEQUALS DIVIDEEQUALS PLUSPLUS MINUSMINUS
-%token LPARENS RPARENS LCURLY RCURLY
-%token PLUS MINUS MULTIPLY DIVIDE MODULO
-%token BITAND BITOR BITXOR BITNOT
-%token EQUALSEQUALS NOTEQUALS MORETHAN LESSTHAN MORETHANOREQUAL LESSTHANOREQUAL
-%token AND OR NOT
-%token STRING DOUBLE FLOAT LONG INT SHORT BOOL VOID F_AT I_AT V_AT S_AT F_DOLLAR I_DOLLAR V_DOLLAR S_DOLLAR
-%token COMMA
-%token VEC3I VEC3F VEC3D
+%token FOR DO WHILE
+%token RETURN BREAK CONTINUE
+%token LCURLY RCURLY
+%token LSQUARE RSQUARE
+%token STRING DOUBLE FLOAT LONG INT SHORT BOOL VOID
+%token VEC2I VEC2F VEC2D VEC3I VEC3F VEC3D VEC4I VEC4F VEC4D
+%token F_AT I_AT V_AT S_AT
+%token MAT3F MAT3D MAT4F MAT4D M3F_AT M4F_AT
+%token F_DOLLAR I_DOLLAR V_DOLLAR S_DOLLAR
 %token DOT_X DOT_Y DOT_Z
 
-%token <value_string> L_SHORT
-%token <value_string> L_INT
-%token <value_string> L_LONG
-%token <value_string> L_FLOAT
-%token <value_string> L_DOUBLE
-%token <value_string> L_STRING
-%token <value_string> IDENTIFIER
+%token <string> L_SHORT
+%token <string> L_INT
+%token <string> L_LONG
+%token <string> L_FLOAT
+%token <string> L_DOUBLE
+%token <string> L_STRING
+%token <string> IDENTIFIER
 
-%type <tree> statements
+%type <tree>  tree
 %type <block> block
 %type <block> body
+%type <block> block_or_statement
+
 %type <statement> statement
 %type <statement> conditional_statement
-%type <statement> declare_assignment
+
+%type <statement> loop loop_init loop_condition loop_condition_optional
+%type <expression> loop_iter
+
+%type <statement> declaration declarations
+%type <statementlist> declaration_list
+
 %type <expression> assign_expression
-%type <expression> assign_component_expression
-%type <expression> crement
-%type <expression> expression
-%type <expression> expression_expand
 %type <expression> function_call_expression
 %type <expression> binary_expression
 %type <expression> unary_expression
-%type <expression> cast_expression
-%type <expressionlist> arguments
+%type <expression> array
+%type <expression> variable_reference
+%type <expression> pre_crement
+%type <expression> post_crement
+%type <expression> expression expressions
+%type <expressionlist> expression_list
+
+%type <variable> variable
 %type <attribute> attribute
 %type <external> external
+
 %type <declare_local> declare_local
+%type <expression> declare_local_initializer
+
 %type <local> local
-%type <vector_unpack> vector_element
-%type <index> component
 
-%type <value> vector_literal
 %type <value> literal
-%type <value_string> scalar_type
-%type <value_string> vector_type
+%type <index> type
+%type <index> scalar_type
+%type <index> vector_type
+%type <index> matrix_type
 
-%right EQUALS PLUSEQUALS MINUSEQUALS MULTIPLYEQUALS DIVIDEEQUALS PLUSPLUS MINUSMINUS
-%left AND OR
-%right NOT
-%right EQUALSEQUALS NOTEQUALS
+// *************************************************************
+// * Operator Precedence Definitions
+// *************************************************************
+//
+// @note Precendence goes from lowest to highest, e.g. assignment
+//   operations are generally lowest. Note that this precedence and
+//   associativity is heavily based off of C++:
+//   https://en.cppreference.com/w/cpp/language/operator_precedence
+
+%left COMMA
+%right EQUALS PLUSEQUALS MINUSEQUALS MULTIPLYEQUALS DIVIDEEQUALS MODULOEQUALS BITANDEQUALS BITXOREQUALS BITOREQUALS
+%left OR
+%left AND
+%left BITOR
+%left BITXOR
+%left BITAND
+%left EQUALSEQUALS NOTEQUALS
 %left MORETHAN LESSTHAN MORETHANOREQUAL LESSTHANOREQUAL
-%left BITAND BITOR BITXOR
 %left PLUS MINUS
-%left MULTIPLY DIVIDE
-%left MODULO
-%right BITNOT
-%left LPAREN RPAREN
+%left MULTIPLY DIVIDE MODULO
+%left NOT BITNOT PLUSPLUS MINUSMINUS
+%left LPARENS RPARENS
 
 %nonassoc LOWER_THAN_ELSE //null token to force no associativity in conditional statement
 %nonassoc ELSE
 
 %parse-param {openvdb::ax::ast::Tree** tree}
 
+%start tree
+
 %%
 
-statements:
-      { *tree = new Tree(); $$ = *tree; } /* nothing */
-    | body { *tree = new Tree($1); $$ = *tree; }
-;
-
-block:
-      LCURLY body RCURLY  { $$ = $2; }
-    | LCURLY RCURLY       { $$ = new Block(); }
-    | statement           { $$ = new Block(); if($1) $$->mList.emplace_back($1); }
+tree:
+    /*empty*/    { *tree = new Tree(); $$ = *tree; }
+    | body       { *tree = new Tree($1); $$ = *tree; }
 ;
 
 body:
-      body statement  { if ($2) $1->mList.emplace_back($2); $$ = $1; }
-    | statement       { $$ = new Block(); if ($1) $$->mList.emplace_back($1); }
+      body statement  { $1->addStatement($2); $$ = $1; }
+    | body block      { $1->addStatement($2); $$ = $1; }
+    | statement       { $$ = new Block(); $$->addStatement($1); }
+    | block           { $$ = new Block(); $$->addStatement($1); }
 ;
 
-/// @brief  Syntax for a statement; a line followed by a semicolon or a
-///         conditional statement
+block:
+      LCURLY body RCURLY    { $$ = $2; }
+    | LCURLY RCURLY         { $$ = new Block(); }
+;
+
+/// @brief  Syntax for a statement; a line followed by a semicolon, a
+///         conditional statement or a loop
 statement:
-      expression SEMICOLON          { $$ = $1; }
-    | declare_assignment SEMICOLON  { $$ = $1; }
-    | conditional_statement         { $$ = $1; }
-    | RETURN SEMICOLON              { $$ = new Return; }
-    | SEMICOLON                     { $$ = nullptr; } // The only possible nullptr rule
-;
-
-/// @brief  Syntax for a conditional statement, capable of supporting a single if
-///         and an optional single else clause
-/// @todo   Support multiple else if statements
-/// @todo   Support break keyword
-conditional_statement:
-      IF expression_expand block %prec LOWER_THAN_ELSE  { $$ = new ConditionalStatement($2, $3, new Block()); }
-    | IF expression_expand block ELSE block             { $$ = new ConditionalStatement($2, $3, $5); }
+      expressions SEMICOLON                  { $$ = $1; }
+    | declarations SEMICOLON                 { $$ = $1; }
+    | conditional_statement                  { $$ = $1; }
+    | loop                                   { $$ = $1; }
+    | RETURN SEMICOLON                       { $$ = new Keyword(tokens::RETURN); }
+    | BREAK SEMICOLON                        { $$ = new Keyword(tokens::BREAK); }
+    | CONTINUE SEMICOLON                     { $$ = new Keyword(tokens::CONTINUE); }
+    | SEMICOLON                              { $$ = nullptr; }
 ;
 
 /// @brief  Syntax for a combination of all numerical expressions which can return
 ///         an rvalue.
 expression:
-      expression_expand            { $$ = $1; }
-    | function_call_expression     { $$ = $1; }
-    | binary_expression            { $$ = $1; }
+      binary_expression            { $$ = $1; }
     | unary_expression             { $$ = $1; }
     | assign_expression            { $$ = $1; }
-    | assign_component_expression  { $$ = $1; }
-    | crement                      { $$ = $1; }
-    | cast_expression              { $$ = $1; }
-    | vector_literal               { $$ = $1; }
-    | vector_element               { $$ = $1; }
+    | function_call_expression     { $$ = $1; }
     | literal                      { $$ = $1; }
     | external                     { $$ = $1; }
-    | local                        { $$ = new LocalValue($1); }
-    | attribute                    { $$ = new AttributeValue($1); }
+    | post_crement                 { $$ = $1; }
+    | array                        { $$ = $1; }
+    | variable_reference           { $$ = $1; }
+    | LPARENS expression RPARENS   { $$ = $2; }
 ;
 
-/// @brief  Component access to vectors
-/// @note   The result of this access is always an rvalue i.e. a non writable
-///         value.
-vector_element:
-    attribute component  { $$ = new VectorUnpack(new AttributeValue($1), $2); } |
-    local component      { $$ = new VectorUnpack(new LocalValue($1), $2); }     |
-    external component   { $$ = new VectorUnpack($1, $2); }
+/// @brief  An expression list of at least size 2
+expression_list:
+      expression COMMA expression       { $$ = new ExpressionList(); $$->addExpression($1); $$->addExpression($3); }
+    | expression_list COMMA expression  { $1->addExpression($3); $$ = $1; }
 ;
 
-/// @brief  A unique type of expression to support recursive brackets
-expression_expand:
-    LPARENS expression RPARENS  { $$ = $2; }
+/// @brief Variable numbers of expressions, either creating a single expression or a list
+expressions:
+    expression         { $$ = $1; }
+    | expression_list  { $$ = $1; }
 ;
 
-/// @brief  A unique type for cast expressions
-/// @note   Only scalar casts are currently supported
-/// @todo   Extend to vector and string casts
-cast_expression:
-    scalar_type expression_expand  { $$ = new Cast($2, $1); }
+/// @brief  Syntax for the declaration of supported local variable types
+declare_local:
+    type IDENTIFIER    { $$ = new DeclareLocal($2, static_cast<tokens::CoreType>($1)); free(const_cast<char*>($2)); }
 ;
 
-/// @brief  A function call, taking zero or any arguments
-function_call_expression:
-      IDENTIFIER LPARENS arguments RPARENS  { $$ = new FunctionCall($1, $3); free((char*)$1); }
-    | IDENTIFIER LPARENS RPARENS            { $$ = new FunctionCall($1); free((char*)$1); }
-;
-
-/// @brief  An argument list of at least size 1
-arguments:
-      expression                  { $$ = new ExpressionList(); $$->mList.emplace_back($1); }
-    | arguments COMMA expression  { $1->mList.emplace_back($3); $$ = $1; }
+/// @brief  Syntax for the declaration of supported local variable types
+declare_local_initializer:
+    declare_local EQUALS expression    { $$ = new AssignExpression($1, $3, false); }
 ;
 
 /// @brief  The declaration of local variables. Unlike assign expression which
 ///         return values (for assignment chains), assign declarations must end
 ///         in a statement.
-declare_assignment:
-      declare_local EQUALS expression  { $$ = new AssignExpression($1, $3); }
-    | declare_local                    { $$ = $1; }
+declaration:
+      declare_local_initializer      { $$ = $1; }
+    | declare_local                  { $$ = $1; }
 ;
 
-/// @brief  Non component assign expressions for attributes and local variables
-/// @note   Currently a single AST node supports local and attribute assignments.
-///         This could be split out into unique types to represent both. This may
-///         make consolidation with component assignments easier
-/// @todo   Consolidate with component assignments
+/// @brief  A declaration list of at least size 2
+declaration_list:
+     declaration COMMA IDENTIFIER EQUALS expression         { $$ = new StatementList($1);
+                                                              const tokens::CoreType type = getDeclarationType($1);
+                                                              $$->addStatement(
+                                                                  new AssignExpression(new DeclareLocal($3, type), $5, false));
+                                                              free(const_cast<char*>($3));
+                                                            }
+    | declaration COMMA IDENTIFIER                          { $$ = new StatementList($1);
+                                                              const tokens::CoreType type = getDeclarationType($1);
+                                                              $$->addStatement(new DeclareLocal($3, type));
+                                                              free(const_cast<char*>($3));
+                                                            }
+    | declaration_list COMMA IDENTIFIER EQUALS expression   { const auto firstNode = $1->child(0);
+                                                              assert(firstNode);
+                                                              const tokens::CoreType type = getDeclarationType(firstNode);
+                                                              $$->addStatement(
+                                                                  new AssignExpression(new DeclareLocal($3, type), $5, false));
+                                                              free(const_cast<char*>($3));
+                                                              $$ = $1;
+                                                            }
+    | declaration_list COMMA IDENTIFIER                     { const auto firstNode = $1->child(0);
+                                                              assert(firstNode);
+                                                              const tokens::CoreType type = getDeclarationType(firstNode);
+                                                              $1->addStatement(new DeclareLocal($3, type));
+                                                              free(const_cast<char*>($3));
+                                                              $$ = $1;
+                                                            }
+;
+
+/// @brief  Variable numbers of declarations, either creating a single declaration or a list
+declarations:
+      declaration        { $$ = $1; }
+    | declaration_list { $$ = $1; }
+;
+
+/// @brief  A single line scope or a scoped block
+block_or_statement:
+      block   { $$ = $1; }
+    | statement { $$ = new Block(); $$->addStatement($1); }
+;
+
+/// @brief  Syntax for a conditional statement, capable of supporting a single if
+///         and an optional single else. Multiple else ifs are handled by this.
+conditional_statement:
+      IF LPARENS expressions RPARENS block_or_statement %prec LOWER_THAN_ELSE   { $$ = new ConditionalStatement($3, $5); }
+    | IF LPARENS expressions RPARENS block_or_statement ELSE block_or_statement { $$ = new ConditionalStatement($3, $5, $7); }
+;
+
+/// @brief  A loop condition statement, either an initialized declaration or a list of expressions
+loop_condition:
+      expressions               { $$ = $1; }
+    | declare_local_initializer { $$ = $1; }
+;
+loop_condition_optional:
+      loop_condition            { $$ = $1; }
+    | /*empty*/                 { $$ = nullptr; }
+;
+
+/// @brief A for loop initial statement, an optional list of declarations/list of expressions
+loop_init:
+      expressions               { $$ = $1; }
+    | declarations              { $$ = $1; }
+    | /*empty*/                 { $$ = nullptr; }
+;
+
+/// @brief A for loop iteration statement, an optional list of expressions
+loop_iter:
+      expressions                { $$ = $1; }
+    | /* empty */                { $$ = nullptr; }
+;
+
+/// @brief  For loops, while loops and do-while loops.
+loop:
+      FOR LPARENS loop_init SEMICOLON loop_condition_optional SEMICOLON loop_iter RPARENS block_or_statement
+                                                                    { $$ = new Loop(tokens::FOR, ($5 ? $5 : new Value<bool>(true)), $9, $3, $7); }
+    | DO block_or_statement WHILE LPARENS loop_condition RPARENS    { $$ = new Loop(tokens::DO, $5, $2); }
+    | WHILE LPARENS loop_condition RPARENS block_or_statement       { $$ = new Loop(tokens::WHILE, $3, $5); }
+;
+
+/// @brief  A function call, taking zero or a comma separated list of arguments
+/// @note   This must have an expression list so we need to handle single expressions explicitly
+function_call_expression:
+      IDENTIFIER LPARENS expression_list RPARENS  { $$ = new FunctionCall($1, $3); free(const_cast<char*>($1)); }
+    | IDENTIFIER LPARENS expression RPARENS       { $$ = new FunctionCall($1, new ExpressionList($3)); free(const_cast<char*>($1)); }
+    | IDENTIFIER LPARENS RPARENS                  { $$ = new FunctionCall($1); free(const_cast<char*>($1)); }
+    | scalar_type LPARENS expression RPARENS      { $$ = new Cast($3, static_cast<tokens::CoreType>($1)); }
+;
+
+/// @brief  Assign expressions for attributes and local variables
 assign_expression:
-      attribute EQUALS expression          { $$ = new AssignExpression($1, $3); }
-    | attribute PLUSEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::PLUS, new AttributeValue($1->copy()), $3)); }
-    | attribute MINUSEQUALS expression     { $$ = new AssignExpression($1, new BinaryOperator(tokens::MINUS, new AttributeValue($1->copy()), $3)); }
-    | attribute MULTIPLYEQUALS expression  { $$ = new AssignExpression($1, new BinaryOperator(tokens::MULTIPLY, new AttributeValue($1->copy()), $3)); }
-    | attribute DIVIDEEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::DIVIDE, new AttributeValue($1->copy()), $3)); }
-    | local EQUALS expression              { $$ = new AssignExpression($1, $3); }
-    | local PLUSEQUALS expression          { $$ = new AssignExpression($1, new BinaryOperator(tokens::PLUS, new LocalValue($1->copy()), $3)); }
-    | local MINUSEQUALS expression         { $$ = new AssignExpression($1, new BinaryOperator(tokens::MINUS, new LocalValue($1->copy()), $3)); }
-    | local MULTIPLYEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::MULTIPLY, new LocalValue($1->copy()), $3)); }
-    | local DIVIDEEQUALS expression        { $$ = new AssignExpression($1, new BinaryOperator(tokens::DIVIDE, new LocalValue($1->copy()), $3)); }
-;
-
-/// @brief  Component assign expressions for attributes and local variables
-/// @note   Due to the way attributes are passed around (void* to a handle)
-///         and due to the function implementation of attribute writes, we must
-///         pull out the entire value, modify the component, and then re-assign to
-///         perform component assignments. This is not necessary for locals.
-/// @todo   Simplify component assignments for local variables and introduce flexible
-///         solution for attribute component assignments
-assign_component_expression:
-      attribute component EQUALS expression          { $$ = buildAttributeComponentExpression(nullptr, $1, $2, $4); }
-    | attribute component PLUSEQUALS expression      { $$ = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::PLUS), $1, $2, $4); }
-    | attribute component MINUSEQUALS expression     { $$ = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::MINUS), $1, $2, $4); }
-    | attribute component MULTIPLYEQUALS expression  { $$ = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::MULTIPLY), $1, $2, $4); }
-    | attribute component DIVIDEEQUALS expression    { $$ = buildAttributeComponentExpression(new tokens::OperatorToken(tokens::DIVIDE), $1, $2, $4); }
-    | local component EQUALS expression              { $$ = buildLocalComponentExpression(nullptr, $1, $2, $4); }
-    | local component PLUSEQUALS expression          { $$ = buildLocalComponentExpression(new tokens::OperatorToken(tokens::PLUS), $1, $2, $4); }
-    | local component MINUSEQUALS expression         { $$ = buildLocalComponentExpression(new tokens::OperatorToken(tokens::MINUS), $1, $2, $4); }
-    | local component MULTIPLYEQUALS expression      { $$ = buildLocalComponentExpression(new tokens::OperatorToken(tokens::MULTIPLY), $1, $2, $4); }
-    | local component DIVIDEEQUALS expression        { $$ = buildLocalComponentExpression(new tokens::OperatorToken(tokens::DIVIDE), $1, $2, $4); }
-;
-
-/// @brief  Attribute and local crement operations.
-/// @todo   Support component crement and properly handle pre and post crement return
-///         types. That is, pre crement should return an assignable lvalue, where as
-///         post crement should return an rvalue to the cremented value. This is complex
-///         for attributes.
-crement:
-      PLUSPLUS attribute    { $$ = new Crement($2, new AttributeValue($2->copy()), Crement::Increment, /*post*/false); }
-    | MINUSMINUS attribute  { $$ = new Crement($2, new AttributeValue($2->copy()), Crement::Decrement, /*post*/false); }
-    | attribute PLUSPLUS    { $$ = new Crement($1, new AttributeValue($1->copy()), Crement::Increment, /*post*/true); }
-    | attribute MINUSMINUS  { $$ = new Crement($1, new AttributeValue($1->copy()), Crement::Decrement, /*post*/true); }
-    | PLUSPLUS local        { $$ = new Crement($2, new LocalValue($2->copy()), Crement::Increment, /*post*/false); }
-    | MINUSMINUS local      { $$ = new Crement($2, new LocalValue($2->copy()), Crement::Decrement, /*post*/false); }
-    | local PLUSPLUS        { $$ = new Crement($1, new LocalValue($1->copy()), Crement::Increment, /*post*/true); }
-    | local MINUSMINUS      { $$ = new Crement($1, new LocalValue($1->copy()), Crement::Decrement, /*post*/true); }
-;
-
-/// @brief  A unary expression which takes an expression and returns an expression
-unary_expression:
-      PLUS expression    { $$ = new UnaryOperator(tokens::PLUS, $2); }
-    | MINUS expression   { $$ = new UnaryOperator(tokens::MINUS, $2); }
-    | BITNOT expression  { $$ = new UnaryOperator(tokens::BITNOT, $2); }
-    | NOT expression     { $$ = new UnaryOperator(tokens::NOT, $2); }
+      variable_reference EQUALS expression          { $$ = new AssignExpression($1, $3, false); }
+    | variable_reference PLUSEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::PLUS, $1->copy(), $3), true); }
+    | variable_reference MINUSEQUALS expression     { $$ = new AssignExpression($1, new BinaryOperator(tokens::MINUS, $1->copy(), $3), true); }
+    | variable_reference MULTIPLYEQUALS expression  { $$ = new AssignExpression($1, new BinaryOperator(tokens::MULTIPLY, $1->copy(), $3), true); }
+    | variable_reference DIVIDEEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::DIVIDE, $1->copy(), $3), true); }
+    | variable_reference MODULOEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::MODULO, $1->copy(), $3), true); }
+    | variable_reference BITANDEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITAND, $1->copy(), $3), true); }
+    | variable_reference BITXOREQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITXOR, $1->copy(), $3), true); }
+    | variable_reference BITOREQUALS expression     { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITOR, $1->copy(), $3), true); }
 ;
 
 /// @brief  A binary expression which takes a left and right hand side expression
@@ -380,89 +382,131 @@ binary_expression:
     | expression LESSTHANOREQUAL expression  { $$ = new BinaryOperator(tokens::LESSTHANOREQUAL, $1, $3); }
 ;
 
+/// @brief  A unary expression which takes an expression and returns an expression
+unary_expression:
+      PLUS expression        { $$ = new UnaryOperator(tokens::PLUS, $2); }
+    | MINUS expression       { $$ = new UnaryOperator(tokens::MINUS, $2); }
+    | BITNOT expression      { $$ = new UnaryOperator(tokens::BITNOT, $2); }
+    | NOT expression         { $$ = new UnaryOperator(tokens::NOT, $2); }
+;
+
+pre_crement:
+      PLUSPLUS variable_reference    { $$ = new Crement($2, Crement::Increment, /*post*/false); }
+    | MINUSMINUS variable_reference  { $$ = new Crement($2, Crement::Decrement, /*post*/false); }
+;
+
+post_crement:
+      variable_reference PLUSPLUS    { $$ = new Crement($1, Crement::Increment, /*post*/true); }
+    | variable_reference MINUSMINUS  { $$ = new Crement($1, Crement::Decrement, /*post*/true); }
+;
+
+/// @brief  Syntax which can return a valid variable lvalue
+variable_reference:
+      variable                                              { $$ = $1; }
+    | pre_crement                                           { $$ = $1;}
+    | variable DOT_X                                        { $$ = new ArrayUnpack($1, new Value<int32_t>(0)); }
+    | variable DOT_Y                                        { $$ = new ArrayUnpack($1, new Value<int32_t>(1)); }
+    | variable DOT_Z                                        { $$ = new ArrayUnpack($1, new Value<int32_t>(2)); }
+    | variable LSQUARE expression RSQUARE                   { $$ = new ArrayUnpack($1, $3); }
+    | variable LSQUARE expression COMMA expression RSQUARE  { $$ = new ArrayUnpack($1, $3, $5); }
+;
+
 /// @brief  Syntax for vector literals
-vector_literal:
-    LCURLY expression COMMA expression COMMA expression RCURLY { $$ = new VectorPack($2, $4, $6); }
+array:
+    LCURLY expression_list RCURLY { $$ = new ArrayPack($2); }
+;
+
+/// @brief  Objects which are assignable are considered variables. Importantly,
+///         externals are not classified in this rule as they are read only.
+variable:
+      attribute  { $$ = $1; }
+    | local      { $$ = $1; }
 ;
 
 /// @brief  Syntax for supported attribute access
 attribute:
-      scalar_type AT IDENTIFIER  { $$ = new Attribute($3, $1); free((char*)$3); }
-    | vector_type AT IDENTIFIER  { $$ = new Attribute($3, $1); free((char*)$3); }
-    | I_AT  IDENTIFIER           { $$ = new Attribute($2, openvdb::typeNameAsString<int32_t>()); free((char*)$2); }
-    | F_AT  IDENTIFIER           { $$ = new Attribute($2, openvdb::typeNameAsString<float>()); free((char*)$2); }
-    | V_AT IDENTIFIER            { $$ = new Attribute($2, openvdb::typeNameAsString<openvdb::Vec3s>()); free((char*)$2); }
-    | S_AT IDENTIFIER            { $$ = new Attribute($2, openvdb::typeNameAsString<std::string>()); free((char*)$2); }
-    | STRING AT IDENTIFIER       { $$ = new Attribute($3, openvdb::typeNameAsString<std::string>()); free((char*)$3); }
-    | AT IDENTIFIER              { $$ = new Attribute($2, openvdb::typeNameAsString<float>(), true); free((char*)$2); }
+      type AT IDENTIFIER     { $$ = new Attribute($3, static_cast<tokens::CoreType>($1)); free(const_cast<char*>($3)); }
+    | I_AT IDENTIFIER        { $$ = new Attribute($2, tokens::INT); free(const_cast<char*>($2)); }
+    | F_AT IDENTIFIER        { $$ = new Attribute($2, tokens::FLOAT); free(const_cast<char*>($2)); }
+    | V_AT IDENTIFIER        { $$ = new Attribute($2, tokens::VEC3F); free(const_cast<char*>($2)); }
+    | S_AT IDENTIFIER        { $$ = new Attribute($2, tokens::STRING); free(const_cast<char*>($2)); }
+    | M3F_AT IDENTIFIER      { $$ = new Attribute($2, tokens::MAT3F); free(const_cast<char*>($2)); }
+    | M4F_AT IDENTIFIER      { $$ = new Attribute($2, tokens::MAT4F); free(const_cast<char*>($2)); }
+    | AT IDENTIFIER          { $$ = new Attribute($2, tokens::FLOAT, true); free(const_cast<char*>($2)); }
 ;
 
 /// @brief  Syntax for supported external variable access
 external:
-      scalar_type DOLLAR IDENTIFIER  { $$ = new ExternalVariable($3, $1); free((char*)$3); }
-    | vector_type DOLLAR IDENTIFIER  { $$ = new ExternalVariable($3, $1); free((char*)$3); }
-    | I_DOLLAR  IDENTIFIER           { $$ = new ExternalVariable($2, openvdb::typeNameAsString<int32_t>()); free((char*)$2); }
-    | F_DOLLAR  IDENTIFIER           { $$ = new ExternalVariable($2, openvdb::typeNameAsString<float>()); free((char*)$2); }
-    | V_DOLLAR IDENTIFIER            { $$ = new ExternalVariable($2, openvdb::typeNameAsString<openvdb::Vec3s>()); free((char*)$2); }
-    | S_DOLLAR IDENTIFIER            { $$ = new ExternalVariable($2, openvdb::typeNameAsString<std::string>()); free((char*)$2); }
-    | STRING DOLLAR IDENTIFIER       { $$ = new ExternalVariable($3, openvdb::typeNameAsString<std::string>()); free((char*)$3); }
-    | DOLLAR IDENTIFIER              { $$ = new ExternalVariable($2, openvdb::typeNameAsString<float>()); free((char*)$2); }
-;
-
-/// @brief  Syntax for the declaration of supported local variable types
-declare_local:
-      scalar_type IDENTIFIER  { $$ = new DeclareLocal($2, $1); free((char*)$2); }
-    | vector_type IDENTIFIER  { $$ = new DeclareLocal($2, $1); free((char*)$2); }
-    | STRING IDENTIFIER       { $$ = new DeclareLocal($2, openvdb::typeNameAsString<std::string>()); free((char*)$2); }
+      type DOLLAR IDENTIFIER  { $$ = new ExternalVariable($3, static_cast<tokens::CoreType>($1)); free(const_cast<char*>($3)); }
+    | I_DOLLAR IDENTIFIER     { $$ = new ExternalVariable($2, tokens::INT); free(const_cast<char*>($2)); }
+    | F_DOLLAR IDENTIFIER     { $$ = new ExternalVariable($2, tokens::FLOAT); free(const_cast<char*>($2)); }
+    | V_DOLLAR IDENTIFIER     { $$ = new ExternalVariable($2, tokens::VEC3F); free(const_cast<char*>($2)); }
+    | S_DOLLAR IDENTIFIER     { $$ = new ExternalVariable($2, tokens::STRING); free(const_cast<char*>($2)); }
+    | DOLLAR IDENTIFIER       { $$ = new ExternalVariable($2, tokens::FLOAT); free(const_cast<char*>($2)); }
 ;
 
 /// @brief  Syntax for text identifiers which resolves to a local. Types have
 ///         have their own tokens which do not evaluate to a local variable
 /// @note   Anything which uses an IDENTIFIER must free the returned char array
 local:
-    IDENTIFIER  { $$ = new Local($1); free((char*)$1); }
+    IDENTIFIER  { $$ = new Local($1); free(const_cast<char*>($1)); }
 ;
 
 /// @brief  Syntax numerical and boolean literal values
 /// @note   Anything which uses one of the below tokens must free the returned char
 ///         array (aside from TRUE and FALSE tokens)
 literal:
-      L_SHORT   { $$ = new Value<int16_t>($1); free((char*)$1); }
-    | L_INT     { $$ = new Value<int32_t>($1); free((char*)$1); }
-    | L_LONG    { $$ = new Value<int64_t>($1); free((char*)$1); }
-    | L_FLOAT   { $$ = new Value<float>($1); free((char*)$1); }
-    | L_DOUBLE  { $$ = new Value<double>($1); free((char*)$1); }
-    | L_STRING  { $$ = new Value<std::string>($1); free((char*)$1); }
-    | TRUE      { $$ = new Value<bool>(true); }
-    | FALSE     { $$ = new Value<bool>(false); }
+      L_SHORT         { $$ = new Value<int16_t>($1); free(const_cast<char*>($1)); }
+    | L_INT           { $$ = new Value<int32_t>($1); free(const_cast<char*>($1)); }
+    | L_LONG          { $$ = new Value<int64_t>($1); free(const_cast<char*>($1)); }
+    | L_FLOAT         { $$ = new Value<float>($1); free(const_cast<char*>($1)); }
+    | L_DOUBLE        { $$ = new Value<double>($1); free(const_cast<char*>($1)); }
+    | L_STRING        { $$ = new Value<std::string>($1); free(const_cast<char*>($1)); }
+    | TRUE            { $$ = new Value<bool>(true); }
+    | FALSE           { $$ = new Value<bool>(false); }
 ;
 
-/// @brief  Vector component access
-component:
-      DOT_X  { $$ = 0; }
-    | DOT_Y  { $$ = 1; }
-    | DOT_Z  { $$ = 2; }
+type:
+      scalar_type   { $$ = $1; }
+    | vector_type   { $$ = $1; }
+    | matrix_type   { $$ = $1; }
+    | STRING        { $$ = tokens::STRING; }
 ;
 
-/// @brief  Scalar types consolidated as strings. These should be used to ensure
-///         type matching.
+/// @brief  Matrix types
+matrix_type:
+      MAT3F   { $$ = tokens::MAT3F; }
+    | MAT3D   { $$ = tokens::MAT3D; }
+    | MAT4F   { $$ = tokens::MAT4F; }
+    | MAT4D   { $$ = tokens::MAT4D; }
+;
+
+/// @brief  Scalar types
 scalar_type:
-      BOOL    { $$ = openvdb::typeNameAsString<bool>(); }
-    | SHORT   { $$ = openvdb::typeNameAsString<int16_t>(); }
-    | INT     { $$ = openvdb::typeNameAsString<int32_t>(); }
-    | LONG    { $$ = openvdb::typeNameAsString<int64_t>(); }
-    | FLOAT   { $$ = openvdb::typeNameAsString<float>(); }
-    | DOUBLE  { $$ = openvdb::typeNameAsString<double>(); }
+      BOOL    { $$ = tokens::BOOL; }
+    | SHORT   { $$ = tokens::SHORT; }
+    | INT     { $$ = tokens::INT; }
+    | LONG    { $$ = tokens::LONG; }
+    | FLOAT   { $$ = tokens::FLOAT; }
+    | DOUBLE  { $$ = tokens::DOUBLE; }
 ;
 
-/// @brief  Vector types consolidated as strings. These should be used to ensure
-///         type matching.
+/// @brief  Vector types
 vector_type:
-      VEC3I   { $$ = openvdb::typeNameAsString<openvdb::Vec3i>(); }
-    | VEC3F   { $$ = openvdb::typeNameAsString<openvdb::Vec3s>(); }
-    | VEC3D   { $$ = openvdb::typeNameAsString<openvdb::Vec3d>(); }
+      VEC2I   { $$ = tokens::VEC2I; }
+    | VEC2F   { $$ = tokens::VEC2F; }
+    | VEC2D   { $$ = tokens::VEC2D; }
+    | VEC3I   { $$ = tokens::VEC3I; }
+    | VEC3F   { $$ = tokens::VEC3F; }
+    | VEC3D   { $$ = tokens::VEC3D; }
+    | VEC4I   { $$ = tokens::VEC4I; }
+    | VEC4F   { $$ = tokens::VEC4F; }
+    | VEC4D   { $$ = tokens::VEC4D; }
+;
 
 %%
+
+OPENVDB_NO_TYPE_CONVERSION_WARNING_END
 
 // Copyright (c) 2015-2019 DNEG
 // All rights reserved. This software is distributed under the

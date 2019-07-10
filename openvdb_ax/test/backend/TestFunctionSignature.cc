@@ -116,7 +116,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("SVFunction"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::SVFunction));
+        reinterpret_cast<void(*)()>(&TestFunctions::SVFunction));
 
     // test inline static void function
 
@@ -125,7 +125,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("SIVFunction"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::SIVFunction));
+        reinterpret_cast<void(*)()>(&TestFunctions::SIVFunction));
 
     // test scalar arguments
 
@@ -135,7 +135,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("IFunctionScalar"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::IFunctionScalar));
+        reinterpret_cast<void(*)()>(&TestFunctions::IFunctionScalar));
 
     // test scalar ptr arguments
 
@@ -145,7 +145,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("IFunctionScalarPtr"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::IFunctionScalarPtr));
+        reinterpret_cast<void(*)()>(&TestFunctions::IFunctionScalarPtr));
 
     // test array ptr arguments
 
@@ -155,7 +155,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("IFunctionArray"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::IFunctionArray));
+        reinterpret_cast<void(*)()>(&TestFunctions::IFunctionArray));
 
     // test argument mixture
 
@@ -165,7 +165,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("FFunctionMix"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::FFunctionMix));
+        reinterpret_cast<void(*)()>(&TestFunctions::FFunctionMix));
 
     // test argument mixture const
 
@@ -175,7 +175,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("DFunctionMixc"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::DFunctionMixc));
+        reinterpret_cast<void(*)()>(&TestFunctions::DFunctionMixc));
 
     // test selected template functions
 
@@ -184,7 +184,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("TemplateSelection0"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::TemplateSelection0<float>));
+        reinterpret_cast<void(*)()>(&TestFunctions::TemplateSelection0<float>));
 
     // test multiple indirection layers
 
@@ -194,7 +194,7 @@ TestFunctionSignature::testCreate()
     CPPUNIT_ASSERT(functionPtr);
     CPPUNIT_ASSERT_EQUAL(functionPtr->symbolName(), std::string("MultiPtrFunction"));
     CPPUNIT_ASSERT_EQUAL(functionPtr->functionPointer(),
-        reinterpret_cast<void*>(&TestFunctions::MultiPtrFunction));
+        reinterpret_cast<void(*)()>(&TestFunctions::MultiPtrFunction));
 
     // test non matching - The function signature generator will allow compilation
     // of void() templates with differing layers of indirection, but fail at runtime on
@@ -246,10 +246,10 @@ TestFunctionSignature::testPrint()
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<void()>::create(nullptr, "__void"));
-     functionPtr->print(state.context(), "", os);
+    functionPtr->print(state.context(), "", os, false);
     CPPUNIT_ASSERT_EQUAL(std::string("void()"), os.str());
     os.str("");
-    functionPtr->print(state.context(), functionPtr->symbolName(),  os);
+    functionPtr->print(state.context(), functionPtr->symbolName(),  os, false);
     CPPUNIT_ASSERT_EQUAL(std::string("void __void()"), os.str());
     os.str("");
 
@@ -258,8 +258,12 @@ TestFunctionSignature::testPrint()
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<float(bool,int16_t,int32_t,int64_t,float,double)>
             ::create(nullptr, "__void"));
-     std::string expected("float test(i1; i16; i32; i64; float; double)");
-    functionPtr->print(state.context(), "test", os);
+    std::string expected("float test(i1; i16; i32; i64; float; double)");
+    functionPtr->print(state.context(), "test", os, false);
+    CPPUNIT_ASSERT_EQUAL(expected, os.str());
+    os.str("");
+    expected = std::string("float test(bool; short; int; long; float; double)");
+    functionPtr->print(state.context(), "test", os, true);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");
 
@@ -269,7 +273,12 @@ TestFunctionSignature::testPrint()
         = FunctionSignature<void(bool*,int16_t*,int32_t*,int64_t*,float*,double*)>
             ::create(nullptr, "__void"));
     expected = std::string("void(i1*; i16*; i32*; i64*; float*; double*)");
-    functionPtr->print(state.context(), "", os);
+    functionPtr->print(state.context(), "", os, false);
+    CPPUNIT_ASSERT_EQUAL(expected, os.str());
+    os.str("");
+    // note that AX types ignore pointers
+    expected = std::string("void(bool; short; int; long; float; double)");
+    functionPtr->print(state.context(), "", os, true);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");
 
@@ -279,7 +288,12 @@ TestFunctionSignature::testPrint()
         = FunctionSignature<void(bool(*)[1],int16_t(*)[2],int32_t(*)[3],int64_t(*)[4],float(*)[5],double(*)[6])>
             ::create(nullptr, "__void"));
     expected = std::string("void([1 x i1]*; [2 x i16]*; [3 x i32]*; [4 x i64]*; [5 x float]*; [6 x double]*)");
-    functionPtr->print(state.context(), "", os);
+    functionPtr->print(state.context(), "", os, false);
+    CPPUNIT_ASSERT_EQUAL(expected, os.str());
+    os.str("");
+    // Some of these types are not supported AX types
+    expected = std::string("void([1 x i1]*; [2 x i16]*; vec3i; [4 x i64]*; [5 x float]*; [6 x double]*)");
+    functionPtr->print(state.context(), "", os, true);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");
 
@@ -289,7 +303,12 @@ TestFunctionSignature::testPrint()
         = FunctionSignature<double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
             ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc"));
     expected = std::string("double(i1; i16*; [1 x i32]*; i64; float*; [2 x double]*)");
-    functionPtr->print(state.context(), "", os);
+    functionPtr->print(state.context(), "", os, false);
+    CPPUNIT_ASSERT_EQUAL(expected, os.str());
+    os.str("");
+    // Some of these types are not supported AX types
+    expected = std::string("double(bool; short; [1 x i32]*; long; float; vec2d)");
+    functionPtr->print(state.context(), "", os, true);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");
 
@@ -298,7 +317,7 @@ TestFunctionSignature::testPrint()
     CPPUNIT_ASSERT_NO_THROW(functionPtr = FunctionSignature<double()>::
         create((double(*)())(TestFunctions::TemplateSelection0), "TemplateSelection0"));
     expected = std::string("double()");
-    functionPtr->print(state.context(), "", os);
+    functionPtr->print(state.context(), "", os, false);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");
 
@@ -309,7 +328,7 @@ TestFunctionSignature::testPrint()
             create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction"));
     // void pointers are pointers to structs containing a void member
     expected = std::string("{ void }**({ void }*; { void }**; { void }***; float*; float**; float***)");
-    functionPtr->print(state.context(), "", os);
+    functionPtr->print(state.context(), "", os, false);
     CPPUNIT_ASSERT_EQUAL(expected, os.str());
     os.str("");;
 }
@@ -412,11 +431,9 @@ void
 TestFunctionSignature::testReturnOutputs()
 {
     unittest_util::LLVMState state;
-    std::vector<llvm::Value*> values;
-    std::vector<llvm::Type*> types;
 
-    auto isAllocation = [](llvm::Value*& v) {
-        CPPUNIT_ASSERT(llvm::isa<llvm::AllocaInst>(v));
+    auto isAllocation = [](llvm::Value* v) -> bool {
+        return llvm::isa<llvm::AllocaInst>(v);
     };
 
     // create a dummy builder and give it something to write to
@@ -429,250 +446,150 @@ TestFunctionSignature::testReturnOutputs()
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<void()>::create(nullptr, "void"));
-    CPPUNIT_ASSERT(!functionPtr->hasOutputArguments());
+    CPPUNIT_ASSERT(!functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(!functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(0), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT(types.empty());
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT(values.empty());
+    CPPUNIT_ASSERT_EQUAL((llvm::Type*)nullptr, functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT_EQUAL((llvm::Value*)nullptr, functionPtr->getOutputArgument(builder));
 
     // test zero arguments, zero output arguments, int return
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr =
         FunctionSignature<int()>::create(nullptr, "void"));
-    CPPUNIT_ASSERT(!functionPtr->hasOutputArguments());
+    CPPUNIT_ASSERT(!functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(1), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT(types.empty());
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT(values.empty());
+    CPPUNIT_ASSERT_EQUAL((llvm::Type*)nullptr, functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT_EQUAL((llvm::Value*)nullptr, functionPtr->getOutputArgument(builder));
 
     // test 1 arguments, zero output arguments, int return
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr =
         FunctionSignature<int(int)>::create(nullptr, "void"));
-    CPPUNIT_ASSERT(!functionPtr->hasOutputArguments());
+    CPPUNIT_ASSERT(!functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(1), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT(types.empty());
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT(values.empty());
+    CPPUNIT_ASSERT_EQUAL((llvm::Type*)nullptr, functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT_EQUAL((llvm::Value*)nullptr, functionPtr->getOutputArgument(builder));
 
-    // test 1 arguments, 1 output arguments, int return
+    // test 2 arguments, 1 output arguments, void return (no return)
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr =
-        FunctionSignature<int(int*)>::create(nullptr, "void", 1));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
-    CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(2), functionPtr->numReturnValues(state.context()));
-
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(1), types.size());
-    CPPUNIT_ASSERT_EQUAL(types.front(), llvm::cast<llvm::Type>(LLVMType<int*>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(1), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
-
-    // test 2 arguments, 2 output arguments, int return
-
-    CPPUNIT_ASSERT_NO_THROW(functionPtr =
-        FunctionSignature<int(int*, float*)>::create(nullptr, "void", 2));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
-    CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(3), functionPtr->numReturnValues(state.context()));
-
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(2), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<int*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[1], llvm::cast<llvm::Type>(LLVMType<float*>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(2), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
-
-    // test 2 arguments, 2 output arguments, void return (no return)
-
-    CPPUNIT_ASSERT_NO_THROW(functionPtr =
-        FunctionSignature<void(int*, float*)>::create(nullptr, "void", 2));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
+        FunctionSignature<void(int*, float*)>::create(nullptr, "void", true));
+    CPPUNIT_ASSERT(functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(!functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(2), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(2), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<int*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[1], llvm::cast<llvm::Type>(LLVMType<float*>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(2), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<float*>::get(state.context())),
+        functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT(isAllocation(functionPtr->getOutputArgument(builder)));
 
     // test 1 arguments, 1 output arguments, void return (no return)
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr =
-        FunctionSignature<void(float(*)[3])>::create(nullptr, "void", 1));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
+        FunctionSignature<void(float(*)[3])>::create(nullptr, "void", true));
+    CPPUNIT_ASSERT(functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(!functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(1), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(1), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<float(*)[3]>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(1), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
-
-    // test 1 arguments, 1 output arguments, float return
-
-    CPPUNIT_ASSERT_NO_THROW(functionPtr =
-        FunctionSignature<float(float(*)[3])>::create(nullptr, "void", 1));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
-    CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(2), functionPtr->numReturnValues(state.context()));
-
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(1), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<float(*)[3]>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(1), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<float(*)[3]>::get(state.context())),
+        functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT(isAllocation(functionPtr->getOutputArgument(builder)));
 
     // test 6 arguments, zero output arguments, float return
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<float(bool,int16_t,int32_t,int64_t,float,double)>
             ::create(nullptr, "__void"));
-    CPPUNIT_ASSERT(!functionPtr->hasOutputArguments());
+    CPPUNIT_ASSERT(!functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(1), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT(types.empty());
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT(values.empty());
+    CPPUNIT_ASSERT_EQUAL((llvm::Type*)nullptr, functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT_EQUAL((llvm::Value*)nullptr, functionPtr->getOutputArgument(builder));
 
     // test 6 arguments, 6 output arguments, void return (no return)
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<void(bool*,int16_t*,int32_t*,int64_t*,float*,double*)>
-            ::create(nullptr, "__void", 6));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
+            ::create(nullptr, "__void", true));
+    CPPUNIT_ASSERT(functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(!functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(6), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(6), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<bool*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[1], llvm::cast<llvm::Type>(LLVMType<int16_t*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[2], llvm::cast<llvm::Type>(LLVMType<int32_t*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[3], llvm::cast<llvm::Type>(LLVMType<int64_t*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[4], llvm::cast<llvm::Type>(LLVMType<float*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[5], llvm::cast<llvm::Type>(LLVMType<double*>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(6), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<double*>::get(state.context())),
+        functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT(isAllocation(functionPtr->getOutputArgument(builder)));
 
     // test 6 arguments, 2 output arguments, double return
 
-    CPPUNIT_ASSERT_NO_THROW(functionPtr
-        = FunctionSignature<double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
-            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc", 2));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
+    CPPUNIT_ASSERT_NO_THROW(functionPtr = FunctionSignature
+        <double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
+            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc"));
+
+    CPPUNIT_ASSERT(!functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(3), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(2), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<float*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[1], llvm::cast<llvm::Type>(LLVMType<double(*)[2]>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(2), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-    types.clear(); values.clear();
+    CPPUNIT_ASSERT_EQUAL((llvm::Type*)nullptr, functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT_EQUAL((llvm::Value*)nullptr, functionPtr->getOutputArgument(builder));
 
     // test 6 arguments, 3 output arguments, void return (no return)
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<void(bool(*)[1],int16_t(*)[2],int32_t(*)[3],int64_t(*)[4],float(*)[5],double(*)[6])>
             ::create(nullptr, "__void", 3));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
+    CPPUNIT_ASSERT(functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(!functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(3), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(3), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<int64_t(*)[4]>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[1], llvm::cast<llvm::Type>(LLVMType<float(*)[5]>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[2], llvm::cast<llvm::Type>(LLVMType<double(*)[6]>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(3), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
-
-     types.clear(); values.clear();
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<double(*)[6]>::get(state.context())),
+        functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT(isAllocation(functionPtr->getOutputArgument(builder)));
 
     // test multi indirection arguments
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<void**(void*, void**, void***, float*, float**, float***)>
-            ::create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction", 6));
-    CPPUNIT_ASSERT(functionPtr->hasOutputArguments());
+            ::create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction"));
+
+    CPPUNIT_ASSERT(!functionPtr->hasOutputArgument());
     CPPUNIT_ASSERT(functionPtr->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT_EQUAL(size_t(7), functionPtr->numReturnValues(state.context()));
 
-    functionPtr->appendOutputTypes(types, state.context());
-    CPPUNIT_ASSERT_EQUAL(size_t(6), types.size());
-    CPPUNIT_ASSERT_EQUAL(types[0], llvm::cast<llvm::Type>(LLVMType<void*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[1], llvm::cast<llvm::Type>(LLVMType<void**>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[2], llvm::cast<llvm::Type>(LLVMType<void***>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[3], llvm::cast<llvm::Type>(LLVMType<float*>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[4], llvm::cast<llvm::Type>(LLVMType<float**>::get(state.context())));
-    CPPUNIT_ASSERT_EQUAL(types[5], llvm::cast<llvm::Type>(LLVMType<float***>::get(state.context())));
-    functionPtr->appendOutputArguments(values, builder);
-    CPPUNIT_ASSERT_EQUAL(size_t(6), values.size());
-    std::for_each(values.begin(), values.end(), isAllocation);
+    CPPUNIT_ASSERT_EQUAL((llvm::Type*)nullptr, functionPtr->getOutputType(state.context()));
+    CPPUNIT_ASSERT_EQUAL((llvm::Value*)nullptr, functionPtr->getOutputArgument(builder));
 
-    //
+    // invalid tests
 
-    // test incompatible output types (either too many have been specified, or the ones that have
-    // been are not pointers)
+    CPPUNIT_ASSERT_THROW(FunctionSignature
+        <void**(void*, void**, void***, float*, float**, float***)>
+            ::create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction", true),
+            openvdb::LLVMFunctionError);
 
-    CPPUNIT_ASSERT_THROW(FunctionSignature<void()>::create(nullptr, "void", 1),
+    CPPUNIT_ASSERT_THROW(FunctionSignature
+        <double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
+            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc", true),
+            openvdb::LLVMFunctionError);
+
+    // test 1 arguments, 1 output arguments, int return
+
+    CPPUNIT_ASSERT_THROW(FunctionSignature<int(int*)>::create(nullptr, "void", true),
         openvdb::LLVMFunctionError);
 
-    CPPUNIT_ASSERT_THROW(FunctionSignature<void(int*, int*)>::create(nullptr, "void", 3),
+    // test 2 arguments, 1 output arguments, int return
+
+    CPPUNIT_ASSERT_THROW(FunctionSignature<int(int*, float*)>::create(nullptr, "void", true),
         openvdb::LLVMFunctionError);
 
-    CPPUNIT_ASSERT_THROW(functionPtr
-        = FunctionSignature<double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
-            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc", 7), openvdb::LLVMFunctionError);
+    // test 1 arguments, 1 output arguments, float return
 
-    CPPUNIT_ASSERT_NO_THROW(functionPtr
-        = FunctionSignature<double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
-            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc", 4));
-    CPPUNIT_ASSERT_THROW(functionPtr->appendOutputArguments(values, builder),
+    CPPUNIT_ASSERT_THROW(FunctionSignature<float(float(*)[3])>::create(nullptr, "void", true),
         openvdb::LLVMFunctionError);
 
-    CPPUNIT_ASSERT_NO_THROW(functionPtr
-        = FunctionSignature<void(bool*,int16_t*,int32_t*,int64_t*,float*,double)>
-            ::create(nullptr, "__void", 6));
-    CPPUNIT_ASSERT_THROW(functionPtr->appendOutputArguments(values, builder),
+    // test 0 arguments, output argument
+
+    CPPUNIT_ASSERT_THROW(FunctionSignature<void()>::create(nullptr, "void", true),
+        openvdb::LLVMFunctionError);
+    CPPUNIT_ASSERT_THROW(FunctionSignature<int()>::create(nullptr, "void", true),
+        openvdb::LLVMFunctionError);
+
+    // test invalid output return argument
+
+    CPPUNIT_ASSERT_THROW(FunctionSignature<void(int)>::create(nullptr, "void", true),
         openvdb::LLVMFunctionError);
 }
 
@@ -692,17 +609,17 @@ TestFunctionSignature::testMatching()
     CPPUNIT_ASSERT(functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(1));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.emplace_back(LLVMType<void>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
 
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.clear();
 
@@ -713,17 +630,17 @@ TestFunctionSignature::testMatching()
     CPPUNIT_ASSERT(functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(1));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.emplace_back(LLVMType<void>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
 
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.clear();
 
@@ -735,66 +652,66 @@ TestFunctionSignature::testMatching()
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(2));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.resize(1);
 
     types[0] = LLVMType<void>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<void*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int16_t>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int32_t>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int64_t>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
     types[0] = LLVMType<float>::get(state.context());
 
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<double>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int32_t*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int32_t(*)[1]>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.clear();
 
@@ -806,60 +723,60 @@ TestFunctionSignature::testMatching()
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(2));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.resize(1);
 
     types[0] = LLVMType<void>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<void*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int16_t*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int32_t*>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int64_t*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
     types[0] = LLVMType<float*>::get(state.context());
 
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<double*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int32_t(*)[1]>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.clear();
 
@@ -871,42 +788,42 @@ TestFunctionSignature::testMatching()
     CPPUNIT_ASSERT(functionPtr->sizeMatch(6));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.resize(6);
 
     std::fill(types.begin(), types.end(), LLVMType<void>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     std::fill(types.begin(), types.end(), LLVMType<void*>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     std::fill(types.begin(), types.end(), LLVMType<int32_t*>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     std::fill(types.begin(), types.end(), LLVMType<int32_t(*)[1]>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     std::fill(types.begin(), types.end(), LLVMType<double(*)[6]>::get(state.context()));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<bool(*)[1]>::get(state.context());
     types[1] = LLVMType<int16_t(*)[2]>::get(state.context());
@@ -914,16 +831,16 @@ TestFunctionSignature::testMatching()
     types[3] = LLVMType<int64_t(*)[4]>::get(state.context());
     types[4] = LLVMType<float(*)[5]>::get(state.context());
     types[5] = LLVMType<double(*)[6]>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<bool(*)[2]>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<int32_t(*)[1]>::get(state.context());
     types[1] = LLVMType<int32_t(*)[2]>::get(state.context());
@@ -931,10 +848,10 @@ TestFunctionSignature::testMatching()
     types[3] = LLVMType<int32_t(*)[4]>::get(state.context());
     types[4] = LLVMType<int32_t(*)[5]>::get(state.context());
     types[5] = LLVMType<int32_t(*)[6]>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<bool(**)[1]>::get(state.context());
     types[1] = LLVMType<int16_t(**)[2]>::get(state.context());
@@ -942,10 +859,10 @@ TestFunctionSignature::testMatching()
     types[3] = LLVMType<int64_t(**)[4]>::get(state.context());
     types[4] = LLVMType<float(**)[5]>::get(state.context());
     types[5] = LLVMType<double(**)[6]>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.clear();
 
@@ -953,15 +870,15 @@ TestFunctionSignature::testMatching()
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<double(const bool, int16_t* const, int32_t(*)[1], const int64_t, const float* const, const double(*)[2])>
-            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc", 2));
+            ::create(&TestFunctions::DFunctionMixc, "DFunctionMixc"));
 
     CPPUNIT_ASSERT(functionPtr->sizeMatch(6));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.resize(6);
 
@@ -971,22 +888,22 @@ TestFunctionSignature::testMatching()
     types[3] = LLVMType<int64_t>::get(state.context());
     types[4] = LLVMType<float*>::get(state.context());
     types[5] = LLVMType<double(*)[2]>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[0] = LLVMType<double>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[1] = LLVMType<double*>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.clear();
 
@@ -994,15 +911,15 @@ TestFunctionSignature::testMatching()
 
     CPPUNIT_ASSERT_NO_THROW(functionPtr
         = FunctionSignature<void**(void*, void**, void***, float*, float**, float***)>
-            ::create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction", 6));
+            ::create(&TestFunctions::MultiPtrFunction, "MultiPtrFunction"));
 
     CPPUNIT_ASSERT(functionPtr->sizeMatch(6));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(0));
     CPPUNIT_ASSERT(!functionPtr->sizeMatch(-1));
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types.resize(6);
 
@@ -1012,16 +929,16 @@ TestFunctionSignature::testMatching()
     types[3] = LLVMType<float*>::get(state.context());
     types[4] = LLVMType<float**>::get(state.context());
     types[5] = LLVMType<float***>::get(state.context());
-    CPPUNIT_ASSERT(functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 
     types[3] = LLVMType<float**>::get(state.context());
-    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types, state.context()));
-    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types, state.context()));
+    CPPUNIT_ASSERT(!functionPtr->implicitMatch(types));
+    CPPUNIT_ASSERT(!functionPtr->explicitMatch(types));
     CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size ==
-        functionPtr->match(types, state.context()));
+        functionPtr->match(types));
 }
 
 void

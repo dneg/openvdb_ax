@@ -38,17 +38,17 @@
 #ifndef OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 
+#include <openvdb_ax/ast/Tokens.h>
 #include <openvdb_ax/Exceptions.h>
 
+#include <openvdb/math/Mat3.h>
 #include <openvdb/math/Mat4.h>
 #include <openvdb/math/Vec3.h>
 #include <openvdb/Types.h>
 
 #include <llvm/IR/Constants.h>
-#include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 
 #include <type_traits>
 
@@ -58,7 +58,6 @@ namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
 namespace codegen {
-
 
 /// Recursive llvm type mapping from pod types
 /// @note  llvm::Types do not store information about the value sign, only meta
@@ -131,7 +130,7 @@ template <> struct LLVMType<ValueType> { \
             typename std::conditional<std::is_floating_point<ValueType>::value, double, int64_t>::type; \
         return LLVMValueCall(LLVMType<ValueType>::get(C), InputType(value)); \
     } \
-}; \
+} \
 
 REGISTER_LLVM_TYPE_MAP(bool, llvm::Type::getInt1Ty, llvm::ConstantInt::getSigned);
 REGISTER_LLVM_TYPE_MAP(int8_t, llvm::Type::getInt8Ty, llvm::ConstantInt::getSigned);
@@ -152,6 +151,39 @@ struct LLVMType<char> {
 };
 
 template <>
+struct LLVMType<std::string> {
+    static inline llvm::StructType*
+    get(llvm::LLVMContext& C) {
+        const std::vector<llvm::Type*> types {
+            LLVMType<char*>::get(C),  // array
+            LLVMType<int64_t>::get(C) // size
+        };
+        return llvm::StructType::get(C, types, "string");
+    }
+    static inline llvm::Value*
+    get(llvm::LLVMContext& C, llvm::Constant* string, llvm::Constant* size) {
+        return llvm::ConstantStruct::get(LLVMType<std::string>::get(C), {string, size});
+    }
+    /// @note Creating strings from a literal requires a GEP instruction to
+    ///   store the string ptr on the struct.
+    /// @note Usually you should be using s = builder.CreateGlobalStringPtr()
+    ///   followed by LLVMType<std::string>::get(C, s) rather than allocating
+    ///   a non global string
+    static inline llvm::Value*
+    get(llvm::LLVMContext& C, const std::string& string, llvm::IRBuilder<>& builder) {
+        llvm::Constant* constant =
+            llvm::ConstantDataArray::getString(C, string, /*terminator*/true);
+        llvm::Constant* size = llvm::cast<llvm::Constant>
+            (LLVMType<int64_t>::get(C, static_cast<int64_t>(string.size())));
+        llvm::Value* zero = LLVMType<int32_t>::get(C, 0);
+        llvm::Value* args[] = { zero, zero };
+        constant = llvm::cast<llvm::Constant>
+            (builder.CreateInBoundsGEP(constant->getType(), constant, args));
+        return LLVMType<std::string>::get(C, constant, size);
+    }
+};
+
+template <>
 struct LLVMType<void> {
     static inline llvm::Type*
     get(llvm::LLVMContext& C) {
@@ -163,7 +195,7 @@ template <>
 struct LLVMType<uintptr_t> {
     static inline llvm::Type*
     get(llvm::LLVMContext& C) {
-        return llvm::Type::getIntNTy(C, /*bits*/sizeof(uintptr_t)*CHAR_BIT);
+        return llvm::Type::getIntNTy(C, static_cast<unsigned>(/*bits*/sizeof(uintptr_t)*CHAR_BIT));
     }
     template <typename T>
     static inline llvm::Constant*
@@ -192,9 +224,19 @@ struct LLVMType<void*> {
     }
 };
 
+template <> struct LLVMType<math::Vec2<int32_t>> : public LLVMType<int32_t[2]> {};
+template <> struct LLVMType<math::Vec2<float>> : public LLVMType<float[2]> {};
+template <> struct LLVMType<math::Vec2<double>> : public LLVMType<double[2]> {};
 template <> struct LLVMType<math::Vec3<int32_t>> : public LLVMType<int32_t[3]> {};
 template <> struct LLVMType<math::Vec3<float>> : public LLVMType<float[3]> {};
 template <> struct LLVMType<math::Vec3<double>> : public LLVMType<double[3]> {};
+template <> struct LLVMType<math::Vec4<int32_t>> : public LLVMType<int32_t[3]> {};
+template <> struct LLVMType<math::Vec4<float>> : public LLVMType<float[3]> {};
+template <> struct LLVMType<math::Vec4<double>> : public LLVMType<double[3]> {};
+template <> struct LLVMType<math::Mat3<float>> : public LLVMType<float[9]> {};
+template <> struct LLVMType<math::Mat3<double>> : public LLVMType<double[9]> {};
+template <> struct LLVMType<math::Mat4<float>> : public LLVMType<float[16]> {};
+template <> struct LLVMType<math::Mat4<double>> : public LLVMType<double[16]> {};
 
 #undef REGISTER_LLVM_TYPE_MAP
 #undef REGISTER_OPENVDB_VECTOR_LLVM_TYPE_MAP
@@ -241,21 +283,81 @@ llvmFloatType(const size_t size, llvm::LLVMContext& context)
 /// @param C     The LLVMContext to request the Type from.
 ///
 inline llvm::Type*
-llvmTypeFromName(const std::string& type,
-                 llvm::LLVMContext& C)
+llvmTypeFromToken(const ast::tokens::CoreType& type,
+                  llvm::LLVMContext& C)
 {
-    if (type == openvdb::typeNameAsString<bool>())     return LLVMType<bool>::get(C);
-    if (type == openvdb::typeNameAsString<int16_t>())  return LLVMType<int16_t>::get(C);
-    if (type == openvdb::typeNameAsString<int32_t>())  return LLVMType<int32_t>::get(C);
-    if (type == openvdb::typeNameAsString<int64_t>())  return LLVMType<int64_t>::get(C);
-    if (type == openvdb::typeNameAsString<float>())    return LLVMType<float>::get(C);
-    if (type == openvdb::typeNameAsString<double>())   return LLVMType<double>::get(C);
-    if (type == openvdb::typeNameAsString<math::Vec3<int32_t>>())  return LLVMType<math::Vec3<int32_t>>::get(C);
-    if (type == openvdb::typeNameAsString<math::Vec3<float>>())    return LLVMType<math::Vec3<float>>::get(C);
-    if (type == openvdb::typeNameAsString<math::Vec3<double>>())   return LLVMType<math::Vec3<double>>::get(C);
-    if (type == openvdb::typeNameAsString<std::string>())          return LLVMType<char>::get(C);
+    switch (type) {
+        case ast::tokens::BOOL    : return LLVMType<bool>::get(C);
+        case ast::tokens::SHORT   : return LLVMType<int16_t>::get(C);
+        case ast::tokens::INT     : return LLVMType<int32_t>::get(C);
+        case ast::tokens::LONG    : return LLVMType<int64_t>::get(C);
+        case ast::tokens::FLOAT   : return LLVMType<float>::get(C);
+        case ast::tokens::DOUBLE  : return LLVMType<double>::get(C);
+        case ast::tokens::VEC2I   : return LLVMType<int32_t[2]>::get(C);
+        case ast::tokens::VEC2F   : return LLVMType<float[2]>::get(C);
+        case ast::tokens::VEC2D   : return LLVMType<double[3]>::get(C);
+        case ast::tokens::VEC3I   : return LLVMType<int32_t[3]>::get(C);
+        case ast::tokens::VEC3F   : return LLVMType<float[3]>::get(C);
+        case ast::tokens::VEC3D   : return LLVMType<double[3]>::get(C);
+        case ast::tokens::VEC4I   : return LLVMType<int32_t[4]>::get(C);
+        case ast::tokens::VEC4F   : return LLVMType<float[4]>::get(C);
+        case ast::tokens::VEC4D   : return LLVMType<double[4]>::get(C);
+        case ast::tokens::MAT3F   : return LLVMType<float[9]>::get(C);
+        case ast::tokens::MAT3D   : return LLVMType<double[9]>::get(C);
+        case ast::tokens::MAT4F   : return LLVMType<float[16]>::get(C);
+        case ast::tokens::MAT4D   : return LLVMType<double[16]>::get(C);
+        case ast::tokens::STRING  : return LLVMType<std::string>::get(C);
+        case ast::tokens::UNKNOWN :
+        default      :
+            OPENVDB_THROW(LLVMTypeError, "Attribute Type not recognised");
+    }
+}
 
-    OPENVDB_THROW(LLVMTypeError, "Attribute Type " + type + " not recognised");
+inline ast::tokens::CoreType
+tokenFromLLVMType(const llvm::Type* type)
+{
+    if (type->isPointerTy()) {
+        type = type->getPointerElementType();
+    }
+    if (type->isIntegerTy(1))   return ast::tokens::BOOL;
+    if (type->isIntegerTy(16))  return ast::tokens::SHORT;
+    if (type->isIntegerTy(32))  return ast::tokens::INT;
+    if (type->isIntegerTy(64))  return ast::tokens::LONG;
+    if (type->isFloatTy())      return ast::tokens::FLOAT;
+    if (type->isDoubleTy())     return ast::tokens::DOUBLE;
+    if (type->isArrayTy()) {
+        llvm::Type* element = type->getArrayElementType();
+        const size_t size = type->getArrayNumElements();
+        if (size == 2) {
+            if (element->isIntegerTy(32))  return ast::tokens::VEC2I;
+            if (element->isFloatTy())      return ast::tokens::VEC2F;
+            if (element->isDoubleTy())     return ast::tokens::VEC2D;
+        }
+        else if (size == 3) {
+            if (element->isIntegerTy(32))  return ast::tokens::VEC3I;
+            if (element->isFloatTy())      return ast::tokens::VEC3F;
+            if (element->isDoubleTy())     return ast::tokens::VEC3D;
+        }
+        else if (size == 4) {
+            if (element->isIntegerTy(32))  return ast::tokens::VEC4I;
+            if (element->isFloatTy())      return ast::tokens::VEC4F;
+            if (element->isDoubleTy())     return ast::tokens::VEC4D;
+        }
+        else if (size == 9) {
+            if (element->isFloatTy())      return ast::tokens::MAT3F;
+            if (element->isDoubleTy())     return ast::tokens::MAT3D;
+        }
+        else if (size == 16) {
+            if (element->isFloatTy())      return ast::tokens::MAT4F;
+            if (element->isDoubleTy())     return ast::tokens::MAT4D;
+        }
+    }
+    // return string token for both int8 and std::string types
+    if (type->isIntegerTy(8))   return ast::tokens::STRING;
+    if (type == LLVMType<std::string>::get(type->getContext())) {
+        return ast::tokens::STRING;
+    }
+    return ast::tokens::UNKNOWN;
 }
 
 /// @brief A LLVM TypeID reference to compare against
@@ -431,7 +533,6 @@ getGlobalExternalAccess(const std::string& name, const std::string& type)
     assert(internal::isValidGlobalToken(global));
     return global;
 }
-
 
 }
 }

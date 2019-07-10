@@ -74,9 +74,11 @@ TestVolumeExecutable::testConstructionDestruction()
 
     // Basic construction
 
-    openvdb::ax::VolumeRegistry::ConstPtr emptyReg(new openvdb::ax::VolumeRegistry);
+    openvdb::ax::ast::Tree tree;
+    openvdb::ax::AttributeRegistry::ConstPtr emptyReg =
+        openvdb::ax::AttributeRegistry::create(tree);
     openvdb::ax::VolumeExecutable::Ptr volumeExecutable
-        (new openvdb::ax::VolumeExecutable(E, C, emptyReg, nullptr, {}, {}));
+        (new openvdb::ax::VolumeExecutable(E, C, emptyReg, nullptr, {}));
 
     CPPUNIT_ASSERT_EQUAL(2, int(wE.use_count()));
     CPPUNIT_ASSERT_EQUAL(2, int(wC.use_count()));

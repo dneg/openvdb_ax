@@ -1,14 +1,14 @@
 if (false)
 {
-	int@int_test = 1;
+	int@return_test3 = 1;
 	return;
-	int@int_test = 2;
+	int@return_test3 = 2;
 }
 else
 {
-	int@int_test = 3;
+	int@return_test3 = 3;
 	return;
-	int@int_test = 4;
+	int@return_test3 = 4;
 }
 
-int@int_test = 5;
+int@return_test3 = 5;

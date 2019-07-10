@@ -24,44 +24,230 @@
 # IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
 # LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 #
-cmake_minimum_required( VERSION 3.1 )
-project ( OpenVDB_AX )
+#[=======================================================================[
+
+  CMake Configuration for OpenVDB AX
+
+#]=======================================================================]
+
+project(OpenVDB_AX)
+cmake_minimum_required(VERSION 3.3)
+
+include(CMakeDependentOption)
+
+option(OPENVDB_BUILD_AX "Build the OpenVDB AX library" ON)
+option(OPENVDB_BUILD_AX_BINARIES "Build the OpenVDB AX command line binary" ON)
+option(OPENVDB_BUILD_AX_PYTHON_MODULE "Build the OpenVDB AX Python module" ON)
+option(OPENVDB_BUILD_AX_HOUDINI_PLUGIN "Build the OpenVDB AX Houdini plugin" OFF)
+option(OPENVDB_BUILD_AX_UNITTESTS "Build the OpenVDB AX unit tests" OFF)
+option(OPENVDB_BUILD_AX_DOCS "Build the OpenVDB AX documentation" OFF)
+option(USE_CCACHE "Build using Ccache if found on the path" ON)
+option(USE_HOUDINI "Build the library against a Houdini installation." OFF)
+option(USE_SYSTEM_LIBRARY_PATHS "Build with system library paths" OFF)
+
+###### Deprecated options
+
+option(OPENVDB_AX_BUILD_AX "Build the OpenVDB AX compiler" OFF)
+option(OPENVDB_AX_BUILD_PYTHON_BINDINGS "Build the OpenVDB AX Python bindings" OFF)
+option(OPENVDB_AX_BUILD_GRAMMAR "Rebuild the OpenVDB AX grammar. CMake 3.4 with flex and bison." OFF)
+option(OPENVDB_AX_BUILD_UNITTESTS "Build the OpenVDB AX unit tests" OFF)
+option(OPENVDB_AX_BUILD_DOCS "Build the OpenVDB AX documentation" OFF)
+option(OPENVDB_AX_BUILD_HOUDINI_SOP "Build the OpenVDB AX Houdini SOP" OFF)
+option(OPENVDB_AX_ENABLE_RPATH "Build with RPATH information" OFF)
+option(OPENVDB_AX_CXX_STRICT "Enable or disable pre-defined compiler warnings" OFF)
+
+if(OPENVDB_AX_BUILD_AX)
+  message(DEPRECATION "OPENVDB_AX_BUILD_AX option is deprecated")
+  set(OPENVDB_BUILD_AX ON)
+endif()
+if(OPENVDB_AX_BUILD_PYTHON_BINDINGS)
+  message(DEPRECATION "OPENVDB_AX_BUILD_PYTHON_BINDINGS option is deprecated")
+  set(OPENVDB_BUILD_AX_PYTHON_MODULE ON)
+endif()
+if(OPENVDB_AX_BUILD_GRAMMAR)
+  message(DEPRECATION "OPENVDB_AX_BUILD_GRAMMAR option is deprecated")
+  set(OPENVDB_BUILD_AX_GRAMMAR ON)
+endif()
+if(OPENVDB_AX_BUILD_UNITTESTS)
+  message(DEPRECATION "OPENVDB_AX_BUILD_UNITTESTS option is deprecated")
+  set(OPENVDB_BUILD_AX_UNITTESTS ON)
+endif()
+if(OPENVDB_AX_BUILD_DOCS)
+  message(DEPRECATION "OPENVDB_AX_BUILD_DOCS option is deprecated")
+  set(OPENVDB_BUILD_AX_DOCS ON)
+endif()
+if(OPENVDB_AX_BUILD_HOUDINI_SOP)
+  message(DEPRECATION "OPENVDB_AX_BUILD_HOUDINI_SOP option is deprecated")
+  set(OPENVDB_BUILD_AX_HOUDINI_PLUGIN ON)
+endif()
+if(OPENVDB_AX_ENABLE_RPATH)
+  message(DEPRECATION "OPENVDB_AX_ENABLE_RPATH option is deprecated")
+  set(OPENVDB_ENABLE_RPATH ON)
+endif()
+if(OPENVDB_AX_CXX_STRICT)
+  message(DEPRECATION "OPENVDB_AX_CXX_STRICT option is deprecated")
+  set(OPENVDB_CXX_STRICT ON)
+endif()
+
+##### Dependent options
+cmake_dependent_option(OPENVDB_BUILD_AX_GRAMMAR "Rebuild the OpenVDB AX grammar. CMake 3.4 with flex and bison."
+  ON "OPENVDB_BUILD_AX" OFF)
+
+#########################################################################
+
+# General CMake and CXX settings
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+set(CMAKE_DISABLE_SOURCE_CHANGES ON)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+
+if(OPENVDB_ENABLE_RPATH)
+  # Configure rpath for installation base on the following:
+  # https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
+  set(CMAKE_SKIP_BUILD_RPATH FALSE)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+  set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+endif()
+
+# For CMake's find Threads module which brings in pthread - This flag
+# forces the compiler -pthread flag vs -lpthread
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 
 enable_testing()
 
-find_program ( CCACHE_FOUND ccache )
-if (CCACHE_FOUND)
+# Add our cmake modules and the VDB backports in case we're building against
+# VDB pre 6.1.0
+
+list(APPEND CMAKE_MODULE_PATH
+  "${CMAKE_CURRENT_LIST_DIR}/cmake;${CMAKE_CURRENT_LIST_DIR}/cmake/backports")
+
+if(OPENVDB_BUILD_AX_HOUDINI_PLUGIN)
+  set(USE_HOUDINI ON)
+endif()
+
+#########################################################################
+
+# Add the doxygen command if required - do this here so we guarantee not
+# to error on unrelated build issues
+
+if(OPENVDB_BUILD_AX_DOCS)
+  add_subdirectory(openvdb_ax/doc)
+endif()
+
+#########################################################################
+# ccache setup
+
+if(USE_CCACHE)
+  find_program(CCACHE_PATH ccache)
+  if(CCACHE_PATH)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-endif (CCACHE_FOUND)
+    message(STATUS "Using ccache: ${CCACHE_PATH}")
+  endif()
+endif()
 
-option ( OPENVDB_AX_BUILD_AX "Build the OpenVDB AX compiler" ON )
-option ( OPENVDB_AX_BUILD_UNITTESTS "Build the OpenVDB AX unit tests" OFF )
-option ( OPENVDB_AX_BUILD_DOCS "Build the OpenVDB AX documentation" OFF )
-option ( OPENVDB_AX_ENABLE_RPATH "Build with RPATH information" ON )
-option ( OPENVDB_AX_DISABLE_BOOST_IMPLICIT_LINKING "Disable the implicit linking of Boost libraries on Windows" ON )
-option ( OPENVDB_AX_BUILD_HOUDINI_SOP "Build the OpenVDB AX Houdini SOP" OFF )
+# Build type configuration - default to Release if none is set
 
-list ( APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" )
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING
+    "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE
+  )
+endif()
+message(STATUS "CMake Build Type: ${CMAKE_BUILD_TYPE}")
 
-set ( OPENVDB_AX_TOP_LEVEL_DIR ${PROJECT_SOURCE_DIR} CACHE PATH "OpenVDB AX Top Level Directory to share among sub projects" )
+if(USE_SYSTEM_LIBRARY_PATHS)
+  set(SYSTEM_LIBRARY_PATHS
+    ~/Library/Frameworks
+    /Library/Frameworks
+    /usr/local
+    /usr
+    /sw  # Fink
+    /opt/local  # DarwinPorts
+    /opt/csw  # Blastwave
+    /opt
+  )
+endif()
 
-include_directories ( ${OPENVDB_AX_TOP_LEVEL_DIR} ) # To make sure we pick up headers from this version of OpenVDB AX we are building
+#########################################################################
 
-# Check ABI has been provided
+# Compiler configuration. Add definitions for a number of compiler warnings
+# for sub projects and verify version requirements
 
-IF ( ${OPENVDB_ABI_VERSION_NUMBER} )
-  MESSAGE ( STATUS "OpenVDB ABI version: ${OPENVDB_ABI_VERSION_NUMBER}")
-  add_definitions (-DOPENVDB_ABI_VERSION_NUMBER=${OPENVDB_ABI_VERSION_NUMBER} )
-ELSE ()
-    MESSAGE ( FATAL_ERROR "An OpenVDB ABI Version must be provided.\n"
-        "e.g. -D OPENVDB_ABI_VERSION_NUMBER=3" )
-ENDIF ()
+set(HAS_AVAILABLE_WARNINGS FALSE)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  if(OPENVDB_CXX_STRICT)
+    message(STATUS "Configuring Clang CXX warnings")
+    set(HAS_AVAILABLE_WARNINGS TRUE)
+    add_definitions(
+      -Werror
+      -Wall
+      -Wextra
+      -Wconversion
+      -Wno-sign-conversion
+    )
+  endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  if(OPENVDB_CXX_STRICT)
+    message(STATUS "Configuring GCC CXX warnings")
+    set(HAS_AVAILABLE_WARNINGS TRUE)
+    add_definitions(
+      -Werror
+      -Wall
+      -Wextra
+      -pedantic
+      -Wcast-align
+      -Wcast-qual
+      -Wconversion
+      -Wdisabled-optimization
+      -Woverloaded-virtual
+    )
+  endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  # Increase the number of sections that an object file can contain
+  add_definitions("/bigobj")
+endif()
 
-if ( OPENVDB_AX_BUILD_AX )
-  ADD_SUBDIRECTORY ( openvdb_ax )
-endif ()
+if(OPENVDB_CXX_STRICT AND NOT HAS_AVAILABLE_WARNINGS)
+  message(WARNING "No available CXX warnings for compiler ${CMAKE_CXX_COMPILER_ID}")
+endif()
+unset(HAS_AVAILABLE_WARNINGS)
 
-if ( OPENVDB_AX_BUILD_HOUDINI_SOP )
-  ADD_SUBDIRECTORY ( openvdb_ax_houdini )
-endif ()
+##########################################################################
+
+set(REQUIRED_OPENVDB_COMPONENTS openvdb)
+if (USE_HOUDINI)
+    list(APPEND REQUIRED_OPENVDB_COMPONENTS openvdb_houdini)
+endif()
+if (OPENVDB_BUILD_AX_PYTHON_MODULE)
+    list(APPEND REQUIRED_OPENVDB_COMPONENTS pyopenvdb)
+endif()
+if (NOT OPENVDB_BUILD_AX)
+    list(APPEND REQUIRED_OPENVDB_COMPONENTS openvdb_ax)
+endif()
+
+find_package(OpenVDB REQUIRED COMPONENTS ${REQUIRED_OPENVDB_COMPONENTS})
+
+##########################################################################
+
+if(OPENVDB_BUILD_AX)
+  add_subdirectory(openvdb_ax)
+endif()
+
+if(OPENVDB_BUILD_AX_BINARIES)
+  add_subdirectory(openvdb_ax/cmd)
+endif()
+
+if(OPENVDB_BUILD_AX_UNITTESTS)
+  add_subdirectory(openvdb_ax/test)
+endif()
+
+if(OPENVDB_BUILD_AX_PYTHON_MODULE)
+  add_subdirectory(openvdb_ax/python)
+endif()
+
+if(OPENVDB_BUILD_AX_HOUDINI_PLUGIN)
+  add_subdirectory(openvdb_ax_houdini)
+endif()

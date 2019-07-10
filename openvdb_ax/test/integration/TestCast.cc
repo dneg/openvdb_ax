@@ -85,7 +85,7 @@ TestCast::castDouble()
     mHarness.testVolumes(false);
     mHarness.addAttribute<short>("short_test", short(1));
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
     mHarness.addAttribute<double>("double_test2", double(1.0));
@@ -101,7 +101,7 @@ TestCast::castFloat()
     mHarness.testVolumes(false);
     mHarness.addAttribute<short>("short_test", short(1));
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<float>("float_test2", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
@@ -118,7 +118,7 @@ TestCast::castInt()
     mHarness.addAttribute<short>("short_test", short(1));
     mHarness.addAttribute<int>("int_test", int(1));
     mHarness.addAttribute<int>("int_test2", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
 
@@ -133,8 +133,8 @@ TestCast::castLong()
     mHarness.testVolumes(false);
     mHarness.addAttribute<short>("short_test", short(1));
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
-    mHarness.addAttribute<long>("long_test2", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
+    mHarness.addAttribute<int64_t>("long_test2", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
 
@@ -150,7 +150,7 @@ TestCast::castShort()
     mHarness.addAttribute<short>("short_test", short(1));
     mHarness.addAttribute<short>("short_test2", short(1));
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
 
@@ -176,7 +176,7 @@ TestCast::castImplicitAssign()
         {openvdb::Vec3f(1.0f, 1.0f, 1.0f), openvdb::Vec3f(openvdb::Vec3d(1.0, 3.4, 6.0))});
     mHarness.addAttribute("vec_double_test1", openvdb::Vec3d(openvdb::Vec3i(3, 5, -6)));
     mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3), {0, 0, 5});
-    mHarness.addAttribute<long>("long_test1", 2147483648l);
+    mHarness.addAttribute<int64_t>("long_test1", 2147483648l);
 
     mHarness.executeCode("test/snippets/cast/castImplicitAssign");
 
@@ -204,7 +204,7 @@ TestCast::castImplicitComponentAssign()
     mHarness.addAttribute("vec_float_test1", openvdb::Vec3f(-5.361f, 10.3f, 6.0f));
     mHarness.addAttribute("vec_float_test2", openvdb::Vec3f(40, 40, 40));
     mHarness.addAttribute<int>("int_test1", -5);
-    mHarness.addAttribute<long>("long_test1", 40);
+    mHarness.addAttribute<int64_t>("long_test1", 40);
 
     mHarness.executeCode("test/snippets/cast/castImplicitComponentAssign");
 
@@ -215,7 +215,7 @@ void
 TestCast::castDoubleVolume()
 {
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
     mHarness.addAttribute<double>("double_test2", double(1.0));
@@ -232,7 +232,7 @@ TestCast::castFloatVolume()
     mHarness.testPoints(false);
 
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<float>("float_test2", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
@@ -249,7 +249,7 @@ TestCast::castIntVolume()
 
     mHarness.addAttribute<int>("int_test", int(1));
     mHarness.addAttribute<int>("int_test2", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
 
@@ -264,8 +264,8 @@ TestCast::castLongVolume()
     mHarness.testPoints(false);
 
     mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<long>("long_test", long(1));
-    mHarness.addAttribute<long>("long_test2", long(1));
+    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
+    mHarness.addAttribute<int64_t>("long_test2", int64_t(1));
     mHarness.addAttribute<float>("float_test", float(1.0f));
     mHarness.addAttribute<double>("double_test", double(1.0));
 

@@ -58,14 +58,6 @@ addons:
     - libtbb-dev
     - llvm-5.0
     - llvm-5.0-dev
-    # Required for vdb_view. TODO: Improve OpenVDB CMake to allow
-    # building of OpenVDB core library without vdb_view.
-    - libglfw-dev
-    - libxcursor-dev
-    - libxi-dev
-    - libxinerama-dev
-    - libxrandr-dev
-
 
 before_install:
     # TODO: Investigate why OpenVDB's CMake excludes system paths

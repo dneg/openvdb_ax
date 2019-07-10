@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,48 +38,21 @@
 
 #include <string>
 
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
+
 namespace {
-
-enum BehaviourFlags
-{
-    Pass = unittest_util::ExpectedBase::Pass,    // else Fails
-    AttributeCrement = int16_t(Pass) << 1,       // else LocalCrement
-    Increment = int16_t(AttributeCrement) << 1,  // else Decrement
-    Post = int16_t(Increment) << 1,              // else Precrement
-};
-
-#define EXPECTED_PASS(Flags, Count) \
-    unittest_util::ExpectedBase::Ptr(new unittest_util::ExpectedType<>(BehaviourFlags::Pass | Flags, Count))
-
-// @note  successful AST tests which check the crement node must all operate on an attribute
-//        or local names 'a' for post and pre increment checks
 
 static const unittest_util::CodeTests tests =
 {
-    { "a++;",        EXPECTED_PASS(BehaviourFlags::Increment | BehaviourFlags::Post, 1) },
-    { "++a;",        EXPECTED_PASS(BehaviourFlags::Increment, 1) },
-    { "-a++;",       EXPECTED_PASS(BehaviourFlags::Increment | BehaviourFlags::Post, 1) },
-    { "+a++;",       EXPECTED_PASS(BehaviourFlags::Increment | BehaviourFlags::Post, 1) },
-    { "+a--;",       EXPECTED_PASS(BehaviourFlags::Post, 1) },
-    { "-a--;",       EXPECTED_PASS(BehaviourFlags::Post, 1) },
-    { "s@a--;",      EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Post, 1) },
-    { "f@a++;",      EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Increment | BehaviourFlags::Post, 1) },
-    { "++f@a;",      EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Increment, 1) },
-    { "-@a--;",      EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Post, 1) },
-    { "++@a;",       EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Increment, 1) },
-    { "@a++;",       EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Increment | BehaviourFlags::Post, 1) },
-    { "-@a++;",      EXPECTED_PASS(BehaviourFlags::AttributeCrement | BehaviourFlags::Increment | BehaviourFlags::Post, 1) },
-};
-
-struct CrementVisitor : public openvdb::ax::ast::Visitor
-{
-    ~CrementVisitor() override = default;
-    void visit(const openvdb::ax::ast::Crement& node) override final {
-        mCount++;
-        mNode = &node;
-    }
-    size_t mCount = 0;
-    const openvdb::ax::ast::Crement* mNode = nullptr;
+    { "a++;",       Node::Ptr(new Crement(new Local("a"), Crement::Operation::Increment, /*post*/true)) },
+    { "++a;",       Node::Ptr(new Crement(new Local("a"), Crement::Operation::Increment, /*post*/false)) },
+    { "a--;",       Node::Ptr(new Crement(new Local("a"), Crement::Operation::Decrement, /*post*/true)) },
+    { "--a;",       Node::Ptr(new Crement(new Local("a"), Crement::Operation::Decrement, /*post*/false)) },
+    { "s@a--;",     Node::Ptr(new Crement(new Attribute("a", CoreType::STRING), Crement::Operation::Decrement, /*post*/true)) },
+    { "f@a++;",     Node::Ptr(new Crement(new Attribute("a", CoreType::FLOAT), Crement::Operation::Increment, /*post*/true)) },
+    { "++f@a;",     Node::Ptr(new Crement(new Attribute("a", CoreType::FLOAT), Crement::Operation::Increment, /*post*/false)) },
+    { "++mat3f@a;", Node::Ptr(new Crement(new Attribute("a", CoreType::MAT3F), Crement::Operation::Increment, /*post*/false)) }
 };
 
 }
@@ -91,92 +66,37 @@ public:
     CPPUNIT_TEST(testASTNode);
     CPPUNIT_TEST_SUITE_END();
 
-    void testSyntax() { TEST_SYNTAX(tests) };
+    void testSyntax() { TEST_SYNTAX_PASSES(tests) };
     void testASTNode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestCrementNode);
 
-void
-TestCrementNode::testASTNode()
+void TestCrementNode::testASTNode()
 {
-    using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second;
-        if (behaviour->fails()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = openvdb::ax::ast::parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        CrementVisitor visitor;
-        tree->accept(visitor);
-
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected AST node count", code),
-            behaviour->count(), visitor.mCount);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
-            static_cast<bool>(visitor.mNode));
+            Node::CrementNode == result->nodetype());
 
-        Expression::Ptr expression = visitor.mNode->mExpression;
-        CPPUNIT_ASSERT(static_cast<bool>(expression));
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
 
-        if (behaviour->hasFlag(BehaviourFlags::AttributeCrement)) {
-            // check attribute
-            CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Expected attribute crement.", code),
-                code.find("@") != std::string::npos);
-
-            const AttributeValue::Ptr attribute =
-                std::dynamic_pointer_cast<AttributeValue>(expression);
-
-            CPPUNIT_ASSERT(static_cast<bool>(attribute));
-            CPPUNIT_ASSERT(static_cast<bool>(attribute->mAttribute));
-        }
-        else {
-            // check local
-            CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Expected local crement.", code),
-                code.find("@") == std::string::npos);
-
-            const LocalValue::Ptr local =
-                std::dynamic_pointer_cast<LocalValue>(expression);
-
-            CPPUNIT_ASSERT(static_cast<bool>(local));
-            CPPUNIT_ASSERT(static_cast<bool>(local->mLocal));
-        }
-
-        if (behaviour->hasFlag(BehaviourFlags::Increment)) {
-            // check increment
-            CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Expected increment.", code),
-                code.find("++") != std::string::npos);
-
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected increment.", code),
-                Crement::Increment, visitor.mNode->mOperation);
-        }
-        else {
-            // check decrement
-            CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Expected decrement.", code),
-                code.find("--") != std::string::npos);
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected decrement.", code),
-                Crement::Decrement, visitor.mNode->mOperation);
-        }
-
-        const size_t variable = code.find("a");
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Crement test is not crementing a variable 'a'.", code),
-            variable != std::string::npos);
-
-        const bool isPostCrement =
-            (code.substr(variable+1, 2) == "++" ||
-             code.substr(variable+1, 2) == "--");
-
-        if (behaviour->hasFlag(BehaviourFlags::Post)) {
-            // check post crement
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected post crement", code),
-                isPostCrement, visitor.mNode->mPost);
-        }
-        else {
-            // check pre crement
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected pre crement", code),
-                isPostCrement, visitor.mNode->mPost);
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Crement code", code) + os.str());
         }
     }
 }

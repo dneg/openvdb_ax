@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,67 +38,62 @@
 
 #include <string>
 
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
+
 namespace {
-
-enum BehaviourFlags
-{
-    Pass = unittest_util::ExpectedBase::Pass,
-    Plus = int16_t(Pass) << 1,
-    Minus = int16_t(Plus) << 1,
-    Not = int16_t(Minus) << 1,
-    Bitnot = int16_t(Not) << 1
-};
-
-#define EXPECTED_PASS(Flags, Count) \
-    unittest_util::ExpectedBase::Ptr(new unittest_util::ExpectedType<>(BehaviourFlags::Pass | Flags, Count))
 
 static const unittest_util::CodeTests tests =
 {
-    { "-a;",          EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "+a;",          EXPECTED_PASS(BehaviourFlags::Plus, 1) },
-    { "!a;",          EXPECTED_PASS(BehaviourFlags::Not, 1) },
-    { "~a;",          EXPECTED_PASS(BehaviourFlags::Bitnot, 1) },
-    { "~~a;",         EXPECTED_PASS(BehaviourFlags::Bitnot, 2) },
-    { "!~a;",         EXPECTED_PASS(BehaviourFlags::Not, 2) },
-    { "!!a;",         EXPECTED_PASS(BehaviourFlags::Not, 2) },
-    { "+-a;",         EXPECTED_PASS(BehaviourFlags::Plus, 2) },
-    { "-+a;",         EXPECTED_PASS(BehaviourFlags::Minus, 2) },
-    { "!-a;",         EXPECTED_PASS(BehaviourFlags::Not, 2) },
-    { "!!!a;",        EXPECTED_PASS(BehaviourFlags::Not, 3) },
-    { "~~~a;",        EXPECTED_PASS(BehaviourFlags::Bitnot, 3) },
-    { "-(a+b);",      EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "!function();", EXPECTED_PASS(BehaviourFlags::Not, 1) },
-    { "~a+b;",        EXPECTED_PASS(BehaviourFlags::Bitnot, 1) },
-    { "~a;",          EXPECTED_PASS(BehaviourFlags::Bitnot, 1) },
-    { "-@a;",         EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "!v@a;",        EXPECTED_PASS(BehaviourFlags::Not, 1) },
-    { "~v@a;",        EXPECTED_PASS(BehaviourFlags::Bitnot, 1) },
-    { "+int(a);",     EXPECTED_PASS(BehaviourFlags::Plus, 1) },
-    { "-(float(a));", EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "!a.x;",        EXPECTED_PASS(BehaviourFlags::Not, 1) },
-    { "-a.x;",        EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "-++a;",        EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "-a.x=a;",      EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-    { "!a=a;",        EXPECTED_PASS(BehaviourFlags::Not, 1) },
-    { "!{a,b,c};",    EXPECTED_PASS(BehaviourFlags::Not, 1) },
-    { "~{a,b,c};",    EXPECTED_PASS(BehaviourFlags::Bitnot, 1) },
-    { "-{a,b,c};",    EXPECTED_PASS(BehaviourFlags::Minus, 1) },
-};
-
-struct UnaryVisitor : public openvdb::ax::ast::Visitor
-{
-    UnaryVisitor()
-        : mCount(0), mNode(nullptr) {}
-    ~UnaryVisitor() override = default;
-
-    inline virtual void
-    visit(const openvdb::ax::ast::UnaryOperator& node) override final {
-        ++mCount;
-        mNode = &node;
-    };
-
-    size_t mCount; // tracks the amount of nodes visited
-    const openvdb::ax::ast::UnaryOperator* mNode;
+    { "-a;",            Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Local("a"))) },
+    { "+a;",            Node::Ptr(new UnaryOperator(OperatorToken::PLUS, new Local("a"))) },
+    { "!a;",            Node::Ptr(new UnaryOperator(OperatorToken::NOT, new Local("a"))) },
+    { "~a;",            Node::Ptr(new UnaryOperator(OperatorToken::BITNOT, new Local("a"))) },
+    { "~~a;",           Node::Ptr(new UnaryOperator(OperatorToken::BITNOT, new UnaryOperator(OperatorToken::BITNOT, new Local("a")))) },
+    { "!~a;",           Node::Ptr(new UnaryOperator(OperatorToken::NOT, new UnaryOperator(OperatorToken::BITNOT, new Local("a")))) },
+    { "+-a;",           Node::Ptr(new UnaryOperator(OperatorToken::PLUS, new UnaryOperator(OperatorToken::MINUS, new Local("a")))) },
+    { "-+a;",           Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new UnaryOperator(OperatorToken::PLUS, new Local("a")))) },
+    { "!!!a;",          Node::Ptr(new UnaryOperator(OperatorToken::NOT,
+                            new UnaryOperator(OperatorToken::NOT,
+                                new UnaryOperator(OperatorToken::NOT, new Local("a"))
+                            )
+                        ))
+    },
+    { "~~~a;",          Node::Ptr(new UnaryOperator(OperatorToken::BITNOT,
+                            new UnaryOperator(OperatorToken::BITNOT,
+                                new UnaryOperator(OperatorToken::BITNOT, new Local("a"))
+                            )
+                        ))
+    },
+    { "-(a+b);",        Node::Ptr(new UnaryOperator(OperatorToken::MINUS,
+                            new BinaryOperator(OperatorToken::PLUS,
+                                new Local("a"), new Local("b")
+                            )
+                        ))
+    },
+    { "!func();",       Node::Ptr(new UnaryOperator(OperatorToken::NOT, new FunctionCall("func"))) },
+    { "-@a;",           Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Attribute("a", CoreType::FLOAT, true))) },
+    { "!v@a;",          Node::Ptr(new UnaryOperator(OperatorToken::NOT, new Attribute("a", CoreType::VEC3F))) },
+    { "~v@a;",          Node::Ptr(new UnaryOperator(OperatorToken::BITNOT, new Attribute("a", CoreType::VEC3F))) },
+    { "+int(a);",       Node::Ptr(new UnaryOperator(OperatorToken::PLUS, new Cast(new Local("a"), CoreType::INT))) },
+    { "-(float(a));",   Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Cast(new Local("a"), CoreType::FLOAT))) },
+    { "!a.x;",          Node::Ptr(new UnaryOperator(OperatorToken::NOT, new ArrayUnpack(new Local("a"), new Value<int32_t>(0)))) },
+    { "-a[0];",         Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new ArrayUnpack(new Local("a"), new Value<int32_t>(0)))) },
+    { "-++a;",          Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Crement(new Local("a"), Crement::Operation::Increment, false))) },
+    { "!{a,b,c};",      Node::Ptr(new UnaryOperator(OperatorToken::NOT,
+                            new ArrayPack(new ExpressionList({
+                                new Local("a"),
+                                new Local("b"),
+                                new Local("c")
+                            }))
+                        ))
+    },
+    // This is a bit of a weird one - should perhaps look to making this a syntax error
+    // (it will fail at compilation with an lvalue error)
+    { "-a=a;",          Node::Ptr(new UnaryOperator(OperatorToken::MINUS,
+                            new AssignExpression(new Local("a"), new Local("a"), false)
+                        ))
+    }
 };
 
 }
@@ -110,52 +107,37 @@ public:
     CPPUNIT_TEST(testASTNode);
     CPPUNIT_TEST_SUITE_END();
 
-    void testSyntax() { TEST_SYNTAX(tests); }
+    void testSyntax() { TEST_SYNTAX_PASSES(tests); }
     void testASTNode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestUnaryOperatorNode);
 
-void
-TestUnaryOperatorNode::testASTNode()
+void TestUnaryOperatorNode::testASTNode()
 {
-    using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second;
-        if (!behaviour->passes()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = openvdb::ax::ast::parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        UnaryVisitor visitor;
-        tree->accept(visitor);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
+            Node::UnaryOperatorNode == result->nodetype());
 
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Invalid AST node count", code),
-            behaviour->count(), visitor.mCount);
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
 
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code), visitor.mNode);
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node Expression", code), visitor.mNode->mExpression);
-
-        if (behaviour->hasFlag(BehaviourFlags::Plus)) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected + unary operation", code),
-                visitor.mNode->mOperation, tokens::PLUS);
-        }
-        else if (behaviour->hasFlag(BehaviourFlags::Minus)) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected - unary operation", code),
-                visitor.mNode->mOperation, tokens::MINUS);
-        }
-        else if (behaviour->hasFlag(BehaviourFlags::Not)) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected ! unary operation", code),
-                visitor.mNode->mOperation, tokens::NOT);
-        }
-        else if (behaviour->hasFlag(BehaviourFlags::Bitnot)) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected ~ unary operation", code),
-                visitor.mNode->mOperation, tokens::BITNOT);
-        }
-        else {
-            CPPUNIT_FAIL(ERROR_MSG("Expected unary operation", code));
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Unary Operator code", code) + os.str());
         }
     }
 }

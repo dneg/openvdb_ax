@@ -39,7 +39,7 @@ export ILMBASE_ROOT=/usr
 export OPENEXR_ROOT=/usr
 export TBB_ROOT=/usr
 
-git clone https://github.com/dreamworksanimation/openvdb.git openvdb
+git clone https://github.com/AcademySoftwareFoundation/openvdb.git openvdb
 mkdir openvdb/build
 cd openvdb/build
 
@@ -47,12 +47,14 @@ cmake \
     -D CMAKE_CXX_COMPILER=g++ \
     -D CMAKE_C_COMPILER=gcc \
     -D OPENVDB_ABI_VERSION_NUMBER=4 \
-    -D MINIMUM_BOOST_VERSION=1.55 \
-    -D ILMBASE_NAMESPACE_VERSIONING=OFF \
-    -D OPENEXR_NAMESPACE_VERSIONING=OFF \
     -D USE_GLFW3=OFF \
-    -D OPENVDB_BUILD_UNITTESTS=OFF \
+    -D OPENVDB_BUILD_CORE=ON \
+    -D OPENVDB_BUILD_BINARIES=OFF \
     -D OPENVDB_BUILD_PYTHON_MODULE=OFF \
+    -D OPENVDB_BUILD_UNITTESTS=OFF \
+    -D OPENVDB_BUILD_DOCS=OFF \
+    -D OPENVDB_BUILD_HOUDINI_PLUGIN=OFF \
+    -D OPENVDB_BUILD_MAYA_PLUGIN=OFF \
     -D CMAKE_INSTALL_PREFIX=/usr \
     ../
 
