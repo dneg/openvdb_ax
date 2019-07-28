@@ -40,8 +40,6 @@ mkdir openvdb/build
 cd openvdb/build
 
 cmake \
-    -D CMAKE_CXX_COMPILER=g++ \
-    -D CMAKE_C_COMPILER=gcc \
     -D DISABLE_DEPENDENCY_VERSION_CHECKS=ON \
     -D OPENVDB_BUILD_CORE=ON \
     -D OPENVDB_CORE_STATIC=OFF \
