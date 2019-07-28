@@ -1,7 +1,7 @@
 OpenVDB AX Version History
 ==========================
 
-Version 0.1.0 - WIP
+Version 0.1.0 - July 28, 2019
 
     New Features:
     - Support for for, while and do-while loops using standard c-like syntax.
@@ -134,6 +134,7 @@ Version 0.1.0 - WIP
     - Improved LLVM version support for versions 6/7/8
     - Various fixes for clang and MacOS
     - Overhaul of frontend tests to compare full AST generation
+    - Travis improvements including OSX builds
 
 Version 0.0.4 - December 12, 2018
 
