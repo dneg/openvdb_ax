@@ -51,7 +51,6 @@ Version 0.1.0 - July 28, 2019
     - Significantly improved backend string support
     - Introduced new methods for dependency tracking attributes for efficiently
       determining the copy requirements of volumes
-    - Removed duplicate rescaling / offset of existing "noise" function.
     - Moved testing CMake config into its own CMakeLists.txt.
     - Significantly improved the descriptive printing of any parsed AST
     - Improved code documentation throughout the library
@@ -67,7 +66,7 @@ Version 0.1.0 - July 28, 2019
 
     Houdini:
     - Fixed an issue where the VDB name was taken over the Houdini Primitive
-      name for VDBs passed into the OpenVDB AX SOP [OVP-711]
+      name for VDBs passed into the OpenVDB AX SOP
     - Renamed the OpenVDB AX node type from DN_OpenVDBAX to openvdbax
     - Improved the OpenVDB AX SOP UI, added the ability to iterate over
       different value states and the ability to post compact point attributes
