@@ -29,14 +29,17 @@
 #
 # Author: Matt Warner
 
-os: linux
-
-sudo: required
 dist: xenial
-
+sudo: required
 language: cpp
 
-compiler: gcc
+os:
+ - linux
+ - osx
+
+compiler:
+ - gcc
+ - clang
 
 cache: ccache
 
@@ -55,6 +58,21 @@ addons:
     - libblosc-dev
     - llvm-5.0-dev
     - libedit-dev
+
+before_install:
+  - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+      brew update;
+      brew install ilmbase;
+      brew install openexr;
+      brew install cmake;
+      brew install doxygen;
+      brew install boost;
+      brew install cppunit;
+      brew install c-blosc;
+      brew install tbb;
+      brew install llvm@5;
+      brew install zlib;
+    fi
 
 install:
     - travis/install-openvdb.sh

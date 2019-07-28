@@ -35,24 +35,35 @@ echo "Building openvdb_ax..."
 # Working Directory - /home/travis/build/dneg/openvdb_ax/
 
 mkdir build
+mkdir -p $HOME/install
 cd build
 
+OPENVDB_CXX_STRICT="ON"
+LLVM_DIR="/usr/lib/llvm-5.0/share/llvm/cmake"
+
+if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+    LLVM_DIR="/usr/local/opt/llvm@5/lib/cmake/llvm"
+    OPENVDB_CXX_STRICT="OFF"
+fi
+
+if [ "$TRAVIS_COMPILER" = "clang" ]; then
+    OPENVDB_CXX_STRICT="OFF"
+fi
+
 cmake \
-    -D CMAKE_CXX_COMPILER=g++ \
-    -D CMAKE_C_COMPILER=gcc \
     -D OPENVDB_BUILD_AX=ON \
     -D OPENVDB_BUILD_AX_DOCS=ON \
     -D OPENVDB_BUILD_AX_UNITTESTS=ON \
     -D OPENVDB_BUILD_AX_BINARIES=ON \
     -D OPENVDB_BUILD_AX_GRAMMAR=OFF \
     -D OPENVDB_BUILD_AX_PYTHON_MODULE=OFF \
-    -D OPENVDB_CXX_STRICT=ON \
-    -D OPENVDB_ENABLE_RPATH=OFF \
-    -D LLVM_DIR=/usr/lib/llvm-5.0/share/llvm/cmake \
+    -D OPENVDB_CXX_STRICT=$OPENVDB_CXX_STRICT \
+    -D LLVM_DIR=$LLVM_DIR \
+    -D OPENVDB_ROOT=$HOME/openvdb/install \
+    -D CMAKE_INSTALL_PREFIX=$HOME/install \
     ../
 
 make -j2
-echo "Installing openvdb_ax..."
-sudo make install -j2 &>/dev/null
+make install -j2
 
 ctest -V

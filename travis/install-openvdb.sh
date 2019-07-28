@@ -35,6 +35,7 @@ echo "Building and installing openvdb..."
 # Working Directory - /home/travis/build/dneg/openvdb_ax/
 
 git clone https://github.com/AcademySoftwareFoundation/openvdb.git openvdb
+mkdir -p $HOME/openvdb/install
 mkdir openvdb/build
 cd openvdb/build
 
@@ -50,8 +51,8 @@ cmake \
     -D OPENVDB_BUILD_DOCS=OFF \
     -D OPENVDB_BUILD_HOUDINI_PLUGIN=OFF \
     -D OPENVDB_BUILD_MAYA_PLUGIN=OFF \
-    -D CMAKE_INSTALL_PREFIX=/usr \
+    -D CMAKE_INSTALL_PREFIX=$HOME/openvdb/install \
     ../
 
 make -j2
-sudo make install -j2
+make install -j2
