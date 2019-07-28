@@ -22,7 +22,7 @@
         if (i == 1) continue;
         v[i] = i;
     }
-    while(i < 3)
+    while(i < 2)
 
     vec3f@loop_test14 = v;
 }
