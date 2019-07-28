@@ -125,7 +125,7 @@ TestAssign::testAssignArithmeticVolumes()
     CPPUNIT_ASSERT_NO_THROW(unittest_util::wrapExecution(grids, "test/snippets/assign/assignArithmetic"));
 
     CPPUNIT_ASSERT_EQUAL(0.8125f, float_test->tree().getValue(openvdb::Coord(-1,0,0)));
-    CPPUNIT_ASSERT_EQUAL(0.5625f, float_test->tree().getValue(openvdb::Coord(0)));
+    CPPUNIT_ASSERT_EQUAL(0.8125f, float_test->tree().getValue(openvdb::Coord(0)));
     CPPUNIT_ASSERT_EQUAL(2.0f, float_test2->tree().getValue(openvdb::Coord(0)));
 }
 

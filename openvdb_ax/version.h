@@ -54,8 +54,8 @@
 
 // Library major, minor and patch version numbers
 #define OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER 0
-#define OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER 0
-#define OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER 4
+#define OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER 1
+#define OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER 0
 
 #define OPENVDB_AX_VERSION_NAME                                          \
     OPENVDB_PREPROC_CONCAT(v,                                            \
@@ -93,6 +93,32 @@ const uint32_t OPENVDB_AX_LIBRARY_VERSION = OPENVDB_AX_LIBRARY_VERSION_NUMBER;
 
 /// Return a library version number string of the form "<major>.<minor>.<patch>".
 inline constexpr const char* getLibraryVersionString() { return OPENVDB_AX_LIBRARY_VERSION_STRING; }
+
+/// @brief  Some extract compiler macros for ignoring specific warnings
+/// @note   The attributes ignore will likely go away with the function framework
+///         restructuring, but should be migrated to VDB is necessary
+
+#if defined __INTEL_COMPILER
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_BEGIN
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_END
+#elif defined __clang__
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_BEGIN \
+        _Pragma("clang diagnostic push") \
+        _Pragma("clang diagnostic ignored \"-Wignored-attributes\"")
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_END \
+        _Pragma("clang diagnostic pop")
+#elif defined __GNUC__ && OPENVDB_CHECK_GCC(6, 1)
+    // Wignored-attributes only introduced in version 6.1
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_BEGIN \
+        _Pragma("GCC diagnostic push") \
+        _Pragma("GCC diagnostic ignored \"-Wignored-attributes\"")
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_END \
+        _Pragma("GCC diagnostic pop")
+#else
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_BEGIN
+    #define OPENVDB_NO_ATTRIBUTES_WARNING_END
+#endif
+
 
 } // namespace ax
 } // namspace OPENVDB_VERSION_NAME

@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,58 +38,40 @@
 
 #include <string>
 
-namespace {
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
 
-#define EXPECTED_PASS(Type, Count) \
-    unittest_util::ExpectedBase::Ptr(new unittest_util::ExpectedType<Type>(unittest_util::ExpectedBase::Pass, Count))
+namespace {
 
 static const unittest_util::CodeTests tests =
 {
-    { "bool(a);",               EXPECTED_PASS(bool, 1) },
-    { "short(a);",              EXPECTED_PASS(short, 1) },
-    { "int(a);",                EXPECTED_PASS(int, 1) },
-    { "long(a);",               EXPECTED_PASS(long, 1) },
-    { "float(a);",              EXPECTED_PASS(float, 1) },
-    { "double(a);",             EXPECTED_PASS(double, 1) },
-    { "float(double(int(0)));", EXPECTED_PASS(float, 3) },
-    { "int(0);",                EXPECTED_PASS(int, 1) },
-    { "int(@a);",               EXPECTED_PASS(int, 1) },
-    { "int((a));",              EXPECTED_PASS(int, 1) },
-    { "int(function());",       EXPECTED_PASS(int, 1) },
-    { "bool(a+a);",             EXPECTED_PASS(bool, 1) },
-    { "short(a+a);",            EXPECTED_PASS(short, 1) },
-    { "int(~a);",               EXPECTED_PASS(int, 1) },
-    { "long(~a);",              EXPECTED_PASS(long, 1) },
-    { "float(a = a);",          EXPECTED_PASS(float, 1) },
-    { "double(a.x = 0);",       EXPECTED_PASS(double, 1) },
-    { "int(a++);",              EXPECTED_PASS(int, 1) },
-    { "int({a,b,c});",          EXPECTED_PASS(int, 1) },
-    { "bool({a,b,c});",         EXPECTED_PASS(bool, 1) },
-    { "double(true);",          EXPECTED_PASS(double, 1) },
-    { "double(false);",         EXPECTED_PASS(double, 1) },
-    { "short(a.x);",            EXPECTED_PASS(short, 1) },
-    { "int(1.0f);",             EXPECTED_PASS(int, 1) },
-    { "long(1.0);",             EXPECTED_PASS(long, 1) },
-    { "float(true);",           EXPECTED_PASS(float, 1) },
-    { "double(1s);",            EXPECTED_PASS(double, 1) },
-    { "int(1l);",               EXPECTED_PASS(int, 1) },
-    { "int(1);",                EXPECTED_PASS(int, 1) },
-};
-
-struct CastVisitor : public openvdb::ax::ast::Visitor
-{
-    CastVisitor()
-        : mCount(0), mNode(nullptr) {}
-    ~CastVisitor() override = default;
-
-    inline virtual void
-    visit(const openvdb::ax::ast::Cast& node) override final {
-        ++mCount;
-        mNode = &node;
-    };
-
-    size_t mCount; // tracks the amount of nodes visited
-    const openvdb::ax::ast::Cast* mNode;
+    { "bool(a);",           Node::Ptr(new Cast(new Local("a"), CoreType::BOOL)) },
+    { "short(a);",          Node::Ptr(new Cast(new Local("a"), CoreType::SHORT)) },
+    { "int(a);",            Node::Ptr(new Cast(new Local("a"), CoreType::INT)) },
+    { "long(a);",           Node::Ptr(new Cast(new Local("a"), CoreType::LONG)) },
+    { "float(a);",          Node::Ptr(new Cast(new Local("a"), CoreType::FLOAT)) },
+    { "double(a);",         Node::Ptr(new Cast(new Local("a"), CoreType::DOUBLE)) },
+    { "int((a));",          Node::Ptr(new Cast(new Local("a"), CoreType::INT)) },
+    { "int(1l);",           Node::Ptr(new Cast(new Value<int64_t>(1), CoreType::INT)) },
+    { "int(1);",            Node::Ptr(new Cast(new Value<int32_t>(1), CoreType::INT)) },
+    { "int(0);",            Node::Ptr(new Cast(new Value<int32_t>(0), CoreType::INT)) },
+    { "int(@a);",           Node::Ptr(new Cast(new Attribute("a", CoreType::FLOAT, true), CoreType::INT)) },
+    { "double(true);",      Node::Ptr(new Cast(new Value<bool>(true), CoreType::DOUBLE)) },
+    { "double(false);",     Node::Ptr(new Cast(new Value<bool>(false), CoreType::DOUBLE)) },
+    { "int(1.0f);",         Node::Ptr(new Cast(new Value<float>(1.0f), CoreType::INT)) },
+    { "long(1.0);",         Node::Ptr(new Cast(new Value<double>(1.0), CoreType::LONG)) },
+    { "float(true);",       Node::Ptr(new Cast(new Value<bool>(true), CoreType::FLOAT)) },
+    { "double(1s);",        Node::Ptr(new Cast(new Value<int16_t>(1), CoreType::DOUBLE)) },
+    { "int(func());",       Node::Ptr(new Cast(new FunctionCall("func"), CoreType::INT)) },
+    { "bool(a+b);",         Node::Ptr(new Cast(new BinaryOperator(OperatorToken::PLUS, new Local("a"), new Local("b")), CoreType::BOOL)) },
+    { "short(a+b);",        Node::Ptr(new Cast(new BinaryOperator(OperatorToken::PLUS, new Local("a"), new Local("b")), CoreType::SHORT)) },
+    { "int(~a);",           Node::Ptr(new Cast(new UnaryOperator(OperatorToken::BITNOT, new Local("a")), CoreType::INT)) },
+    { "long(~a);",          Node::Ptr(new Cast(new UnaryOperator(OperatorToken::BITNOT, new Local("a")), CoreType::LONG)) },
+    { "float(a = b);",      Node::Ptr(new Cast(new AssignExpression(new Local("a"), new Local("b"), false), CoreType::FLOAT)) },
+    { "double(a.x);",       Node::Ptr(new Cast(new ArrayUnpack(new Local("a"), new Value<int32_t>(0)), CoreType::DOUBLE)) },
+    { "int(a++);",          Node::Ptr(new Cast(new Crement(new Local("a"), Crement::Operation::Increment, true), CoreType::INT)) },
+    { "int({a,b,c});",      Node::Ptr(new Cast(new ArrayPack(new ExpressionList({new Local("a"), new Local("b"), new Local("c")})), CoreType::INT)) },
+    { "float(double(0));",  Node::Ptr(new Cast(new Cast(new Value<int32_t>(0), CoreType::DOUBLE), CoreType::FLOAT)) },
 };
 
 }
@@ -101,66 +85,37 @@ public:
     CPPUNIT_TEST(testASTNode);
     CPPUNIT_TEST_SUITE_END();
 
-    void testSyntax() { TEST_SYNTAX(tests); }
+    void testSyntax() { TEST_SYNTAX_PASSES(tests); }
     void testASTNode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestCastNode);
 
-void
-TestCastNode::testASTNode()
+void TestCastNode::testASTNode()
 {
-    using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second;
-        if (!behaviour->passes()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = openvdb::ax::ast::parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        CastVisitor visitor;
-        tree->accept(visitor);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
+            Node::CastNode == result->nodetype());
 
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Invalid AST node count", code),
-            behaviour->count(), visitor.mCount);
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
 
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code), visitor.mNode);
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node Expression", code), visitor.mNode->mExpression);
-
-        if (behaviour->isType<bool>()) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected bool cast type.", code),
-                std::string(openvdb::typeNameAsString<bool>()), visitor.mNode->mType);
-
-        }
-        else if (behaviour->isType<int16_t>()) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected int16_t cast type.", code),
-                std::string(openvdb::typeNameAsString<int16_t>()), visitor.mNode->mType);
-
-        }
-        else if (behaviour->isType<int32_t>()) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected int32_t cast type.", code),
-                std::string(openvdb::typeNameAsString<int32_t>()), visitor.mNode->mType);
-
-        }
-        else if (behaviour->isType<int64_t>()) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected int64_t cast type.", code),
-                std::string(openvdb::typeNameAsString<int64_t>()), visitor.mNode->mType);
-
-        }
-        else if (behaviour->isType<float>()) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected float cast type.", code),
-                std::string(openvdb::typeNameAsString<float>()), visitor.mNode->mType);
-
-        }
-        else if (behaviour->isType<double>()) {
-            CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Expected double cast type.", code),
-                std::string(openvdb::typeNameAsString<double>()), visitor.mNode->mType);
-
-        }
-        else {
-            CPPUNIT_FAIL(ERROR_MSG("Unsupported cast type.", code));
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Cast code", code) + os.str());
         }
     }
 }

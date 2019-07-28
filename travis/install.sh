@@ -32,42 +32,38 @@
 
 echo "Building openvdb_ax..."
 
-export ILMBASE_ROOT=/usr
-export OPENEXR_ROOT=/usr
-export BOOST_ROOT=/usr
-export TBB_ROOT=/usr
-export BLOSC_ROOT=/usr
-export LLVM_ROOT=/usr
-export CPPUNIT_ROOT=/usr
-export OPENVDB_ROOT=/usr
+# Working Directory - /home/travis/build/dneg/openvdb_ax/
 
 mkdir build
+mkdir -p $HOME/install
 cd build
 
-# Temporarily change the /usr/bin/llvm-config symlink so CMake chooses
-# the correct version of LLVM.
-ORIGINAL_LLVM_CONFIG=`readlink /usr/bin/llvm-config`
-sudo ln -sfn /usr/bin/llvm-config-5.0 /usr/bin/llvm-config
+OPENVDB_CXX_STRICT="ON"
+LLVM_DIR="/usr/lib/llvm-5.0/share/llvm/cmake"
+
+if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+    LLVM_DIR="/usr/local/opt/llvm@5/lib/cmake/llvm"
+    OPENVDB_CXX_STRICT="OFF"
+fi
+
+if [ "$TRAVIS_COMPILER" = "clang" ]; then
+    OPENVDB_CXX_STRICT="OFF"
+fi
 
 cmake \
-    -D OPENVDB_ABI_VERSION_NUMBER=4 \
-    -D MINIMUM_BOOST_VERSION=1.55 \
-    -D OPENVDB_AX_BUILD_DOCS=ON \
-    -D OPENVDB_AX_BUILD_UNITTESTS=ON \
-    -D ILMBASE_NAMESPACE_VERSIONING=OFF \
+    -D OPENVDB_BUILD_AX=ON \
+    -D OPENVDB_BUILD_AX_DOCS=ON \
+    -D OPENVDB_BUILD_AX_UNITTESTS=ON \
+    -D OPENVDB_BUILD_AX_BINARIES=ON \
+    -D OPENVDB_BUILD_AX_GRAMMAR=OFF \
+    -D OPENVDB_BUILD_AX_PYTHON_MODULE=OFF \
+    -D OPENVDB_CXX_STRICT=$OPENVDB_CXX_STRICT \
+    -D LLVM_DIR=$LLVM_DIR \
+    -D OPENVDB_ROOT=$HOME/openvdb/install \
+    -D CMAKE_INSTALL_PREFIX=$HOME/install \
     ../
 
 make -j2
+make install -j2
 
-echo "Installing openvdb_ax..."
-
-sudo make install -j2 &>/dev/null
-
-# Tests require running from the same root as the test snippets.
-cd openvdb_ax/test
-
-# Don't use ctest as we don't get much info even with verbose flags.
-./vdb_ax_test -v
-
-# Reset the symlink for /usr/bin/llvm-config to original setting.
-sudo ln -sfn $ORIGINAL_LLVM_CONFIG /usr/bin/llvm-config
+ctest -V

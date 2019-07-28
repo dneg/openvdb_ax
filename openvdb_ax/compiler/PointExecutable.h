@@ -39,10 +39,12 @@
 #define OPENVDB_AX_COMPILER_POINT_EXECUTABLE_HAS_BEEN_INCLUDED
 
 #include <openvdb_ax/compiler/CustomData.h>
-#include <openvdb_ax/compiler/TargetRegistry.h>
+#include <openvdb_ax/compiler/AttributeRegistry.h>
 
 #include <openvdb/openvdb.h>
 #include <openvdb/points/PointDataGrid.h>
+
+#include <unordered_map>
 
 //forward
 namespace llvm {
@@ -64,7 +66,6 @@ class PointExecutable
 {
 public:
     using Ptr = std::shared_ptr<PointExecutable>;
-    using Registry = openvdb::ax::AttributeRegistry;
 
     /// @brief Constructor
     /// @param exeEngine Shared pointer to an llvm::ExecutionEngine object used to build functions.
@@ -79,9 +80,9 @@ public:
     ///        than directly
     PointExecutable(const std::shared_ptr<const llvm::ExecutionEngine>& exeEngine,
                     const std::shared_ptr<const llvm::LLVMContext>& context,
-                    const Registry::ConstPtr& attributeRegistry,
+                    const AttributeRegistry::ConstPtr& attributeRegistry,
                     const CustomData::ConstPtr& customData,
-                    const std::map<std::string, uint64_t>& functions)
+                    const std::unordered_map<std::string, uint64_t>& functions)
         : mContext(context)
         , mExecutionEngine(exeEngine)
         , mAttributeRegistry(attributeRegistry)
@@ -99,17 +100,14 @@ public:
 
 private:
 
-    /// @brief Returns the in-memory address of the function with the given name
-    uint64_t functionAddress(const std::string &name) const;
-
     // The Context and ExecutionEngine must exist _only_ for object lifetime
     // management. The ExecutionEngine must be destroyed before the Context
     const std::shared_ptr<const llvm::LLVMContext> mContext;
     const std::shared_ptr<const llvm::ExecutionEngine> mExecutionEngine;
-    const Registry::ConstPtr mAttributeRegistry;
+    const AttributeRegistry::ConstPtr mAttributeRegistry;
     const CustomData::ConstPtr mCustomData;
     // addresses of actual compiled code
-    const std::map<std::string, uint64_t> mFunctionAddresses;
+    const std::unordered_map<std::string, uint64_t> mFunctionAddresses;
 };
 
 }

@@ -4,7 +4,7 @@
 
 This page holds the full list of functions  currently supported by OpenVDB AX.
 
-@section sLanguageContents Contents
+@section sFunctionContents Contents
 - @ref secFunctions
 	- @ref subsecAbs
 	- @ref subsecAcos
@@ -216,16 +216,16 @@ Computes the binary (base-2) logarithm of arg.
   - double log2(double)
   - float log2(float)
 
-@subsection subsecLookupf lookupf
+@subsection subsecExternal external
 Find a custom user parameter with a given name of type 'float' in the Custom data provided to the AX
    compiler. If the data can not be found, or is not of the expected type 0.0f is returned.
-  - float lookupf(string)
+  - float external(string)
 
-@subsection subsecLookupvec3f lookupvec3f
+@subsection subsecExternalV externalv
 Find a custom user parameter with a given name of type 'vector float' in the Custom data provided to
    the AX compiler. If the data can not be found, or is not of the expected type { 0.0f, 0.0f,
    0.0f } is returned.
-  - vec3f lookupvec3f(string)
+  - vec3f externalv(string)
 
 @subsection subsecMax max
 Returns the larger of the given values.

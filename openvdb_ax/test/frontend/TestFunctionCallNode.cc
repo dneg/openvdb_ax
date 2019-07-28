@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,68 +38,124 @@
 
 #include <string>
 
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
+
 namespace {
-
-struct ExpectedFunctionCall : public unittest_util::ExpectedBase
-{
-    using Ptr = std::shared_ptr<ExpectedFunctionCall>;
-    ExpectedFunctionCall(const size_t flags = 0,
-                         const size_t count = 0,
-                         const std::string& name = "",
-                         const size_t arguments = 0)
-        : unittest_util::ExpectedBase(flags, count)
-        , mName(name)
-        , mNumArguments(arguments) {}
-
-    std::string type() const override  { return ""; }
-    const std::string& name() const { return mName; }
-    size_t args() const { return mNumArguments; }
-private:
-    const std::string mName;
-    const size_t mNumArguments;
-};
-
-#define EXPECTED_PASS(Count, Name, Args) \
-    unittest_util::ExpectedBase::Ptr(new ExpectedFunctionCall(unittest_util::ExpectedBase::Pass, Count, Name, Args))
 
 static const unittest_util::CodeTests tests =
 {
-    { "function();",            EXPECTED_PASS(1, "function", 0) },
-    { "FUNCTION();",            EXPECTED_PASS(1, "FUNCTION", 0) },
-    { "name();",                EXPECTED_PASS(1, "name"    , 0) },
-    { "f(a);",                  EXPECTED_PASS(1, "f"       , 1) },
-    { "a(a,1);",                EXPECTED_PASS(1, "a"       , 2) },
-    { "function(1);",           EXPECTED_PASS(1, "function", 1) },
-    { "function(\"string\");",  EXPECTED_PASS(1, "function", 1) },
-    { "function(true);",        EXPECTED_PASS(1, "function", 1) },
-    { "function({a,b,c});",     EXPECTED_PASS(1, "function", 1) },
-    { "function(@a);",          EXPECTED_PASS(1, "function", 1) },
-    { "function(++a);",         EXPECTED_PASS(1, "function", 1) },
-    { "function(~a);",          EXPECTED_PASS(1, "function", 1) },
-    { "function((a));",         EXPECTED_PASS(1, "function", 1) },
-    { "function(function());",  EXPECTED_PASS(2, "function", 1) },
-    { "function(a=a);",         EXPECTED_PASS(1, "function", 1) },
-    { "function(a==a);",        EXPECTED_PASS(1, "function", 1) },
-    { "function(a.x=a);",       EXPECTED_PASS(1, "function", 1) },
-    { "function(bool(a));",     EXPECTED_PASS(1, "function", 1) },
-    { "function(a.x);",         EXPECTED_PASS(1, "function", 1) },
-    { "function(a,b,c,d,e,f);", EXPECTED_PASS(1, "function", 6) },
-};
-
-struct FunctionCallVisitor : public openvdb::ax::ast::Visitor
-{
-    FunctionCallVisitor()
-        : mCount(0), mNode(nullptr) {}
-    ~FunctionCallVisitor() override = default;
-
-    inline virtual void
-    visit(const openvdb::ax::ast::FunctionCall& node) override final {
-        ++mCount;
-        mNode = &node;
-    };
-
-    size_t mCount; // tracks the amount of nodes visited
-    const openvdb::ax::ast::FunctionCall* mNode;
+    { "func();",            Node::Ptr(new FunctionCall("func")) },
+    { "_();",               Node::Ptr(new FunctionCall("_")) },
+    { "_1();",              Node::Ptr(new FunctionCall("_1")) },
+    { "a_();",              Node::Ptr(new FunctionCall("a_")) },
+    { "_a();",              Node::Ptr(new FunctionCall("_a")) },
+    { "A();",               Node::Ptr(new FunctionCall("A")) },
+    { "D1f();",             Node::Ptr(new FunctionCall("D1f")) },
+    { "f(a);",              Node::Ptr(new FunctionCall("f",
+                                new ExpressionList(
+                                    new Local("a")
+                                )
+                            ))
+    },
+    { "a(a,1);",            Node::Ptr(new FunctionCall("a",
+                                new ExpressionList({
+                                    new Local("a"),
+                                    new Value<int32_t>(1)
+                                })
+                            ))
+    },
+    { "func(1);",           Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Value<int32_t>(1)
+                                )
+                            ))
+    },
+    { "func(\"string\");",  Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Value<std::string>("string")
+                                )
+                            ))
+    },
+    { "func(true);",        Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Value<bool>(true)
+                                )
+                            ))
+    },
+    { "func({a,b,c});",     Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new ArrayPack(
+                                        new ExpressionList({
+                                            new Local("a"),
+                                            new Local("b"),
+                                            new Local("c"),
+                                        })
+                                    )
+                                )
+                            ))
+    },
+    { "func(@a);",          Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Attribute("a", CoreType::FLOAT, true)
+                                )
+                            ))
+    },
+    { "func(++a);",         Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Crement(new Local("a"), Crement::Operation::Increment, false)
+                                )
+                            ))
+    },
+    { "func(~a);",          Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new UnaryOperator(OperatorToken::BITNOT, new Local("a"))
+                                )
+                            ))
+    },
+    { "func((a));",         Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Local("a")
+                                )
+                            ))
+    },
+    { "func1(func2());",    Node::Ptr(new FunctionCall("func1",
+                                new ExpressionList(
+                                    new FunctionCall("func2")
+                                )
+                            ))
+    },
+    { "func(a=b);",         Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new AssignExpression(new Local("a"), new Local("b"), false)
+                                )
+                            ))
+    },
+    { "func(a==b);",        Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new BinaryOperator(OperatorToken::EQUALSEQUALS, new Local("a"), new Local("b"))
+                                )
+                            ))
+    },
+    { "func(a.x);",         Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new ArrayUnpack(new Local("a"), new Value<int32_t>(0))
+                                )
+                            ))
+    },
+    { "func(bool(a));",     Node::Ptr(new FunctionCall("func",
+                                new ExpressionList(
+                                    new Cast(new Local("a"), CoreType::BOOL)
+                                )
+                            ))
+    },
+    { "func(a,b,c,d,e,f);", Node::Ptr(new FunctionCall("func",
+                                new ExpressionList({
+                                    new Local("a"), new Local("b"), new Local("c"),
+                                    new Local("d"), new Local("e"), new Local("f")
+                                })
+                            ))
+    },
 };
 
 }
@@ -111,39 +169,38 @@ public:
     CPPUNIT_TEST(testASTNode);
     CPPUNIT_TEST_SUITE_END();
 
-    void testSyntax() { TEST_SYNTAX(tests); }
+    void testSyntax() { TEST_SYNTAX_PASSES(tests); }
     void testASTNode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestFunctionCallNode);
 
-void
-TestFunctionCallNode::testASTNode()
+void TestFunctionCallNode::testASTNode()
 {
-    using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const ExpectedFunctionCall::Ptr behaviour =
-            std::static_pointer_cast<ExpectedFunctionCall>(test.second);
-        if (!behaviour->passes()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = openvdb::ax::ast::parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        FunctionCallVisitor visitor;
-        tree->accept(visitor);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
+            Node::FunctionCallNode == result->nodetype());
 
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Invalid AST node count", code),
-            behaviour->count(), visitor.mCount);
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
 
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code), visitor.mNode);
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node Expression", code), visitor.mNode->mArguments);
-
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected argument list size", code),
-            behaviour->args(), visitor.mNode->mArguments->mList.size());
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected function name", code),
-            behaviour->name(), visitor.mNode->mFunction);
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Function Call code", code) + os.str());
+        }
     }
 }
 

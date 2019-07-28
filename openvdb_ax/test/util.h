@@ -32,70 +32,190 @@
 #ifndef OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 
-#include <openvdb/Types.h>
+#include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Tokens.h>
 
 #include <memory>
 #include <vector>
 #include <utility>
 #include <string>
 
-#define ERROR_MSG(Msg, Code) Msg + std::string(":\"") + Code + std::string("\"")
+#define ERROR_MSG(Msg, Code) Msg + std::string(": \"") + Code + std::string("\"")
 
-#define TEST_SYNTAX(Tests) \
+#define TEST_SYNTAX_PASSES(Tests) \
 { \
     for (const auto& test : Tests) { \
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second; \
         const std::string& code = test.first; \
-        if (behaviour->passes()) { \
-            CPPUNIT_ASSERT_NO_THROW_MESSAGE(ERROR_MSG("Unexpected parsing error", code), \
-                openvdb::ax::ast::parse(code.c_str())); \
-        } \
-        else { \
-            CPPUNIT_ASSERT_THROW_MESSAGE(ERROR_MSG("Expected LLVMSyntaxError", code), \
-                openvdb::ax::ast::parse(code.c_str()), openvdb::LLVMSyntaxError); \
-        } \
+        CPPUNIT_ASSERT_NO_THROW_MESSAGE(ERROR_MSG("Unexpected parsing error", code), \
+            openvdb::ax::ast::parse(code.c_str())); \
+    } \
+} \
+
+#define TEST_SYNTAX_FAILS(Tests) \
+{ \
+    for (const auto& test : Tests) { \
+        const std::string& code = test.first; \
+        CPPUNIT_ASSERT_THROW_MESSAGE(ERROR_MSG("Expected LLVMSyntaxError", code), \
+            openvdb::ax::ast::parse(code.c_str()), openvdb::LLVMSyntaxError); \
     } \
 } \
 
 namespace unittest_util
 {
 
-struct ExpectedBase
+// Use shared pointers rather than unique pointers so initializer lists can easily
+// be used. Could easily introduce some move semantics to work around this if
+// necessary.
+using CodeTests = std::vector<std::pair<std::string, openvdb::ax::ast::Node::Ptr>>;
+
+
+inline bool compareLinearTrees(const std::vector<const openvdb::ax::ast::Node*>& a,
+    const std::vector<const openvdb::ax::ast::Node*>& b, const bool allowEmpty = false)
 {
-    enum BehaviourFlags
-    {
-        Pass = 1 << 0
-    };
+    if (!allowEmpty && (a.empty() || b.empty())) return false;
+    if (a.size() != b.size()) return false;
+    const size_t size = a.size();
+    for (size_t i = 0; i < size; ++i) {
+        if ((a[i] == nullptr) ^ (b[i] == nullptr)) return false;
+        if (a[i] == nullptr) continue;
+        if (a[i]->nodetype() != b[i]->nodetype()) return false;
 
-    using Ptr = std::shared_ptr<ExpectedBase>;
+        // Specific handling of various node types to compare child data
+        // @todo generalize this
+        // @note  Value methods does not compare child text data
 
-    template <typename T>
-    bool isType() const { return this->type() == openvdb::typeNameAsString<T>(); }
-    virtual std::string type() const = 0;
-
-    inline bool passes() const { return hasFlag(Pass); }
-    inline bool fails() const { return !passes(); }
-    inline bool hasFlag(const size_t flag) const { return mFlags & flag; }
-    inline size_t count() const { return mCount; }
-
-protected:
-    ExpectedBase(const size_t flags, const size_t count)
-        : mFlags(flags), mCount(count) {}
-
-    const size_t mFlags; // expected behaviour flags per test
-    const size_t mCount; // expected ast visit count
-};
-
-template <typename Type=void>
-struct ExpectedType : public ExpectedBase
-{
-    ExpectedType(const size_t flags = 0, const size_t count = 1)
-        : ExpectedBase(flags, count) {}
-    std::string type() const override final { return openvdb::typeNameAsString<Type>(); }
-};
-
-using CodeTests = std::vector<std::pair<std::string, ExpectedBase::Ptr>>;
-
+        if (a[i]->nodetype() == openvdb::ax::ast::Node::AssignExpressionNode) {
+            if (static_cast<const openvdb::ax::ast::AssignExpression*>(a[i])->operation() !=
+                static_cast<const openvdb::ax::ast::AssignExpression*>(b[i])->operation()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::BinaryOperatorNode) {
+            if (static_cast<const openvdb::ax::ast::BinaryOperator*>(a[i])->operation() !=
+                static_cast<const openvdb::ax::ast::BinaryOperator*>(b[i])->operation()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::CrementNode) {
+            if (static_cast<const openvdb::ax::ast::Crement*>(a[i])->operation() !=
+                static_cast<const openvdb::ax::ast::Crement*>(b[i])->operation()) {
+                return false;
+            }
+            if (static_cast<const openvdb::ax::ast::Crement*>(a[i])->post() !=
+                static_cast<const openvdb::ax::ast::Crement*>(b[i])->post()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::CastNode) {
+            if (static_cast<const openvdb::ax::ast::Cast*>(a[i])->type() !=
+                static_cast<const openvdb::ax::ast::Cast*>(b[i])->type()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::FunctionCallNode) {
+            if (static_cast<const openvdb::ax::ast::FunctionCall*>(a[i])->name() !=
+                static_cast<const openvdb::ax::ast::FunctionCall*>(b[i])->name()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::LoopNode) {
+            if (static_cast<const openvdb::ax::ast::Loop*>(a[i])->loopType() !=
+                static_cast<const openvdb::ax::ast::Loop*>(b[i])->loopType()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::KeywordNode) {
+            if (static_cast<const openvdb::ax::ast::Keyword*>(a[i])->keyword() !=
+                static_cast<const openvdb::ax::ast::Keyword*>(b[i])->keyword()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::AttributeNode) {
+            if (static_cast<const openvdb::ax::ast::Attribute*>(a[i])->type() !=
+                static_cast<const openvdb::ax::ast::Attribute*>(b[i])->type()) {
+                return false;
+            }
+            if (static_cast<const openvdb::ax::ast::Attribute*>(a[i])->name() !=
+                static_cast<const openvdb::ax::ast::Attribute*>(b[i])->name()) {
+                return false;
+            }
+            if (static_cast<const openvdb::ax::ast::Attribute*>(a[i])->inferred() !=
+                static_cast<const openvdb::ax::ast::Attribute*>(b[i])->inferred()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ExternalVariableNode) {
+            if (static_cast<const openvdb::ax::ast::ExternalVariable*>(a[i])->type() !=
+                static_cast<const openvdb::ax::ast::ExternalVariable*>(b[i])->type()) {
+                return false;
+            }
+            if (static_cast<const openvdb::ax::ast::ExternalVariable*>(a[i])->name() !=
+                static_cast<const openvdb::ax::ast::ExternalVariable*>(b[i])->name()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::DeclareLocalNode) {
+            if (static_cast<const openvdb::ax::ast::DeclareLocal*>(a[i])->type() !=
+                static_cast<const openvdb::ax::ast::DeclareLocal*>(b[i])->type()) {
+                return false;
+            }
+            if (static_cast<const openvdb::ax::ast::DeclareLocal*>(a[i])->name() !=
+                static_cast<const openvdb::ax::ast::DeclareLocal*>(b[i])->name()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::LocalNode) {
+            if (static_cast<const openvdb::ax::ast::Local*>(a[i])->name() !=
+                static_cast<const openvdb::ax::ast::Local*>(b[i])->name()) {
+                return false;
+            }
+        }
+        // @note  Value methods does not compare child text data
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueBoolNode) {
+            if (static_cast<const openvdb::ax::ast::Value<bool>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<bool>*>(b[i])->value()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueInt16Node) {
+            if (static_cast<const openvdb::ax::ast::Value<int16_t>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<int16_t>*>(b[i])->value()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueInt32Node) {
+            if (static_cast<const openvdb::ax::ast::Value<int32_t>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<int32_t>*>(b[i])->value()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueInt64Node) {
+            if (static_cast<const openvdb::ax::ast::Value<int64_t>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<int64_t>*>(b[i])->value()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueFloatNode) {
+            if (static_cast<const openvdb::ax::ast::Value<float>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<float>*>(b[i])->value()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueDoubleNode) {
+            if (static_cast<const openvdb::ax::ast::Value<double>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<double>*>(b[i])->value()) {
+                return false;
+            }
+        }
+        else if (a[i]->nodetype() == openvdb::ax::ast::Node::ValueStrNode) {
+            if (static_cast<const openvdb::ax::ast::Value<std::string>*>(a[i])->value() !=
+                static_cast<const openvdb::ax::ast::Value<std::string>*>(b[i])->value()) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 inline std::vector<std::string>
 nameSequence(const std::string& base, const int number)

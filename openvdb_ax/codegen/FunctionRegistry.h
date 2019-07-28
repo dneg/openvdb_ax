@@ -42,9 +42,10 @@
 #include "FunctionTypes.h"
 #include "Types.h"
 
+#include <openvdb_ax/version.h>
 #include <openvdb_ax/compiler/CompilerOptions.h>
 
-#include <openvdb_ax/version.h>
+#include <unordered_map>
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -84,7 +85,7 @@ public:
             : mConstructor(creator), mFunction(), mInternal(internal) {}
 
         /// @brief Create a function object using this creator of this function
-        /// @param The current function options
+        /// @param op The current function options
         ///
         inline void create(const FunctionOptions& op) { mFunction = mConstructor(op); }
 
@@ -102,7 +103,7 @@ public:
         const bool mInternal;
     };
 
-    using RegistryMap = std::map<std::string, RegisteredFunction>;
+    using RegistryMap = std::unordered_map<std::string, RegisteredFunction>;
 
     /// @brief  Insert and register a function base object to a function identifier.
     /// @note   Throws if the identifier is already registered
@@ -132,7 +133,7 @@ public:
     ///
     /// @param  identifier  The function identifier
     /// @param  op          FunctionOptions to pass the function constructor
-    /// @param  internal    Whether to look in the 'internal' functions
+    /// @param  allowInternalAccess    Whether to look in the 'internal' functions
     ///
     FunctionBase::Ptr getOrInsert(const std::string& identifier,
                       const FunctionOptions& op,
@@ -143,8 +144,7 @@ public:
     ///         function is marked as internal
     ///
     /// @param  identifier  The function identifier
-    /// @param  internal    Whether to look in the 'internal' functions
-
+    /// @param  allowInternalAccess    Whether to look in the 'internal' functions
     ///
     FunctionBase::Ptr get(const std::string& identifier,
                           const bool allowInternalAccess) const;
@@ -169,13 +169,6 @@ public:
 private:
     RegistryMap mMap;
 };
-
-/// @brief Creates a registry with the standard set of registered functions including math functions,
-///        point functions and volume functions
-/// @param The current function options
-///
-FunctionRegistry::UniquePtr createStandardRegistry(const FunctionOptions& op);
-
 
 }
 }

@@ -24,17 +24,46 @@
 # IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
 # LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 #
+#[=======================================================================[
 
-FIND_PACKAGE ( CPPUnit REQUIRED )
+  CMake Configuration for OpenVDB Unit Tests
 
-SET ( TEST_SOURCE_FILES
+#]=======================================================================]
+
+project(OpenVDBAXUnitTests)
+cmake_minimum_required(VERSION 3.3)
+# Monitoring <PackageName>_ROOT variables
+if(POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+
+##########################################################################
+
+message(STATUS "----------------------------------------------------")
+message(STATUS "---------- Configuring OpenVDBAXUnitTests ----------")
+message(STATUS "----------------------------------------------------")
+
+##########################################################################
+
+if(NOT OPENVDB_BUILD_AX)
+  set(OPENVDBAX_LIB OpenVDB::openvdb_ax)
+else()
+  set(OPENVDBAX_LIB openvdb_ax)
+endif()
+
+find_package(CppUnit REQUIRED)
+
+set(TEST_SOURCE_FILES
+  ast/TestScanners.cc
   backend/TestFunctionBase.cc
   backend/TestFunctionSignature.cc
   backend/TestSymbolTable.cc
   compiler/TestPointExecutable.cc
   compiler/TestVolumeExecutable.cc
-  frontend/TestAttributeAssignExpressionNode.cc
-  frontend/TestAttributeValueNode.cc
+  frontend/TestArrayPack.cc
+  frontend/TestArrayUnpack.cc
+  frontend/TestAssignExpressionNode.cc
+  frontend/TestAttributeNode.cc
   frontend/TestBinaryOperatorNode.cc
   frontend/TestCastNode.cc
   frontend/TestConditionalStatementNode.cc
@@ -43,16 +72,16 @@ SET ( TEST_SOURCE_FILES
   frontend/TestExternalVariableNode.cc
   frontend/TestFunctionCallNode.cc
   frontend/TestKeywordNode.cc
-  frontend/TestLocalValueNode.cc
+  frontend/TestLocalNode.cc
+  frontend/TestLoopNode.cc
   frontend/TestSyntaxFailures.cc
   frontend/TestUnaryOperatorNode.cc
   frontend/TestValueNode.cc
-  frontend/TestVectorPack.cc
-  frontend/TestVectorUnpack.cc
   integration/CompareGrids.cc
   integration/TestAssign.cc
   integration/TestBinary.cc
   integration/TestCast.cc
+  integration/TestConditional.cc
   integration/TestDeclare.cc
   integration/TestEditGroups.cc
   integration/TestEmpty.cc
@@ -60,24 +89,23 @@ SET ( TEST_SOURCE_FILES
   integration/TestGroups.cc
   integration/TestHarness.cc
   integration/TestKeyword.cc
-  # integration/TestString.cc @todo: reenable string tests with string support
+  integration/TestLoop.cc
+  integration/TestString.cc
   integration/TestUnary.cc
   integration/TestWorldSpaceAccessors.cc
   main.cc
   )
 
-# this copies the AX snippets into the build directory so that the test executable
-# can find them correctly
-EXECUTE_PROCESS ( COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/snippets/ ${CMAKE_CURRENT_BINARY_DIR}/test/snippets )
-
-ADD_EXECUTABLE ( vdb_ax_test
-    ${TEST_SOURCE_FILES}
+add_executable(vdb_ax_test
+  ${TEST_SOURCE_FILES}
 )
 
-TARGET_LINK_LIBRARIES ( vdb_ax_test
-    ${CPPUnit_cppunit_LIBRARY}
-    openvdb_ax_shared
-    stdc++
+target_link_libraries(vdb_ax_test
+  ${OPENVDBAX_LIB}
+  CppUnit::cppunit
+)
+target_include_directories(vdb_ax_test
+  PRIVATE ../ .
 )
 
-ADD_TEST ( vdb_ax_unit_test vdb_ax_test )
+add_test(NAME vdb_ax_unit_test COMMAND vdb_ax_test -v WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/../)

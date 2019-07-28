@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,45 +38,28 @@
 
 #include <string>
 
-namespace {
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
 
-#define EXPECTED_PASS(Type) \
-    unittest_util::ExpectedBase::Ptr(new unittest_util::ExpectedType<Type>(unittest_util::ExpectedBase::Pass))
+namespace {
 
 static const unittest_util::CodeTests tests =
 {
-    { "$a;",       EXPECTED_PASS(float) },
-    { "bool$a;",   EXPECTED_PASS(bool) },
-    { "short$a;",  EXPECTED_PASS(short) },
-    { "i$a;",      EXPECTED_PASS(int) },
-    { "int$a;",    EXPECTED_PASS(int) },
-    { "long$a;",   EXPECTED_PASS(long) },
-    { "f$a;",      EXPECTED_PASS(float) },
-    { "float$a;",  EXPECTED_PASS(float) },
-    { "double$a;", EXPECTED_PASS(double) },
-    { "vec3i$a;",  EXPECTED_PASS(openvdb::Vec3i) },
-    { "v$a;",      EXPECTED_PASS(openvdb::Vec3f) },
-    { "s$a;",      EXPECTED_PASS(std::string) },
-    { "vec3f$a;",  EXPECTED_PASS(openvdb::Vec3f) },
-    { "vec3d$a;",  EXPECTED_PASS(openvdb::Vec3d) },
-    { "string$a;", EXPECTED_PASS(std::string) },
-};
-
-struct ExternalVariableVisitor : public openvdb::ax::ast::Visitor
-{
-    ExternalVariableVisitor()
-        : mCount(0)
-        , mExternalVariable(nullptr) {}
-    ~ExternalVariableVisitor() override = default;
-
-    inline virtual void
-    visit(const openvdb::ax::ast::ExternalVariable& node) override final {
-        ++mCount;
-        mExternalVariable = &node;
-    };
-
-    size_t mCount; // tracks the amount of nodes visited
-    const openvdb::ax::ast::ExternalVariable* mExternalVariable;
+    { "$a;",        Node::Ptr(new ExternalVariable("a", CoreType::FLOAT)) },
+    { "bool$_a;",   Node::Ptr(new ExternalVariable("_a", CoreType::BOOL)) },
+    { "short$a_;",  Node::Ptr(new ExternalVariable("a_", CoreType::SHORT)) },
+    { "i$a1;",      Node::Ptr(new ExternalVariable("a1", CoreType::INT)) },
+    { "int$abc;",   Node::Ptr(new ExternalVariable("abc", CoreType::INT)) },
+    { "long$a;",    Node::Ptr(new ExternalVariable("a", CoreType::LONG)) },
+    { "f$a;",       Node::Ptr(new ExternalVariable("a", CoreType::FLOAT)) },
+    { "float$a;",   Node::Ptr(new ExternalVariable("a", CoreType::FLOAT)) },
+    { "double$a;",  Node::Ptr(new ExternalVariable("a", CoreType::DOUBLE)) },
+    { "vec3i$a;",   Node::Ptr(new ExternalVariable("a", CoreType::VEC3I)) },
+    { "v$a;",       Node::Ptr(new ExternalVariable("a", CoreType::VEC3F)) },
+    { "vec3f$a;",   Node::Ptr(new ExternalVariable("a", CoreType::VEC3F)) },
+    { "vec3d$a;",   Node::Ptr(new ExternalVariable("a", CoreType::VEC3D)) },
+    { "string$a;",  Node::Ptr(new ExternalVariable("a", CoreType::STRING)) },
+    { "s$a;",       Node::Ptr(new ExternalVariable("a", CoreType::STRING)) },
 };
 
 }
@@ -88,34 +73,38 @@ public:
     CPPUNIT_TEST(testASTNode);
     CPPUNIT_TEST_SUITE_END();
 
-    void testSyntax() { TEST_SYNTAX(tests); }
+    void testSyntax() { TEST_SYNTAX_PASSES(tests); }
     void testASTNode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestExternalVariableNode);
 
-void
-TestExternalVariableNode::testASTNode()
+void TestExternalVariableNode::testASTNode()
 {
-    using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second;
-        if (behaviour->fails()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        ExternalVariableVisitor visitor;
-        tree->accept(visitor);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
+            Node::ExternalVariableNode == result->nodetype());
 
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected AST node count", code),
-            behaviour->count(), visitor.mCount);
-        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST External Variable node", code),
-            static_cast<bool>(visitor.mExternalVariable));
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected External Variable type", code),
-            behaviour->type(), visitor.mExternalVariable->mType);
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
+
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for External Variable code", code) + os.str());
+        }
     }
 }
 

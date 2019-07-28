@@ -39,7 +39,11 @@
 #define OPENVDB_AX_COMPILER_VOLUME_EXECUTABLE_HAS_BEEN_INCLUDED
 
 #include <openvdb_ax/compiler/CustomData.h>
-#include <openvdb_ax/compiler/TargetRegistry.h>
+#include <openvdb_ax/compiler/AttributeRegistry.h>
+
+#include <openvdb/Grid.h>
+
+#include <unordered_map>
 
 // Forward declaration of LLVM types which persist on the Executables
 
@@ -62,37 +66,39 @@ class VolumeExecutable
 {
 public:
     using Ptr = std::shared_ptr<VolumeExecutable>;
-    using Registry = VolumeRegistry;
+
+    enum class IterType {
+        ON,
+        OFF,
+        ALL
+    };
 
     /// @brief Constructor
     /// @param exeEngine Shared pointer to an llvm::ExecutionEngine object used to build functions.
     ///        context should be the associated llvm context
     /// @param context Shared pointer to an llvm:context object associated with exeEngine
-    /// @param volumeRegistry Registry of volumes accessed by AX code
+    /// @param accessRegistry Registry of volumes accessed by AX code
     /// @param customData Custom data object which will be shared by this executable.  It can be
     ///        used to retrieve external data from within the AX code
     /// @param functionAddresses A Vector of maps of function names to physical memory addresses which were built
     ///        by llvm using exeEngine
-    /// @param assignedVolumes Vector of names of volumes which are written to, in order.
     /// @note  This object is normally be constructed by the Compiler::compile method, rather
     ///        than directly
     VolumeExecutable(const std::shared_ptr<const llvm::ExecutionEngine>& exeEngine,
                      const std::shared_ptr<const llvm::LLVMContext>& context,
-                     const Registry::ConstPtr& volumeRegistry,
+                     const AttributeRegistry::ConstPtr& accessRegistry,
                      const CustomData::ConstPtr& customData,
-                     const std::vector<std::map<std::string, uint64_t>>& functionAddresses,
-                     const std::vector<std::string>& assignedVolumes)
+                     const std::unordered_map<std::string, uint64_t>& functionAddresses)
         : mContext(context)
         , mExecutionEngine(exeEngine)
-        , mVolumeRegistry(volumeRegistry)
+        , mAttributeRegistry(accessRegistry)
         , mCustomData(customData)
-        , mBlockFunctionAddresses(functionAddresses)
-        , mAssignedVolumes(assignedVolumes) {}
+        , mFunctionAddresses(functionAddresses) {}
 
     ~VolumeExecutable() = default;
 
     /// @brief Execute AX code on target grids
-    void execute(const openvdb::GridPtrVec& grids) const;
+    void execute(const openvdb::GridPtrVec& grids, const IterType iterType = IterType::ON) const;
 
 private:
 
@@ -100,10 +106,9 @@ private:
     // management. The ExecutionEngine must be destroyed before the Context
     const std::shared_ptr<const llvm::LLVMContext> mContext;
     const std::shared_ptr<const llvm::ExecutionEngine> mExecutionEngine;
-    const Registry::ConstPtr mVolumeRegistry;
+    const AttributeRegistry::ConstPtr mAttributeRegistry;
     const CustomData::ConstPtr mCustomData;
-    const std::vector<std::map<std::string, uint64_t> > mBlockFunctionAddresses;
-    const std::vector<std::string> mAssignedVolumes;
+    const std::unordered_map<std::string, uint64_t> mFunctionAddresses;
 };
 
 }

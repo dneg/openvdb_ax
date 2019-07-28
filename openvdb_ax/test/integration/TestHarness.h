@@ -84,7 +84,7 @@ struct AXTestHarness
     void addInputGroups(const std::vector<std::string>& names, const std::vector<bool>& defaults);
     void addExpectedGroups(const std::vector<std::string>& names, const std::vector<bool>& defaults);
 
-    /// @brief adds attributes to both to input data set
+    /// @brief adds attributes to input data set
     template <typename T>
     void addInputAttributes(const std::vector<std::string>& names,
                        const std::vector<T>& values)
@@ -108,17 +108,53 @@ struct AXTestHarness
         }
     }
 
-    /// @brief override of addInputAttributes for Mat4s which won't add to volumes
+    /// @brief override of addInputAttributes for Mat3f which won't add to volumes
     ///        necessary since there are no matrix volumes
     void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<openvdb::math::Mat4s>& values)
+                            const std::vector<openvdb::math::Mat3<float>>& values)
     {
         if (mUsePoints) {
-            addInputPtAttributes<openvdb::math::Mat4s>(names, values);
+            addInputPtAttributes<openvdb::math::Mat3<float>>(names, values);
         }
     }
 
-    /// @brief adds attributes to both to expected outptu data sets
+    /// @brief override of addInputAttributes for Mat3d which won't add to volumes
+    ///        necessary since there are no matrix volumes
+    void addInputAttributes(const std::vector<std::string>& names,
+                            const std::vector<openvdb::math::Mat3<double>>& values)
+    {
+        if (mUsePoints) {
+            addInputPtAttributes<openvdb::math::Mat3<double>>(names, values);
+        }
+    }
+
+    /// @brief override of addInputAttributes for Mat4f which won't add to volumes
+    ///        necessary since there are no matrix volumes
+    void addInputAttributes(const std::vector<std::string>& names,
+                            const std::vector<openvdb::math::Mat4<float>>& values)
+    {
+        if (mUsePoints) {
+            addInputPtAttributes<openvdb::math::Mat4<float> >(names, values);
+        }
+    }
+
+    /// @brief override of addInputAttributes for Mat4d which won't add to volumes
+    ///        necessary since there are no matrix volumes
+    void addInputAttributes(const std::vector<std::string>& names,
+                            const std::vector<openvdb::math::Mat4<double>>& values)
+    {
+        if (mUsePoints) {
+            addInputPtAttributes<openvdb::math::Mat4<double>>(names, values);
+        }
+    }
+
+    template <typename T>
+    void addInputAttribute(const std::string& name, const T& inputVal)
+    {
+        addInputAttributes<T>({name}, {inputVal});
+    }
+
+    /// @brief adds attributes to expected output data sets
     template <typename T>
     void addExpectedAttributes(const std::vector<std::string>& names,
                        const std::vector<T>& values)
@@ -132,21 +168,40 @@ struct AXTestHarness
         }
     }
 
-    /// @brief adds attributes to both to expected outptu data sets
+    /// @brief adds attributes to both to expected output data sets
     void addExpectedAttributes(const std::vector<std::string>& names,
                                const std::vector<std::string>& values)
     {
         addExpectedPtAttributes<std::string>(names, values);
     }
 
-    /// @brief adds attributes to both to expected outptu data sets
+    /// @brief adds attributes to both to expected output data sets
     void addExpectedAttributes(const std::vector<std::string>& names,
-                                const std::vector<openvdb::math::Mat4s>& values)
+                                const std::vector<openvdb::math::Mat3<float>>& values)
     {
-        addExpectedPtAttributes<openvdb::math::Mat4s>(names, values);
+        addExpectedPtAttributes<openvdb::math::Mat3<float>>(names, values);
     }
 
-    /// @brief adds attributes to both to expected outptu data sets
+    /// @brief adds attributes to both to expected output data sets
+    void addExpectedAttributes(const std::vector<std::string>& names,
+                                const std::vector<openvdb::math::Mat3<double>>& values)
+    {
+        addExpectedPtAttributes<openvdb::math::Mat3<double>>(names, values);
+    }
+        /// @brief adds attributes to both to expected output data sets
+    void addExpectedAttributes(const std::vector<std::string>& names,
+                                const std::vector<openvdb::math::Mat4<float>>& values)
+    {
+        addExpectedPtAttributes<openvdb::math::Mat4<float>>(names, values);
+    }
+        /// @brief adds attributes to both to expected output data sets
+    void addExpectedAttributes(const std::vector<std::string>& names,
+                                const std::vector<openvdb::math::Mat4<double>>& values)
+    {
+        addExpectedPtAttributes<openvdb::math::Mat4<double>>(names, values);
+    }
+
+    /// @brief adds attributes to both to expected output data sets
     void addExpectedAttributes(const std::vector<std::string>& names,
                                const std::vector<short>& values)
     {

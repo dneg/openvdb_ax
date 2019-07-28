@@ -154,12 +154,12 @@ inline bool compareLeafBuffers(const LeafNodeType& firstLeaf,
 
         if (settings.mCheckActiveStates &&
             firstMask.isOn(n) ^ secondMask.isOn(n)) {
-            data.flagVoxelTopology(n);
+            data.flagVoxelTopology(static_cast<int16_t>(n));
         }
 
         if (settings.mCheckBufferValues &&
             !openvdb::math::isApproxEqual(firstBuffer[n], secondBuffer[n], tolerance)) {
-            data.flagVoxelValue(n);
+            data.flagVoxelValue(static_cast<int16_t>(n));
         }
     }
 
@@ -196,7 +196,7 @@ void compareStringArrays(const openvdb::points::AttributeArray& a1,
             const openvdb::Index i = *iter;
             if (h1.get(i) != h2.get(i)) {
                 arrayData.flagArrayValue(i);
-                data.flagVoxelValue(LeafNodeT::coordToOffset(iter.getCoord()));
+                data.flagVoxelValue(static_cast<int16_t>(LeafNodeT::coordToOffset(iter.getCoord())));
             }
         }
     }
@@ -229,7 +229,7 @@ inline void compareArrays(const openvdb::points::AttributeArray& a1,
             const openvdb::Index i = *iter;
             if (h1.get(i) != h2.get(i)) {
                 arrayData.flagArrayValue(i);
-                data.flagVoxelValue(LeafNodeT::coordToOffset(iter.getCoord()));
+                data.flagVoxelValue(static_cast<int16_t>(LeafNodeT::coordToOffset(iter.getCoord())));
             }
         }
     }
@@ -312,7 +312,18 @@ compareAttributes<openvdb::points::PointDataTree::LeafNodeType>
             else if (type == openvdb::typeNameAsString<openvdb::Vec3d>()) compareArrays<openvdb::Vec3d>(array1, array2, firstLeaf, name, data);
             else if (type == openvdb::typeNameAsString<openvdb::Vec3f>()) compareArrays<openvdb::Vec3f>(array1, array2, firstLeaf, name, data);
             else if (type == openvdb::typeNameAsString<openvdb::Vec3i>()) compareArrays<openvdb::Vec3i>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Mat4s>()) compareArrays<openvdb::Mat4s>(array1, array2, firstLeaf, name, data);
+            else if (type == openvdb::typeNameAsString<openvdb::math::Mat3<float>>())  {
+                compareArrays<openvdb::math::Mat3<float>>(array1, array2, firstLeaf, name, data);
+            }
+            else if (type == openvdb::typeNameAsString<openvdb::math::Mat3<double>>()) {
+                compareArrays<openvdb::math::Mat3<double>>(array1, array2, firstLeaf, name, data);
+            }
+            else if (type == openvdb::typeNameAsString<openvdb::math::Mat4<float>>()) {
+                compareArrays<openvdb::math::Mat4<float>>(array1, array2, firstLeaf, name, data);
+            }
+            else if (type == openvdb::typeNameAsString<openvdb::math::Mat4<double>>()) {
+                compareArrays<openvdb::math::Mat4<double>>(array1, array2, firstLeaf, name, data);
+            }
             else {
                 throw std::runtime_error("Unsupported array type for comparison: " + type);
             }
@@ -523,7 +534,7 @@ bool compareGrids(ComparisonResult& resultData,
 
         if (!topologyMatch) {
             os << "        The following voxel topologies differ : " << std::endl;
-            size_t idx(0);
+            openvdb::Index idx(0);
             for (const auto match : *(diagnostic->mVoxelTopologyFlags)) {
                 if (!match) {
                     const openvdb::Coord coord = leaf->offsetToGlobalCoord(idx);
@@ -542,7 +553,7 @@ bool compareGrids(ComparisonResult& resultData,
 
         if (!valueMatch) {
             os << "        The following voxel values differ : " << std::endl;
-            size_t idx(0);
+            openvdb::Index idx(0);
             for (const auto match : *(diagnostic->mVoxelValueFlags)) {
                 if (!match) {
                     const openvdb::Coord coord = leaf->offsetToGlobalCoord(idx);
@@ -598,16 +609,16 @@ template bool compareGrids<TYPE>( \
          const openvdb::MaskGrid::ConstPtr, \
          const TYPE::ValueType);
 
-INSTANTIATE_COMPARE_GRIDS(openvdb::MaskGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::BoolGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::FloatGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::DoubleGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::Int32Grid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::Int64Grid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3fGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3dGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3IGrid);
-INSTANTIATE_COMPARE_GRIDS(openvdb::points::PointDataGrid);
+INSTANTIATE_COMPARE_GRIDS(openvdb::MaskGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::BoolGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::FloatGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::DoubleGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::Int32Grid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::Int64Grid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3fGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3dGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3IGrid)
+INSTANTIATE_COMPARE_GRIDS(openvdb::points::PointDataGrid)
 
 bool compareUntypedGrids(ComparisonResult &resultData,
                          const openvdb::GridBase &firstGrid,
@@ -621,82 +632,48 @@ bool compareUntypedGrids(ComparisonResult &resultData,
     if (firstGrid.valueType() == openvdb::typeNameAsString<float>()) {
         const openvdb::FloatGrid* firstGridTypedPtr = static_cast<const openvdb::FloatGrid*>(firstGridPtr);
         const openvdb::FloatGrid* secondGridTypedPtr = static_cast<const openvdb::FloatGrid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 
     if (firstGrid.valueType() == openvdb::typeNameAsString<double>()) {
         const openvdb::DoubleGrid* firstGridTypedPtr = static_cast<const openvdb::DoubleGrid*>(firstGridPtr);
         const openvdb::DoubleGrid* secondGridTypedPtr = static_cast<const openvdb::DoubleGrid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 
     if (firstGrid.valueType() == openvdb::typeNameAsString<bool>()) {
         const openvdb::BoolGrid* firstGridTypedPtr = static_cast<const openvdb::BoolGrid*>(firstGridPtr);
         const openvdb::BoolGrid* secondGridTypedPtr = static_cast<const openvdb::BoolGrid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 
     if (firstGrid.valueType() == openvdb::typeNameAsString<openvdb::Int32>()) {
         const openvdb::Int32Grid* firstGridTypedPtr = static_cast<const openvdb::Int32Grid*>(firstGridPtr);
         const openvdb::Int32Grid* secondGridTypedPtr = static_cast<const openvdb::Int32Grid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 
     if (firstGrid.valueType() == openvdb::typeNameAsString<openvdb::Int64>()) {
         const openvdb::Int64Grid* firstGridTypedPtr = static_cast<const openvdb::Int64Grid*>(firstGridPtr);
         const openvdb::Int64Grid* secondGridTypedPtr = static_cast<const openvdb::Int64Grid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 
     if (firstGrid.valueType() == openvdb::typeNameAsString<openvdb::Vec3f>()) {
         const openvdb::Vec3fGrid* firstGridTypedPtr = static_cast<const openvdb::Vec3fGrid*>(firstGridPtr);
         const openvdb::Vec3fGrid* secondGridTypedPtr = static_cast<const openvdb::Vec3fGrid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 
     if (firstGrid.valueType() == openvdb::typeNameAsString<openvdb::Vec3d>()) {
         const openvdb::Vec3dGrid* firstGridTypedPtr = static_cast<const openvdb::Vec3dGrid*>(firstGridPtr);
         const openvdb::Vec3dGrid* secondGridTypedPtr = static_cast<const openvdb::Vec3dGrid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
+
     if (firstGrid.valueType() == openvdb::typeNameAsString<openvdb::math::Vec3i>()) {
         const openvdb::Vec3IGrid* firstGridTypedPtr = static_cast<const openvdb::Vec3IGrid*>(firstGridPtr);
         const openvdb::Vec3IGrid* secondGridTypedPtr = static_cast<const openvdb::Vec3IGrid*>(secondGridPtr);
-
-        assert(firstGridTypedPtr != nullptr);
-        assert(secondGridTypedPtr != nullptr);
-
         return compareGrids(resultData, *firstGridTypedPtr, *secondGridTypedPtr, settings, maskGrid);
     }
 

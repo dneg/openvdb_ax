@@ -31,8 +31,10 @@
 #include <openvdb_ax/ast/AST.h>
 #include <openvdb_ax/ast/Scanners.h>
 #include <openvdb_ax/ast/PrintTree.h>
-#include <openvdb_ax/codegen/FunctionRegistry.h>
+#include <openvdb_ax/codegen/Functions.h>
 #include <openvdb_ax/compiler/Compiler.h>
+#include <openvdb_ax/compiler/AttributeRegistry.h>
+#include <openvdb_ax/compiler/CompilerOptions.h>
 #include <openvdb_ax/compiler/PointExecutable.h>
 #include <openvdb_ax/compiler/VolumeExecutable.h>
 
@@ -54,25 +56,50 @@ const char* gProgName = "";
 
 struct ProgOptions
 {
-    std::string mInputCode = "";
+    enum Mode {
+        Execute, Analyze, Functions
+    };
+    Mode mMode = Execute;
+
+    // Execute options
+    std::unique_ptr<std::string> mInputCode = nullptr;
     std::string mInputVDBFile = "";
     std::string mOutputVDBFile = "";
     bool mVerbose = false;
+    std::string mOptLevel = "O3";
+
+    // Analyze options
+    bool mParse = false;
     bool mPrintAST = false;
+    bool mReprint = false;
+    bool mAttribRegPrint = false;
+
+    // Function Options
+    bool mFunctionList = false;
+    bool mFunctionNamesOnly = false;
+    std::string mFunctionSearch = "";
 };
 
 void
 usage [[noreturn]] (int exitStatus = EXIT_FAILURE)
 {
     std::cerr <<
-"Usage: " << gProgName << " input.vdb output.vdb [ -s \"string\" | -f file.txt ] [OPTIONS]\n" <<
+"Usage: " << gProgName << " [input.vdb [output.vdb] | analyze] [-s \"string\" | -f file.txt] [OPTIONS]\n" <<
 "Which: executes a string or file containing a code snippet on an input.vdb file\n\n" <<
 "Options:\n" <<
-"    -s snippet        execute code snippet on the input.vdb file\n" <<
-"    -f file.txt       execute text file containing a code snippet on the input.vdb file\n" <<
-"    -v                verbose (print timing and diagnostics)\n" <<
-"    --list-functions  list all available functions, their signatures and their documentation\n" <<
-"    --print-ast       print the abstract syntax tree generated for point and volume execution\n" <<
+"    -s snippet       execute code snippet on the input.vdb file\n" <<
+"    -f file.txt      execute text file containing a code snippet on the input.vdb file\n" <<
+"    -v               verbose (print timing and diagnostics)\n" <<
+"    --opt level      set an optimization level on the generated IR [NONE, O0, O1, O2, Os, Oz, O3]\n" <<
+"    analyze          enter analysis mode for the provided code\n" <<
+"      --parse           attempt to parse the input snippet only\n" <<
+"      --ast-print       descriptive print the abstract syntax tree generated, implies --parse\n" <<
+"      --re-print        re-interpret print of the provided code after ast traversal, implies --parse\n" <<
+"      --reg-print       print the attribute registry (name, types, access, dependencies), implies --parse\n" <<
+"    functions        enter function mode to query available function information\n" <<
+"      --list [name]     list all available functions, their documentation and their signatures.\n" <<
+"                        optionally only list functions which whose name includes a provided string.\n" <<
+"      --list-names      list all available functions names only\n" <<
 "Warning:\n" <<
 "     Providing the same file-path to both input.vdb and output.vdb arguments will overwrite\n" <<
 "     the file. If no output file is provided, the input.vdb will be processed but will remain\n" <<
@@ -132,50 +159,85 @@ struct ScopedInitialize
     inline void initializeCompiler() const { openvdb::ax::initialize(); }
 };
 
-void printFunctions(std::ostream& os)
+void printFunctions(const bool namesOnly, const std::string& search, std::ostream& os)
 {
-    openvdb::ax::FunctionOptions opts;
-    opts.mLazyFunctions = false;
-
     static const size_t maxHelpTextWidth = 100;
 
+    openvdb::ax::FunctionOptions opts;
+    opts.mLazyFunctions = false;
     const openvdb::ax::codegen::FunctionRegistry::UniquePtr reg =
-        openvdb::ax::codegen::createStandardRegistry(opts);
+        openvdb::ax::codegen::createDefaultRegistry(&opts);
 
-    llvm::LLVMContext C;
-
-    for (const auto& iter : reg->map()) {
-
-        if (iter.second.isInternal()) continue;
-
-        os << iter.first << std::endl << "|" << std::endl;
-
-        const openvdb::ax::codegen::FunctionBase::Ptr function = iter.second.function();
-        std::string docs;
-        function->getDocumentation(docs);
-
-        if (docs.empty()) docs = "<No documentation exists for this fuction>";
-
-        // do some basic formatting on the help text
-
-        size_t pos = maxHelpTextWidth;
-        while (pos < docs.size()) {
-            while (docs[pos] != ' ' && pos != 0) --pos;
-            if (pos == 0) break;
-            docs.insert(pos, "\n|  ");
-            pos += maxHelpTextWidth;
+    if (namesOnly) {
+        std::vector<const std::string*> names;
+        for (const auto& iter : reg->map()) {
+            if (iter.second.isInternal()) continue;
+            names.emplace_back(&iter.first);
         }
+        if (names.empty()) return;
 
-        os << "| - " << docs << std::endl << "|" << std::endl;
-
-        const auto& list = function->list();
-        for (const openvdb::ax::codegen::FunctionSignatureBase::Ptr& signature : list) {
-            os << "|  - ";
-            signature->print(C, iter.first, os);
-            os << std::endl;
+        size_t pos = 0;
+        for (size_t i = 0; i < names.size() - 1; ++i) {
+            const std::string& name = (*names[i]);
+            if (i != 0 && pos > maxHelpTextWidth) {
+                os << '\n';
+                pos = 0;
+            }
+            pos += name.size() + 2; // 2=", "
+            os << name << ',' << ' ';
         }
-        os << std::endl;
+        os << *names.back() << '\n';
     }
+    else {
+
+        llvm::LLVMContext C;
+
+        for (const auto& iter : reg->map()) {
+            if (iter.second.isInternal()) continue;
+            if (!search.empty() && iter.first.find(search) == std::string::npos) {
+                continue;
+            }
+            const openvdb::ax::codegen::FunctionBase::Ptr function = iter.second.function();
+            std::string docs;
+            function->getDocumentation(docs);
+            if (docs.empty()) docs = "<No documentation exists for this fuction>";
+
+            // do some basic formatting on the help text
+
+            size_t pos = maxHelpTextWidth;
+            while (pos < docs.size()) {
+                while (docs[pos] != ' ' && pos != 0) --pos;
+                if (pos == 0) break;
+                docs.insert(pos, "\n|  ");
+                pos += maxHelpTextWidth;
+            }
+
+            os << iter.first << '\n' << '|' << '\n';
+            os << "| - " << docs << '\n' << '|' << '\n';
+
+            const auto& list = function->list();
+            for (const openvdb::ax::codegen::FunctionSignatureBase::Ptr& signature : list) {
+                os << "|  - ";
+                signature->print(C, iter.first, os);
+                os << '\n';
+            }
+            os << '\n';
+        }
+    }
+}
+
+openvdb::ax::CompilerOptions::OptLevel
+optStringToLevel(const std::string& str)
+{
+    if (str == "NONE") return openvdb::ax::CompilerOptions::OptLevel::NONE;
+    if (str == "O0")   return openvdb::ax::CompilerOptions::OptLevel::O0;
+    if (str == "O1")   return openvdb::ax::CompilerOptions::OptLevel::O1;
+    if (str == "O2")   return openvdb::ax::CompilerOptions::OptLevel::O2;
+    if (str == "Os")   return openvdb::ax::CompilerOptions::OptLevel::Os;
+    if (str == "Oz")   return openvdb::ax::CompilerOptions::OptLevel::Oz;
+    if (str == "O3")   return openvdb::ax::CompilerOptions::OptLevel::O3;
+    OPENVDB_LOG_FATAL("invalid option given for --opt level");
+    usage();
 }
 
 int
@@ -198,18 +260,37 @@ main(int argc, char *argv[])
         if (arg[0] == '-') {
             if (parser.check(i, "-s")) {
                 ++i;
-                options.mInputCode = argv[i];
+                options.mInputCode.reset(new std::string(argv[i]));
             } else if (parser.check(i, "-f")) {
                 ++i;
-                loadSnippetFile(argv[i], options.mInputCode);
+                options.mInputCode.reset(new std::string());
+                loadSnippetFile(argv[i], *options.mInputCode);
             } else if (parser.check(i, "-v", 0)) {
                 options.mVerbose = true;
-            } else if (parser.check(i, "--list-functions", 0)) {
-                initializer.initializeCompiler();
-                printFunctions(std::cout);
-                return EXIT_SUCCESS;
-            } else if (parser.check(i, "--print-ast", 0)) {
+            } else if (parser.check(i, "--parse", 0)) {
+                options.mParse = true;
+            } else if (parser.check(i, "--list", 0)) {
+                options.mFunctionList = true;
+                options.mFunctionNamesOnly = false;
+                if (i + 1 >= argc) continue;
+                if (argv[i+1][0] == '-') continue;
+                ++i;
+                options.mFunctionSearch = std::string(argv[i]);
+            } else if (parser.check(i, "--list-names", 0)) {
+                options.mFunctionList = true;
+                options.mFunctionNamesOnly = true;
+            } else if (parser.check(i, "--ast-print", 0)) {
                 options.mPrintAST = true;
+                options.mParse = true;
+            } else if (parser.check(i, "--re-print", 0)) {
+                options.mReprint = true;
+                options.mParse = true;
+            } else if (parser.check(i, "--reg-print", 0)) {
+                options.mAttribRegPrint = true;
+                options.mParse = true;
+            } else if (parser.check(i, "--opt")) {
+                ++i;
+                options.mOptLevel = argv[i];
             } else if (arg == "-h" || arg == "-help" || arg == "--help") {
                 usage(EXIT_SUCCESS);
             } else {
@@ -217,14 +298,33 @@ main(int argc, char *argv[])
                 usage();
             }
         } else if (!arg.empty()) {
-            if (options.mInputVDBFile.empty()) {
-                options.mInputVDBFile = arg;
+            // if mode has already been set, no more positional arguments are expected
+            // (except for execute which takes in and out)
+            if (options.mMode != ProgOptions::Mode::Execute) {
+                OPENVDB_LOG_FATAL("unrecognized positional argument: \"" << arg << "\"");
+                usage();
             }
-            else if (options.mOutputVDBFile.empty()) {
-                options.mOutputVDBFile = arg;
+
+            if (arg == "analyze")        options.mMode = ProgOptions::Analyze;
+            else if (arg == "functions") options.mMode = ProgOptions::Functions;
+
+            if (options.mMode == ProgOptions::Mode::Execute) {
+                // execute positional argument setup
+                if (options.mInputVDBFile.empty()) {
+                    options.mInputVDBFile = arg;
+                }
+                else if (options.mOutputVDBFile.empty()) {
+                    options.mOutputVDBFile = arg;
+                }
+                else {
+                    OPENVDB_LOG_FATAL("unrecognized positional argument: \"" << arg << "\"");
+                    usage();
+                }
             }
-            else {
-                OPENVDB_LOG_FATAL("unrecognized positional argument \"" << arg << "\"");
+            else if (!options.mInputVDBFile.empty() ||
+                !options.mOutputVDBFile.empty())
+            {
+                OPENVDB_LOG_FATAL("unrecognized positional argument: \"" << arg << "\"");
                 usage();
             }
         } else {
@@ -232,15 +332,49 @@ main(int argc, char *argv[])
         }
     }
 
-    if (options.mInputVDBFile.empty() || options.mInputCode.empty()) {
-        OPENVDB_LOG_FATAL("expected at least one OpenVDB file and one code snippet");
+    if (options.mMode == ProgOptions::Functions) {
+        if (options.mFunctionList) {
+            if (!options.mFunctionNamesOnly) {
+                // llvm only needs to be initialized if the signatures are being queried
+                initializer.initializeCompiler();
+            }
+            printFunctions(options.mFunctionNamesOnly,
+                options.mFunctionSearch,
+                std::cout);
+        }
+        return EXIT_SUCCESS;
+    }
+
+    if (!options.mInputCode) {
+        OPENVDB_LOG_FATAL("expected at least one AX file or a code snippet");
         usage();
     }
 
+    if (options.mMode == ProgOptions::Analyze) {
+        if (!options.mParse) return EXIT_SUCCESS;
+        const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
+            openvdb::ax::ast::parse(options.mInputCode->c_str());
+
+        if (options.mPrintAST) openvdb::ax::ast::print(*syntaxTree, true, std::cout);
+        if (options.mReprint)  openvdb::ax::ast::reprint(*syntaxTree, std::cout);
+        if (options.mAttribRegPrint) {
+            const openvdb::ax::AttributeRegistry::ConstPtr reg =
+                openvdb::ax::AttributeRegistry::create(*syntaxTree);
+            reg->print(std::cout);
+        }
+        return EXIT_SUCCESS;
+    }
+
+    if (options.mInputVDBFile.empty()) {
+        OPENVDB_LOG_FATAL("expected at least one OpenVDB file or analysis mode");
+        usage();
+    }
     if (options.mOutputVDBFile.empty()) {
         OPENVDB_LOG_WARN("no output VDB File specified - nothing will be written to disk");
     }
 
+    const openvdb::ax::CompilerOptions::OptLevel level =
+        optStringToLevel(options.mOptLevel);
 
     openvdb::GridPtrVecPtr grids;
     openvdb::MetaMap::Ptr meta;
@@ -261,16 +395,21 @@ main(int argc, char *argv[])
 
     // begin compiler
 
+    if (options.mVerbose) {
+        std::cout << "Initializing Compiler..." << std::endl;
+        std::cout << "  Opt Level [" << options.mOptLevel << "]" << std::endl;
+    }
+
     initializer.initializeCompiler();
-    openvdb::ax::Compiler::Ptr compiler = openvdb::ax::Compiler::create();
+
+    openvdb::ax::CompilerOptions opts;
+    opts.mOptLevel = level;
+    openvdb::ax::Compiler::Ptr compiler = openvdb::ax::Compiler::create(opts);
 
     // parse
 
     const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
-        openvdb::ax::ast::parse(options.mInputCode.c_str());
-    if (options.mPrintAST) {
-        openvdb::ax::ast::print(*syntaxTree);
-    }
+        openvdb::ax::ast::parse(options.mInputCode->c_str());
 
     // Execute on PointDataGrids
 

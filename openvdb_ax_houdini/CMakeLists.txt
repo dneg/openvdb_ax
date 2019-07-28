@@ -24,130 +24,98 @@
 # IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
 # LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 #
+#[=======================================================================[
 
-cmake_minimum_required ( VERSION 3.1 )
-set ( CMAKE_CXX_STANDARD 11 )
+  CMake Configuration for the OpenVDB AX Houdini Plugin.
 
-project ( OpenVDB_AX_Houdini )
+#]=======================================================================]
 
-##### SETUP DEPENDENCIES
+project(OpenVDBAXHoudini)
+cmake_minimum_required(VERSION 3.3)
+
+option(USE_DEFAULT_HOUDINI_INSTALL [=[
+Use the default install location returned by the Houdini CMake function,
+houdini_get_default_install_dir():
+  Linux: $ENV{HOME}/houdiniX.X
+  Mac: $ENV{HOME}/Library/Preferences/houdini/X.X
+  Windows: $ENV{HOMEDRIVE}$ENV{HOMEPATH}\Documents\houdiniX.X
+If OFF, CMAKE_INSTALL_PREFIX is used.]=] ON)
+
+#########################################################################
+
+message(STATUS "----------------------------------------------------")
+message(STATUS "---------- Configuring OpenVDB_AX_Houdini ----------")
+message(STATUS "----------------------------------------------------")
+
+#########################################################################
+
+# Configure prefix
+
+if(NOT OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
+  if(USE_DEFAULT_HOUDINI_INSTALL)
+    # Function from the Houdini CMake which is brought in by OpenVDBHoudiniSetup.cmake
+    houdini_get_default_install_dir(HOUDINI_INSTALL_LOCATION)
+  else()
+    set(HOUDINI_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX})
+  endif()
+endif()
+
+set(OPENVDB_AX_HOUDINI_INSTALL_PREFIX ${HOUDINI_INSTALL_LOCATION}
+  CACHE PATH "Base install path for OpenVDB Houdini shared libraries, dsos and headers."
+)
+
+message(STATUS "Houdini base install path: ${OPENVDB_AX_HOUDINI_INSTALL_PREFIX}")
+
+#########################################################################
 
 # Get OpenVDB AX Core library
 
-if ( NOT OPENVDB_AX_BUILD_AX )
-
-  # If not building OpenVDB AX, assume it is already installed
-
-  find_package ( OpenVDB_AX REQUIRED )
-  set( OPENVDB_AX_SHARED_LIB ${OpenVDB_AX_LIBRARY} )
-  set( OPENVDB_AX_INCLUDE_DIR ${OpenVDB_AX_INCLUDE_DIR})
+if(NOT OPENVDB_BUILD_AX)
+  find_package(OpenVDB REQUIRED openvdb_ax)
+  set(OPENVDBAX_LIB OpenVDB::openvdb_ax)
 else ()
-
-  # If OpenVDB AX is being built as well, use the target set in openvdb_ax/CMakeLists.txt
-
-  set ( OPENVDB_AX_SHARED_LIB openvdb_ax_shared )
-  set ( OPENVDB_AX_INCLUDE_DIR ${OPENVDB_AX_TOP_LEVEL_DIR} )
-
-endif ( NOT OPENVDB_AX_BUILD_AX )
-
-find_package ( OpenVDB_Houdini REQUIRED )
-find_package ( OpenVDB REQUIRED )
-
-set( OPENVDB_HOUDINI_SHARED_LIB ${OPENVDB_HOUDINI_LIBRARY} )
-set( OPENVDB_SHARED_LIB ${OpenVDB_OPENVDB_LIBRARY} )
-
-find_package ( HDK REQUIRED )
-
-if ( NOT WIN32 )
-  add_definitions ( -pthread -fPIC )
-endif ()
-
-# RPath handling
-if ( OPENVDB_AX_ENABLE_RPATH )
-
-  # when building, don't use the install RPATH already
-  # (but later on when installing)
-  set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-
-  # Use $ORIGIN for relative referencing
-  # The second $ORIGIN is present for the openvdb_houdini shared library.
-  if( OPENVDB_HOUDINI_INSTALL_LIBRARY )
-    set(CMAKE_INSTALL_RPATH "$ORIGIN/../../lib:$ORIGIN/../lib")
-  else ()
-    set(CMAKE_INSTALL_RPATH "$ORIGIN/../../lib:$ORIGIN")
-  endif ()
-  # SET(CMAKE_INSTALL_RPATH "$ORIGIN")
-
-endif ( OPENVDB_AX_ENABLE_RPATH )
+  set(OPENVDBAX_LIB openvdb_ax)
+endif()
 
 #### ADD TARGET
 
-hdk_add_library ( SOP_OpenVDB_AX
-  SOP_OpenVDB_AX.cc
-  )
-
-##### INCLUDES AND LINKING
-
-target_include_directories ( SOP_OpenVDB_AX
-  PUBLIC
-  ${PROJECT_SOURCE_DIR}
-  ${OPENVDB_AX_INCLUDE_DIR}
-  ${OPENVDB_HOUDINI_INCLUDE_DIR}
-  #${OPENVDB_HOUDINI_UTILS_INCLUDE_DIR} #this is the same as above
-  )
-
-target_include_directories ( SOP_OpenVDB_AX
-  SYSTEM
-  PUBLIC
-  ${OpenVDB_INCLUDE_DIR}
+add_library(SOP_OpenVDB_AX SHARED SOP_OpenVDB_AX.cc)
+set_target_properties(SOP_OpenVDB_AX
+  PROPERTIES PREFIX ""
 )
 
-target_include_directories ( SOP_OpenVDB_AX
-  SYSTEM
-  PUBLIC
-  ${HDK_INCLUDE_DIR}
+target_include_directories(SOP_OpenVDB_AX PRIVATE . )
+target_link_libraries(SOP_OpenVDB_AX PUBLIC
+  OpenVDB::openvdb_houdini
+  ${OPENVDBAX_LIB}
+  Houdini
+)
+
+if(OPENVDB_ENABLE_RPATH)
+  set(RPATHS)
+  if(OPENVDB_BUILD_AX)
+    list(APPEND RPATHS ${CMAKE_INSTALL_PREFIX}/lib)
+  else()
+    list(APPEND RPATHS ${OpenVDB_LIBRARY_DIRS})
+  endif()
+
+  list(REMOVE_DUPLICATES RPATHS)
+  set_target_properties(SOP_OpenVDB_AX
+    PROPERTIES INSTALL_RPATH "${RPATHS}"
   )
-
-# Checking if hdk version is >= 16.5
-# Houdini 16.5 stopped shipping boost.
-
-if (( HDK_VERSION_MAJOR GREATER 16 ) OR
-    (( HDK_VERSION_MAJOR EQUAL 16 ) AND ( HDK_VERSION_MINOR EQUAL 5 )))
-
-  find_package ( Boost ${MINIMUM_BOOST_VERSION} REQUIRED )
-
-  target_include_directories ( SOP_OpenVDB_AX
-    SYSTEM
-    PUBLIC
-    ${Boost_INCLUDE_DIR}
-    )
-
 endif()
-
-link_directories( $ENV{HFS}/dsolib )
-
-target_link_libraries ( SOP_OpenVDB_AX
-  ${OPENVDB_AX_SHARED_LIB}
-  ${OPENVDB_HOUDINI_SHARED_LIB}
-  ${OPENVDB_SHARED_LIB}
-  )
 
 ##### INSTALL
 
-target_compile_options(SOP_OpenVDB_AX
-  PRIVATE
-  -fext-numeric-literals
-  )
+set(OPENVDB_AX_HOUDINI_INCLUDE_FILES ax/HoudiniAXUtils.h)
 
-install ( TARGETS SOP_OpenVDB_AX
-  DESTINATION lib/houdini/dso
-  )
 
-set ( OPENVDB_AX_HOUDINI_INCLUDE_FILES
-  ax/HoudiniAXUtils.h
-  )
+install(TARGETS SOP_OpenVDB_AX
+  DESTINATION
+    ${OPENVDB_AX_HOUDINI_INSTALL_PREFIX}/dso
+)
 
-install (
-  FILES ${OPENVDB_AX_HOUDINI_INCLUDE_FILES}
-  DESTINATION include/openvdb_ax_houdini/ax
-  )
+install(FILES ${OPENVDB_AX_HOUDINI_INCLUDE_FILES}
+  DESTINATION
+    ${OPENVDB_AX_HOUDINI_INSTALL_PREFIX}/include/openvdb_ax_houdini/ax
+)

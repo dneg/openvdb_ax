@@ -196,20 +196,18 @@ struct SymbolTableBlocks
     ///
     inline llvm::Value* find(const std::string& name, const size_t startIndex) const
     {
-        // Find the lower bound start index - if it's greater than any value in the
-        // container, start at the beginning
+        // Find the lower bound start index and if necessary, decrement into
+        // the first block where the search will be started. Note that this
+        // is safe as the global block 0 will always exist
 
         auto it = mTables.lower_bound(startIndex);
-        if (it != mTables.end() && it->first != startIndex) {
-            assert(it != mTables.begin());
-            --it;
-        }
+        if (it == mTables.end() || it->first != startIndex) --it;
 
-        // reverse the iterator (which also make it point to the preceding value)
-        // and decrement
+        // reverse the iterator (which also make it point to the preceding
+        // value, hence the crement)
 
-        MapType::const_reverse_iterator iter(it);
-        --iter;
+        assert(it != mTables.end());
+        MapType::const_reverse_iterator iter(++it);
 
         for (; iter != mTables.crend(); ++iter) {
             llvm::Value* value = iter->second.get(name);

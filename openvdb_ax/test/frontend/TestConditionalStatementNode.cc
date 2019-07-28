@@ -29,6 +29,8 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Scanners.h>
+#include <openvdb_ax/ast/PrintTree.h>
 #include <openvdb_ax/Exceptions.h>
 #include <openvdb_ax/test/util.h>
 
@@ -36,61 +38,217 @@
 
 #include <string>
 
+using namespace openvdb::ax::ast;
+using namespace openvdb::ax::ast::tokens;
+
 namespace {
-
-enum BehaviourFlags
-{
-    Pass = unittest_util::ExpectedBase::Pass,    // else Fails
-};
-
-#define EXPECTED_PASS(Count) \
-    unittest_util::ExpectedBase::Ptr(new unittest_util::ExpectedType<>(BehaviourFlags::Pass, Count))
 
 static const unittest_util::CodeTests tests =
 {
-    { "if ((a));",                                     EXPECTED_PASS(1) },
-    { "if (function());",                              EXPECTED_PASS(1) },
-    { "if (a+b);",                                     EXPECTED_PASS(1) },
-    { "if (-a);",                                      EXPECTED_PASS(1) },
-    { "if (a = 1);",                                   EXPECTED_PASS(1) },
-    { "if (a.x = 1);",                                 EXPECTED_PASS(1) },
-    { "if (a++);",                                     EXPECTED_PASS(1) },
-    { "if (float(a));",                                EXPECTED_PASS(1) },
-    { "if ({1.0, 2.0, 3.0});",                         EXPECTED_PASS(1) },
-    { "if (a.z);",                                     EXPECTED_PASS(1) },
-    { "if (1.0f);",                                    EXPECTED_PASS(1) },
-    { "if (@a);",                                      EXPECTED_PASS(1) },
-    { "if (@a=1);",                                    EXPECTED_PASS(1) },
-    { "if (@a==1);",                                   EXPECTED_PASS(1) },
-    { "if (a);",                                       EXPECTED_PASS(1) },
-    { "if(a);",                                        EXPECTED_PASS(1) },
-    { "if (a) {b;}",                                   EXPECTED_PASS(1) },
-    { "if (a); else ;",                                EXPECTED_PASS(1) },
-    { "if (a) {} else ;",                              EXPECTED_PASS(1) },
-    { "if (a); else {}",                               EXPECTED_PASS(1) },
-    { "if (a); else (b);",                             EXPECTED_PASS(1) },
-    { "if (a) {} else {}",                             EXPECTED_PASS(1) },
-    { "if (a) b = 1; else {}",                         EXPECTED_PASS(1) },
-    { "if (a) {b = 1;} else {}",                       EXPECTED_PASS(1) },
-    { "if (a); else (b);",                             EXPECTED_PASS(1) },
-    { "if (a); else if(b) ;",                          EXPECTED_PASS(2) },
-    { "if (a) if(b) ; else ;",                         EXPECTED_PASS(2) },
-    { "if (a) if(b) {} else {} else ;",                EXPECTED_PASS(2) },
-    { "if (a) if(b) {if (c) ; else ;} else {} else ;", EXPECTED_PASS(3) },
-    { "if (a) if(b) {if (c) ;} else {}",               EXPECTED_PASS(3) },
-    { "if (a) {} else if(b) {if (c) ;} else {}",       EXPECTED_PASS(3) },
-    { "if (a); else {};",                              EXPECTED_PASS(1) },
-};
+    { "if ((a));",                                      Node::Ptr(new ConditionalStatement(new Local("a"), new Block())) },
+    { "if (a);",                                        Node::Ptr(new ConditionalStatement(new Local("a"), new Block())) },
+    { "if(a);",                                         Node::Ptr(new ConditionalStatement(new Local("a"), new Block())) },
+    { "if (@a);",                                       Node::Ptr(new ConditionalStatement(new Attribute("a", CoreType::FLOAT, true), new Block())) },
+    { "if (1.0f);",                                     Node::Ptr(new ConditionalStatement(new Value<float>(1.0f), new Block())) },
+    { "if (func());",                                   Node::Ptr(new ConditionalStatement(new FunctionCall("func"), new Block())) },
+    { "if (a+b);",                                      Node::Ptr(new ConditionalStatement(
+                                                            new BinaryOperator(OperatorToken::PLUS,
+                                                                new Local("a"),
+                                                                new Local("b")
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if (-a);",                                       Node::Ptr(new ConditionalStatement(
+                                                            new UnaryOperator(OperatorToken::MINUS,
+                                                                new Local("a")
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if (a = 1);",                                    Node::Ptr(new ConditionalStatement(
+                                                            new AssignExpression(
+                                                                new Local("a"),
+                                                                new Value<int32_t>(1),
+                                                                false
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if (a.x);",                                      Node::Ptr(new ConditionalStatement(
+                                                            new ArrayUnpack(
+                                                                new Local("a"),
+                                                                new Value<int32_t>(0)
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if (a++);",                                      Node::Ptr(new ConditionalStatement(
+                                                            new Crement(
+                                                                new Local("a"),
+                                                                Crement::Operation::Increment,
+                                                                true
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if (float(a));",                                 Node::Ptr(new ConditionalStatement(
+                                                            new Cast(
+                                                                new Local("a"),
+                                                                CoreType::FLOAT
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if ({1.0, 2.0, 3.0});",                          Node::Ptr(new ConditionalStatement(
+                                                            new ArrayPack(
+                                                                new ExpressionList({
+                                                                    new Value<double>(1.0),
+                                                                    new Value<double>(2.0),
+                                                                    new Value<double>(3.0)
+                                                                })
+                                                            ),
+                                                            new Block())
+                                                        )
+    },
+    { "if (a, b);",                                     Node::Ptr(new ConditionalStatement(
+                                                                    new ExpressionList({
+                                                                        new Local("a"),
+                                                                        new Local("b")
+                                                                    }),
+                                                                    new Block())) },
+    { "if (a, b, true, c = 1);",                        Node::Ptr(new ConditionalStatement(
+                                                                    new ExpressionList({
+                                                                        new Local("a"),
+                                                                        new Local("b"),
+                                                                        new Value<bool>(true),
+                                                                        new AssignExpression(
+                                                                            new Local("c"),
+                                                                            new Value<int32_t>(1),
+                                                                            false
+                                                                        ),
+                                                                    }),
+                                                                    new Block())) },
+    { "if (a) {b;}",                                    Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(new Local("b"))))
+    },
+    { "if (a); else ;",                                 Node::Ptr(new ConditionalStatement(new Local("a"), new Block(), new Block())) },
+    { "if (a) {} else ;",                               Node::Ptr(new ConditionalStatement(new Local("a"), new Block(), new Block())) },
+    { "if (a); else {}",                                Node::Ptr(new ConditionalStatement(new Local("a"), new Block(), new Block())) },
+    { "if (a); else (b);",                              Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(),
+                                                            new Block(new Local("b"))))
+    },
+    { "if (a); else {};",                               Node::Ptr(new ConditionalStatement(new Local("a"), new Block(), new Block())) },
+    { "if (a) {} else {}",                              Node::Ptr(new ConditionalStatement(new Local("a"), new Block(), new Block())) },
+    { "if (a) b = 1; else {}",                          Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new AssignExpression(
+                                                                    new Local("b"),
+                                                                    new Value<int32_t>(1),
+                                                                    false
+                                                                )
+                                                            ),
+                                                            new Block()))
+    },
 
-struct ConditionalStatementVisitor : public openvdb::ax::ast::Visitor
-{
-    ~ConditionalStatementVisitor() override = default;
-    void visit(const openvdb::ax::ast::ConditionalStatement& node) override final {
-        mCount++;
-        mNode = &node;
-    }
-    size_t mCount = 0;
-    const openvdb::ax::ast::ConditionalStatement* mNode = nullptr;
+    { "if (a) {b = 1;} else {}",                        Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new AssignExpression(
+                                                                    new Local("b"),
+                                                                    new Value<int32_t>(1),
+                                                                    false
+                                                                )
+                                                            ),
+                                                            new Block()))
+    },
+    { "if (a); else if(b) ;",                           Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new Local("b"),
+                                                                    new Block()
+                                                                )
+                                                            )
+                                                        ))
+    },
+    { "if (a) if(b) ; else ;",                          Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new Local("b"),
+                                                                    new Block(),
+                                                                    new Block()
+                                                                )
+                                                            )
+                                                        ))
+    },
+    { "if (a) if(b) {} else {} else ;",                 Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new Local("b"),
+                                                                    new Block(),
+                                                                    new Block()
+                                                                )
+                                                            ),
+                                                            new Block()
+                                                        ))
+    },
+    { "if (a) if(b) {if (c) ; else ;} else {} else ;",  Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new Local("b"),
+                                                                    new Block(
+                                                                        new ConditionalStatement(
+                                                                            new Local("c"),
+                                                                            new Block(),
+                                                                            new Block()
+                                                                        )
+                                                                    ),
+                                                                    new Block()
+                                                                )
+                                                            ),
+                                                            new Block()
+                                                        ))
+    },
+    { "if (a) if(b) {if (c) ;} else {}",                Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new Local("b"),
+                                                                    new Block(
+                                                                        new ConditionalStatement(
+                                                                            new Local("c"),
+                                                                            new Block()
+                                                                        )
+                                                                    ),
+                                                                    new Block()
+                                                                )
+                                                            )
+                                                        ))
+    },
+    { "if (a) {} else if(b) {if (c) ;} else {}",        Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new Local("b"),
+                                                                    new Block(
+                                                                        new ConditionalStatement(
+                                                                            new Local("c"),
+                                                                            new Block()
+                                                                        )
+                                                                    ),
+                                                                    new Block()
+                                                                )
+                                                            )
+                                                        ))
+    },
 };
 
 }
@@ -104,7 +262,7 @@ class TestConditionalStatementNode : public CppUnit::TestCase
     CPPUNIT_TEST(testASTNode);
     CPPUNIT_TEST_SUITE_END();
 
-    void testSyntax() { TEST_SYNTAX(tests); }
+    void testSyntax() { TEST_SYNTAX_PASSES(tests); }
     void testASTNode();
 };
 
@@ -112,27 +270,30 @@ CPPUNIT_TEST_SUITE_REGISTRATION(TestConditionalStatementNode);
 
 void TestConditionalStatementNode::testASTNode()
 {
-    using namespace openvdb::ax::ast;
-
     for (const auto& test : tests) {
-        const unittest_util::ExpectedBase::Ptr behaviour = test.second;
-        if (behaviour->fails()) continue;
-
         const std::string& code = test.first;
-        const openvdb::ax::ast::Tree::Ptr tree = parse(code.c_str());
+        const Node* expected = test.second.get();
+        const Tree::Ptr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
-        ConditionalStatementVisitor visitor;
-        tree->accept(visitor);
-        CPPUNIT_ASSERT_EQUAL_MESSAGE(ERROR_MSG("Unexpected AST node count", code),
-            behaviour->count(), visitor.mCount);
+        // get the first statement
+        const Node* result = tree->child(0)->child(0);
+        CPPUNIT_ASSERT(result);
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Invalid AST node", code),
-            static_cast<bool>(visitor.mNode));
+            Node::ConditionalStatementNode == result->nodetype());
 
-        CPPUNIT_ASSERT(visitor.mNode->mConditional.get() != nullptr);
-        CPPUNIT_ASSERT(visitor.mNode->mThenBranch.get()  != nullptr);
-        CPPUNIT_ASSERT(visitor.mNode->mElseBranch.get()  != nullptr);
+        std::vector<const Node*> resultList, expectedList;
+        linearize(*result, resultList);
+        linearize(*expected, expectedList);
 
+        if (!unittest_util::compareLinearTrees(expectedList, resultList)) {
+            std::ostringstream os;
+            os << "\nExpected:\n";
+            openvdb::ax::ast::print(*expected, true, os);
+            os << "Result:\n";
+            openvdb::ax::ast::print(*result, true, os);
+            CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Conditional Statement code", code) + os.str());
+        }
     }
 }
 

@@ -62,31 +62,22 @@ namespace codegen {
 
 class PrioritiseIRGeneration {};
 
-/// @brief  Helper function to retrieve a set amount of arguments from the
-///         argument stack
+/// @brief  Parse a set amount of llvm Values from the stack and "format" them
+///         such that they are in the default expected state. This state defined
+///         scalars to be loaded, arrays to be pointers to the underlying array and
+///         strings to be a pointer to the start of the string.
 ///
+/// @param arguments  A vector of llvm arguments to populate
 /// @param values     The value stack from the computer generation
 /// @param count      The number of values to pop from the stack
-/// @param arguments  A vector of llvm arguments to populate
+/// @param builder    The current llvm IRBuilder
 ///
 void
-argumentsFromStack(std::stack<llvm::Value*>& values,
+stackValuesForFunction(std::vector<llvm::Value*>& arguments,
+                   std::stack<llvm::Value*>& values,
                    const size_t count,
-                   std::vector<llvm::Value*>& arguments);
+                   llvm::IRBuilder<>& builder);
 
-/// @brief  Parse a vector of llvm function arguments such that they are
-///         in the default expected state. This state defined scalars to be
-///         loaded, arrays to be pointers to the underlying array and strings
-///         to be a pointer to the start of the string.
-///
-/// @param arguments            The vector of llvm arguments to parse
-/// @param builder              The current llvm IRBuilder
-/// @param loadScalarArguments  Whether to load scalar arguments
-///
-bool
-parseDefaultArgumentState(std::vector<llvm::Value*>& arguments,
-                          llvm::IRBuilder<>& builder,
-                          const bool loadScalarArguments = true);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,10 +96,19 @@ struct ArgType {
 template <typename T, size_t S>
 struct LLVMType<ArgType<T,S>> : public LLVMType<T[S]> {};
 
-using StringPtrType = const uint8_t* const;
+using V2D = ArgType<double, 2>;
+using V2F = ArgType<float, 2>;
+using V2I = ArgType<int32_t, 2>;
 using V3D = ArgType<double, 3>;
 using V3F = ArgType<float, 3>;
-using V3I = ArgType<int, 3>;
+using V3I = ArgType<int32_t, 3>;
+using V4D = ArgType<double, 4>;
+using V4F = ArgType<float, 4>;
+using V4I = ArgType<int32_t, 4>;
+using M3D = ArgType<double, 9>;
+using M3F = ArgType<float, 9>;
+using M4D = ArgType<double, 16>;
+using M4F = ArgType<float, 16>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -159,7 +159,7 @@ struct ArgumentIterator<FunctionT, 0> {
 ///         the return type of the function signature.
 /// @note   Reference arguments are not supported.
 ///
-/// @param LLVMContext  The llvm context
+/// @param C  The llvm context
 /// @param types   A vector of types to populate
 ///
 template<typename FunctionT>
@@ -180,7 +180,7 @@ llvmTypesFromFunction(llvm::LLVMContext& C, std::vector<llvm::Type*>* types)
 
 /// @brief  Populate a vector of llvm types from a function signature declaration.
 ///
-/// @param LLVMContext  The llvm context
+/// @param C  The llvm context
 /// @param types   A vector of types to populate
 ///
 template <typename Signature>
@@ -202,6 +202,7 @@ llvmTypesFromSignature(llvm::LLVMContext& C, std::vector<llvm::Type*>* types)
 struct FunctionSignatureBase
 {
     using Ptr = std::shared_ptr<FunctionSignatureBase>;
+    using VoidFPtr = void(*)();
 
     /// @brief  An enum used to describe how closely a container of llvm types
     ///         matches the stored function signature. This is used to automatically
@@ -232,7 +233,7 @@ struct FunctionSignatureBase
     /// @brief  Returns the pointer to the globally accessible function. Note that
     ///         This can be null if the function is entirely IR based
     ///
-    inline void* functionPointer() const { return mFunction; }
+    inline VoidFPtr functionPointer() const { return mFunction; }
 
     /// @brief  Returns the function symbol name. For functions requiring external
     ///         linkage, this is the name of the function declaration.
@@ -243,9 +244,8 @@ struct FunctionSignatureBase
     ///         representing the function arguments.
     ///
     /// @param  types  A vector of llvm types representing the function argument types
-    /// @param  C      The llvm context
     ///
-    SignatureMatch match(const std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const;
+    SignatureMatch match(const std::vector<llvm::Type*>& types) const;
 
     /// @brief  Returns true if the provided size matches the required number of
     ///         arguments for this function signature.
@@ -258,19 +258,18 @@ struct FunctionSignatureBase
     ///         signature exactly with no additional casting required.
     ///
     /// @param  input  A vector of llvm types representing the function argument types
-    /// @param  C      The llvm context
     ///
-    bool explicitMatch(const std::vector<llvm::Type*>& input, llvm::LLVMContext& C) const;
+    bool explicitMatch(const std::vector<llvm::Type*>& input) const;
 
     /// @brief  Returns true if the provided vector of llvm types matches this function
     ///         signature with additional but supported implicit casting
     ///
     /// @param  input  A vector of llvm types representing the function argument types
-    /// @param  C      The llvm context
     ///
-    bool implicitMatch(std::vector<llvm::Type*>& input, llvm::LLVMContext& C) const;
+    bool implicitMatch(const std::vector<llvm::Type*>& input) const;
 
-    /// @brief  Returns true if this function has a return value which is not void
+    /// @brief  Returns true if this function has a return value which is not void.
+    ///         Does not include functions with return values as output arguments.
     ///
     /// @param  C  The llvm context
     ///
@@ -278,37 +277,24 @@ struct FunctionSignatureBase
 
     /// @brief  Returns true if this function has arguments which return a value
     ///
-    inline bool hasOutputArguments() const {
-        return mOutputArguments != 0;
-    }
+    inline bool hasOutputArgument() const { return mLastArgumentReturn; }
 
-    /// @brief  Returns the number of return arguments. This includes whether the
-    ///         function return type is non void.
-    /// @param  C  The llvm context
-    ///
-    inline size_t numReturnValues(llvm::LLVMContext& C) const {
-        return hasReturnValue(C) ? 1 + mOutputArguments : mOutputArguments;
-    }
-
-    /// @brief  Appends the output arguments to a vector of llvm values. This is useful
+    /// @brief  Allocate and return the output argument of this function. This is useful
     ///         when constructing the correct llvm values to pass in as arguments due to
     ///         the front facing signatures requiring different output locations.
-    /// @note   This does not include the function return value
+    /// @note   Does nothing and returns a nullptr if this function does not have an
+    ///         output argument
     ///
-    /// @param values   The vector of llvm values to append to
     /// @param builder  The current llvm IRBuilder
     ///
-    void appendOutputArguments(std::vector<llvm::Value*>& values,
-                       llvm::IRBuilder<>& builder) const;
+    llvm::Value* getOutputArgument(llvm::IRBuilder<>& B) const;
 
     /// @brief  Appends the output argument types to a vector of llvm types.
     /// @note   This does not include the function return type
     ///
-    /// @param values  The vector of llvm types to append to
-    /// @param C       The llvm context
+    /// @param C      The llvm context
     ///
-    void appendOutputTypes(std::vector<llvm::Type*>& types,
-                      llvm::LLVMContext& C) const;
+    llvm::Type* getOutputType(llvm::LLVMContext& C) const;
 
     /// @brief  Builds and registers this function signature and symbol name as an
     ///         available and callable function within the llvm module. Returns the
@@ -320,11 +306,18 @@ struct FunctionSignatureBase
 
     /// @brief  Prints a description of this functions return type, name and signature
     ///
-    /// @param C     The llvm context
-    /// @param name  The name of the function to insert after it's return type
-    /// @param os    The string stream to write to
+    /// @param C        The llvm context
+    /// @param name     The name of the function to insert after it's return type
+    /// @param os       The string stream to write to
+    /// @param axtypes  Whether to print the types as AX string types or LLVM types.
+    ///                 If AX types, various assumptions are made about the forward
+    ///                 facing type. Pointers are ignored and strings are used for
+    ///                 char*/uint8* access
     ///
-    void print(llvm::LLVMContext& C, const std::string& name = "", std::ostream& os = std::cout) const;
+    void print(llvm::LLVMContext& C,
+        const std::string& name = "",
+        std::ostream& os = std::cout,
+        const bool axtypes = true) const;
 
 protected:
 
@@ -335,12 +328,13 @@ protected:
     ///                  function
     /// @param symbol    The function symbol name. This must be the name of the function
     ///                  signature declaration if the function is external
-    /// @param outArgs   The number of output arguments this function signature contains.
-    ///                  This starts from the end of the function signature
+    /// @param lastArgIsReturn   Whether the last argument of the function signature is
+    ///                  the return value
     ///
-    FunctionSignatureBase(void* const function,
-                          const std::string& symbol,
-                          const size_t outArgs = 0);
+    FunctionSignatureBase(VoidFPtr function,
+        const std::string& symbol,
+        const bool lastArgIsReturn = false);
+    virtual ~FunctionSignatureBase() = default;
 
     /// @brief  static method for converting a function signatures to a vector of
     ///         llvm types. See llvmTypesFromFunction.
@@ -355,28 +349,10 @@ protected:
         return llvmTypesFromFunction<FunctionT>(C, types);
     }
 
-private:
-
-    /// @brief  Returns true if an explicit match exists between two llvm type vectors
-    ///
-    /// @param input      The first vector of llvm types
-    /// @param signature  The second vector of llvm types
-    ///
-    bool explicitMatch(const std::vector<llvm::Type*>& input,
-                  const std::vector<llvm::Type*>& signature) const;
-
-    /// @brief  Returns true if an implicit match exists between two llvm type vectors
-    ///
-    /// @param input      The first vector of llvm types
-    /// @param signature  The second vector of llvm types
-    ///
-    bool implicitMatch(const std::vector<llvm::Type*>& input,
-                  const std::vector<llvm::Type*>& signature) const;
-
 protected:
-    void* const mFunction;
+    VoidFPtr mFunction;
     const std::string mSymbolName;
-    const size_t mOutputArguments;
+    const bool mLastArgumentReturn;
 };
 
 /// @brief  The base definition for a single function type.
@@ -388,27 +364,10 @@ struct FunctionBase
     using FunctionMatch =
         std::pair<FunctionSignatureBase::Ptr, FunctionSignatureBase::SignatureMatch>;
 
-    /// @brief  An enum used to describe what context a function can be called in.
-    ///         As some functions are coupled to the object they are called form, this
-    ///         value is used to check the appropriate arguments are available.
-    ///
-    enum Context
-    {
-        Base = 0x1,
-        Point = 0x2,
-        Volume = 0x4,
-        All = Base | Point | Volume
-    };
-
     /// @brief  Pure virtual function which returns the function identifier for
     ///         this function type.
     ///
     virtual const std::string identifier() const = 0;
-
-    /// @brief  Pure virtual function which returns the function context for
-    ///         this function type.
-    ///
-    virtual FunctionBase::Context context() const = 0;
 
     /// @brief  Populate a vector of strings with the identifiers of any functions which
     ///         this function depends on. This is used by the compiler to ensure global
@@ -416,13 +375,13 @@ struct FunctionBase
     ///
     /// @param  identifiers  A vector of function identifiers to populate
     ///
-    inline virtual void getDependencies(std::vector<std::string>& identifiers) const {}
+    virtual void getDependencies(std::vector<std::string>& identifiers) const;
 
     /// @brief  Populate a string with any documentation for this function
     ///
-    /// @param  A string to populate
+    /// @param  doc A string to populate
     ///
-    inline virtual void getDocumentation(std::string& doc) const {}
+    virtual void getDocumentation(std::string& doc) const;
 
     /// @brief  Given a vector of llvm types, automatically returns the best possible
     ///         function signature pointer and match type.
@@ -447,7 +406,6 @@ struct FunctionBase
     /// @param functionArgs A vector of llvm types representing the function argument values
     /// @param globals      The map of global names to llvm::Values
     /// @param builder      The current llvm IRBuilder
-    /// @param M            The llvm module
     /// @param results      If provided, is populated with any function output arguments if any
     ///                     exist
     /// @param addOutputArguments  Whether the provided llvm value argument vector should
@@ -458,7 +416,6 @@ struct FunctionBase
     execute(const std::vector<llvm::Value*>& functionArgs,
             const std::unordered_map<std::string, llvm::Value*>& globals,
             llvm::IRBuilder<>& builder,
-            llvm::Module& M,
             std::vector<llvm::Value*>* results = nullptr,
             const bool addOutputArguments = true) const;
 
@@ -468,16 +425,11 @@ struct FunctionBase
     /// @param args     A vector of llvm types representing the function argument values
     /// @param globals  The map of global names to llvm::Values
     /// @param builder  The current llvm IRBuilder
-    /// @param M        The llvm Module to allow insertion of any additional functions
-    ///                 (such as intrinsics)
     ///
     virtual llvm::Value*
     generate(const std::vector<llvm::Value*>& args,
              const std::unordered_map<std::string, llvm::Value*>& globals,
-             llvm::IRBuilder<>& builder,
-             llvm::Module& M) const {
-        return nullptr;
-    }
+             llvm::IRBuilder<>& builder) const;
 
     /// @brief  Accessor to the underlying function signature list
     ///
@@ -487,10 +439,12 @@ protected:
 
     /// @brief  Function Base constructor, expected to be instantiated by derived classes
     ///
-    /// @param  A vector of function signatures corresponding to this function type
+    /// @param  list A vector of function signatures corresponding to this function type
     ///
     FunctionBase(const FunctionList& list)
         : mFunctionList(list) {}
+    virtual ~FunctionBase() = default;
+
     const FunctionList mFunctionList;
 };
 
@@ -520,12 +474,44 @@ struct FunctionSignature : public FunctionSignatureBase
 
     using FunctionPtrT = typename std::add_pointer<SignatureT>::type;
 
-    FunctionSignature(void* const ptr, const std::string& symbol, const size_t outArgs = 0)
-        : FunctionSignatureBase(ptr, symbol, outArgs) {
-            if (outArgs > this->size()) {
-                OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
-                    "\" has been constructed with " + std::to_string(outArgs) + " output arguments, "
-                    "with only " + std::to_string(this->size()) + " available in signature.");
+    FunctionSignature(FunctionSignatureBase::VoidFPtr ptr,
+        const std::string& symbol,
+        const bool lastArgIsReturn = false)
+        : FunctionSignatureBase(ptr, symbol, lastArgIsReturn)
+        {
+            if (lastArgIsReturn) {
+                // check there actually are arguments
+                if (this->size() == 0) {
+                    OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
+                        "\" has been setup with the last argument as the return value, however the "
+                        "provided signature is empty.");
+                }
+                // check no return value exists
+                if (!std::is_same<typename Traits::ReturnType, void>::value) {
+                    OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
+                        "\" has been setup with the last argument as the return value and a "
+                        "non void return type.");
+                }
+
+                // @note  This resolves compilation issues where N_ARGS is empty, causing out
+                //        of range tuple queries or queries into 0 size arguments.
+                // @todo  Improve this
+
+                using __SignatureT =
+                    typename std::conditional<Traits::N_ARGS == 0,
+                        std::function<void(void*)>,
+                        Signature>::type;
+                static constexpr size_t Index = Traits::N_ARGS == 0 ? 1 : Traits::N_ARGS;
+                using ArgumentIteratorT = ArgumentIterator<__SignatureT, Index>;
+                using LT = typename ArgumentIteratorT::ArgumentValueType;
+
+                // check output is a pointer (mem will be allocated)
+
+                if (!std::is_pointer<LT>::value) {
+                    OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
+                        "\" has been setup with the last argument as the return value but it is not"
+                        "a pointer type.");
+                }
             }
         }
 
@@ -546,23 +532,22 @@ struct FunctionSignature : public FunctionSignatureBase
     /// @param  symbol   The function symbol name if it is external. If this is a C style function
     ///                  (a free function declared with extern "C"), using the name of the function
     ///                  will always ensure linkage is found, regardless of the llvm linkage type.
-    /// @param outArgs   The number of output arguments this function has.
+    /// @param lastArgIsReturn   Whether the last argument of the function signature is the return value
     ///
-    static Ptr create(Signature function, const std::string& symbol, const size_t outArgs = 0) {
-
-        void* functionVoidPtr = nullptr;
+    static Ptr create(Signature function, const std::string& symbol, const bool lastArgIsReturn = false)
+    {
+        FunctionSignatureBase::VoidFPtr functionVoidPtr = nullptr;
 
         if (function) {
-            using FunctionPtrT = typename std::add_pointer<SignatureT>::type;
             FunctionPtrT* ptr = function.template target<FunctionPtrT>();
             if (!ptr) {
                 OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
                     "\" does not match expected signature during creation.");
             }
-            functionVoidPtr = reinterpret_cast<void*>(*ptr);
+            functionVoidPtr = reinterpret_cast<FunctionSignatureBase::VoidFPtr>(*ptr);
         }
 
-        return Ptr(new FunctionSignatureT(functionVoidPtr, symbol, outArgs));
+        return Ptr(new FunctionSignatureT(functionVoidPtr, symbol, lastArgIsReturn));
     }
 
     /// @brief  Automatically returns the number of arguments of this function using
@@ -592,11 +577,11 @@ struct FunctionSignature : public FunctionSignatureBase
 ///
 #define DECLARE_FUNCTION_SIGNATURE(FunctionPtr) \
     openvdb::ax::codegen::FunctionSignature<decltype(FunctionPtr)>\
-        ::create(&FunctionPtr, std::string(#FunctionPtr), 0)
+        ::create(&FunctionPtr, std::string(#FunctionPtr), false)
 
-#define DECLARE_FUNCTION_SIGNATURE_OUTPUT(FunctionPtr, ReturnIdx) \
+#define DECLARE_FUNCTION_SIGNATURE_OUTPUT(FunctionPtr) \
     openvdb::ax::codegen::FunctionSignature<decltype(FunctionPtr)>\
-        ::create(&FunctionPtr, std::string(#FunctionPtr), ReturnIdx)
+        ::create(&FunctionPtr, std::string(#FunctionPtr), true)
 
 #endif // OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 

@@ -74,7 +74,9 @@ TestPointExecutable::testConstructionDestruction()
 
     // Basic construction
 
-    openvdb::ax::AttributeRegistry::ConstPtr emptyReg(new openvdb::ax::AttributeRegistry);
+    openvdb::ax::ast::Tree tree;
+    openvdb::ax::AttributeRegistry::ConstPtr emptyReg =
+        openvdb::ax::AttributeRegistry::create(tree);
     openvdb::ax::PointExecutable::Ptr pointExecutable
         (new openvdb::ax::PointExecutable(E, C, emptyReg, nullptr, {}));
 

@@ -28,14 +28,36 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file ast/AST.h
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief  Provides the definition for every abstract and concrete derived
+///   class which represent a particular abstract syntax tree (AST) node
+///   type. Also provides access to the parser for generating a fully
+///   constructed AST from a given string.
+///
+///   AST nodes represents a particular branch of a complete AST. Concrete
+///   nodes can be thought of as leaf node types which hold semantic
+///   information of a partial or complete statement or expression. A
+///   string of AX can be fully represented by building the correct
+///   AST structure. The AX grammar defined in axparser.y represents the
+///   valid mapping of a tokenized string to AST nodes.
+///
+///   AST node classes can either represent a "leaf-level" semantic
+///   component of a given AX AST, or an abstract base type. The latter are
+///   used by the parser and leaf-level AST nodes for storage of compatible
+///   child nodes, and provide grouping of various nodes which share common
+///   semantics. The main two types of abstract AST nodes are statements
+///   and expressions.
+///
+
 #ifndef OPENVDB_AX_AST_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_HAS_BEEN_INCLUDED
 
 #include "Tokens.h"
 #include "Literals.h"
 
-#include <openvdb/Types.h>
-#include <openvdb/util/Name.h>
 #include <openvdb_ax/version.h>
 
 #include <memory>
@@ -49,547 +71,2111 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace ast {
 
-/// Forward declaration of the AST
+/// @brief  Forward declaration of the base Abstract Syntax Tree type.
+/// @note   Not to be confused with ast::Node types, which are the base abstract
+///         type for all AST nodes. Tree nodes are the highest possible concrete
+///         node type (in terms of hierarchy) which represent a full AX file.
+///         They are always returned from the parser.
 struct Tree;
 
-/// @brief  Construct an abstract syntax tree from a code snippet
+/// @brief  Construct an abstract syntax tree from a code snippet. If the code
+///         is not well formed, as defined b the AX grammar, a runtime exception
+///         will be thrown with the first lexer or parsing error.
 ///
+/// @return A shared pointer to a valid AST.
+///
+/// @param code  The code to parse
 std::shared_ptr<Tree> parse(const char* code);
 
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-// Forward declarations of all AST nodes
+/// @details  A reference list of all abstract and concrete AST nodes in
+///           hierarchical order (non-linear)
+///  Abstract nodes:
+///  - Node
+///  - Statement
+///  - Expression
+///  - Variable
+///  - ValueBase
+///
+/// Concrete nodes:
+///  - Tree
+///  - StatementList
+///  - Block
+///  - ExpressionList
+///  - Loop
+///  - Keyword
+///  - ConditionalStatement
+///  - BinaryOperator
+///  - AssignExpression
+///  - Crement
+///  - UnaryOperator
+///  - Cast
+///  - FunctionCall
+///  - ArrayUnpack
+///  - ArrayPack
+///  - Attribute
+///  - ExternalVariable
+///  - DeclareLocal
+///  - Local
+///  - Value<double/float/int32_t/int16_t/int64_t/bool>
+///  - Value<std::string>
 
-struct Node;
-struct Statement;
-struct Block;
-struct Expression;
-struct ExpressionList;
-struct ConditionalStatement;
-struct AssignExpression;
-struct Crement;
-struct UnaryOperator;
-struct BinaryOperator;
-struct Cast;
-struct Variable;
-struct Attribute;
-struct AttributeValue;
-struct ExternalVariable;
-struct DeclareLocal;
-struct Local;
-struct LocalValue;
-struct ValueBase;
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 
-struct Visitor;
-struct Modifier;
-
-// ----------------------------------------------------------------------------
-// Visitor Objects
-// ----------------------------------------------------------------------------
-
+/// @brief  The base abstract node which determines the interface and required
+///         methods for all derived concrete nodes which comprise a valid AST.
+/// @note   All AST nodes share a few common characteristics. All constructors
+///         typically take pointers to the abstract (pure-virtual) node types
+///         and assume ownership of this data on successful construction. Deep
+///         copy methods propagate down through all children of a given AST node
+///         but have the unique behavior of ensuring parent data is updated to
+///         the newly created parent nodes. Due to this behavior and the fact
+///         that most nodes store unique pointers to other nodes, we've omitted
+///         comparison and equality operators.
 struct Node
 {
+    using Ptr = std::shared_ptr<Node>;
+    using UniquePtr = std::unique_ptr<Node>;
+
+    /// @brief  An enumerated list of node types for all concrete node types.
+    ///         These can be used for faster evaluation of a given concrete node
+    ///         using the virtual function table via Node::nodetype() rather
+    ///         than performing a dynamic_cast/calling Node::isType.
+    /// @note   Abstract (pure-virtual) nodes are not listed here. Node::isType
+    ///         should be used to determine if a node is of a given abstract
+    ///         type.
+    enum NodeType {
+        TreeNode,
+        StatementListNode,
+        BlockNode,
+        ExpressionListNode,
+        ConditionalStatementNode,
+        LoopNode,
+        KeywordNode,
+        AssignExpressionNode,
+        CrementNode,
+        UnaryOperatorNode,
+        BinaryOperatorNode,
+        CastNode,
+        AttributeNode,
+        FunctionCallNode,
+        ExternalVariableNode,
+        DeclareLocalNode,
+        ArrayPackNode,
+        ArrayUnpackNode,
+        LocalNode,
+        ValueBoolNode,
+        ValueInt16Node,
+        ValueInt32Node,
+        ValueInt64Node,
+        ValueFloatNode,
+        ValueDoubleNode,
+        ValueStrNode
+    };
+
     Node() = default;
-    virtual ~Node() = 0;
-    virtual void accept(Visitor&) const = 0;
-    virtual Node* accept(Modifier&) = 0;
+    virtual ~Node() = default;
+
+    /// @brief  The deep copy method for a Node
+    /// @return A deep copy of the current node and all its children
     virtual Node* copy() const = 0;
+
+    /// @name Name/Type
+    /// @{
+
+    /// @brief  Virtual method for accessing node type information
+    /// @note   This method should be used when querying a concrete nodes type.
+    /// @return Returns the enumerated node type from the NodeType list
+    virtual NodeType nodetype() const = 0;
+
+    /// @brief  Virtual method for accessing node name information
+    /// @return Returns the node class name
+    virtual const char* nodename() const = 0;
+
+    /// @brief  Virtual method for accessing node name information
+    /// @return Returns the short node class name
+    virtual const char* subname() const = 0;
+
+    /// @brief  Virtual method for accessing a node's base class. Note that if
+    ///         this is called explicitly on an instance of ast::Node (the top
+    ///         most base class) a nullptr is returned. This is primarily used
+    ///         by the Visitor to support hierarchical visits.
+    /// @return Returns the current node as its base class type.
+    virtual const Node* basetype() const { return nullptr; }
+
+    /// @brief  Query whether or not this node is of a specific (derived) type.
+    ///         This method should be used to check if a node is of a particular
+    ///         abstract type. When checking concrete types, it's generally
+    ///         more efficient to check the return value of Node::nodetype()
+    /// @tparam NodeT The node type to query against.
+    /// @return True if this node is of the given type, false otherwise.
+    template <typename NodeT>
+    inline bool isType() const {
+        return dynamic_cast<const NodeT*>(this);
+    }
+
+    /// @}
+
+    /// @name Child Queries
+    /// @{
+
+    /// @brief  Virtual method for accessing child information. Returns the
+    ///         number of children a given AST node owns.
+    /// @return The number of children this node owns.
+    virtual size_t children() const = 0;
+
+    /// @brief  Virtual method for accessing child information. Returns a const
+    ///         pointer to a child node at the given index. If the index is out
+    ///         of range, a nullptr is returned.
+    /// @note   This may still return a nullptr even if the given index is valid
+    ///         if the child node has not been created.
+    /// @param  index  The child index to query
+    /// @return A Pointer to the child node, or a nullptr if none exists.
+    virtual const Node* child(const size_t index) const = 0;
+
+    /// @brief  Returns the child index of this node in relation to its parent,
+    ///         or -1 if no valid index is found (usually representing the top
+    ///         most node (i.e. Tree)
+    /// @return The child index of this node
+    inline int64_t childidx() const
+    {
+        const Node* p = this->parent();
+        if (!p) return -1;
+        size_t i = 0;
+        const size_t count = p->children();
+        for (; i < count; ++i) {
+            if (p->child(i) == this) break;
+        }
+        if (i == count) return -1;
+        return static_cast<int64_t>(i);
+    }
+
+    /// @}
+
+    /// @name Replacement
+    /// @{
+
+    /// @brief  In place replacement. Attempts to replace this node at its
+    ///         specific location within its Abstract Syntax Tree. On a
+    ///         successful replacement, this node is destroyed, the provided
+    ///         node is inserted in its place and ownership is transferred to the
+    ///         parent node. No further calls to this node can be made on
+    ///         successful replacements.
+    /// @note   A replacement will fail if this node is the top most node within
+    ///         an AST hierarchy or if the provided node type is not a
+    ///         compatible type for the required abstract storage. For example,
+    ///         if this node is an Attribute being held on a BinaryOperator,
+    ///         only concrete nodes derived from an Expression can be used as a
+    ///         replacement.
+    /// @note   This method will dynamic_cast the provided node to check to see
+    ///         if it's a compatible type.
+    /// @param  node  The node to insert on a successful replacement.
+    /// @return True if the replacement was successful, resulting in destruction
+    ///         of this class and ownership transferal of the provided node.
+    ///         False otherwise, where this and the provided node are unchanged.
+    inline bool replace(Node* node)
+    {
+        const int64_t idx = this->childidx();
+        if (idx == -1) return false; // avoid second vcall
+        return this->parent()->replacechild(idx, node);
+    }
+
+    /// @brief  Virtual method that attempted to replace a child at a given
+    ///         index with a provided node type.
+    /// @note   See Node::replace for a more detailed description
+    /// @param  index  The child index where a replacement should be attempted
+    /// @param  node   The node to insert on a successful replacement.
+    /// @return True if the replacement was successful, false otherwise
+    inline virtual bool replacechild(const size_t index, Node* node);
+
+    /// @}
+
+    /// @name Parent
+    /// @{
+
+    /// @brief  Access a const pointer to this nodes parent
+    /// @note   Can be a nullptr if this is the top most node in an AST (usually
+    ///         a Tree)
+    /// @return A const pointer to this node's parent node
+    inline const Node* parent() const { return mParent; }
+
+    /// @brief  Set this node's parent. This is used during construction of an
+    ///         AST and should not be used. @todo Make this private.
+    /// @param  parent  The parent to set
+    inline void setParent(Node* parent) {
+#ifndef NDEBUG
+        bool hasChild = false;
+        for (size_t i = 0; i < parent->children(); ++i)
+            hasChild |= parent->child(i) == this;
+        assert(hasChild);
+#endif
+        mParent = parent;
+    }
+
+private:
+    /// @brief  Access a non const pointer to this nodes parent. Used by
+    ///         replacement methods.
+    /// @note   Can be a nullptr if this is the top most node in an AST (usually
+    ///         a Tree)
+    /// @return A non-const pointer to this nodes parent node
+    inline Node* parent() { return mParent; }
+
+    /// @}
+
+    Node* mParent = nullptr;
 };
 
-/* Concrete Nodes ------------------------------------------------------------- */
+inline bool Node::replacechild(const size_t, Node*) { return false; }
 
-// Statements are anything that can make up a line, i.e. everything inbetween
-// semicolons
+
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+/// Abstract (pure-virtual) AST nodes
+
+/// @brief Statements are anything that can make up a line, i.e. everything
+///        in between semicolons. Likewise to their base ast::Node class,
+///        currently every concrete AST node is either directly or indirectly
+///        a derived statement type. They hold no class data.
 struct Statement : public Node
 {
-    using Ptr = std::shared_ptr<Statement>;
     using UniquePtr = std::unique_ptr<Statement>;
-
     ~Statement() override = default;
     virtual Statement* copy() const override = 0;
+    const Node* basetype() const override { return this; }
 };
 
-// Expressions only contain identifiers, literals and operators, and can be
-// reduced to some kind of value. For example:
-//    3 + 5
-//    min(3, 2)
+/// @brief Expressions are comprised of full or potentially partial parts of a
+///        full statement that may not necessary make up an entire valid
+///        statement on their own. For example, while a Binary Operator such as
+///        "3 + 5;"" is a valid statement on its own, the full statement
+///        "3 + 5 + 6;" must be broken down into two expressions which together
+///        form the statement as well as determining precedence.
 struct Expression : public Statement
 {
-    using Ptr = std::shared_ptr<Expression>;
     using UniquePtr = std::unique_ptr<Expression>;
-
     ~Expression() override = default;
     virtual Expression* copy() const override = 0;
+    const Statement* basetype() const override { return this; }
 };
 
+/// @brief Variables are a base type for Locals, Attributes and
+///        ExternalVariables. Unlike other abstract types, they also consolidate
+///        data for the derived types.
+struct Variable : public Expression
+{
+    using UniquePtr = std::unique_ptr<Variable>;
+
+    Variable(const std::string& name)
+        : Expression(), mName(name) {}
+    Variable(const Variable& other)
+        : Expression(), mName(other.mName) {}
+    ~Variable() override = default;
+
+    virtual Variable* copy() const override = 0;
+    const Expression* basetype() const override { return this; }
+    //
+    size_t children() const override { return 0; }
+    const Node* child(const size_t) const override { return nullptr; }
+    //
+    inline const std::string& name() const { return mName; }
+
+private:
+    const std::string mName;
+};
+
+/// @brief ValueBases are a base class for anything that holds a value (literal).
+/// Derived classes store the actual typed values
+struct ValueBase : public Expression
+{
+    using UniquePtr = std::unique_ptr<ValueBase>;
+    ~ValueBase() override = default;
+    virtual Expression* copy() const override = 0;
+    const Expression* basetype() const override { return this; }
+    //
+    size_t children() const override { return 0; }
+    const Node* child(const size_t) const override { return nullptr; }
+};
+
+
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+/// Concrete AST nodes
+
+/// @brief  A StatementList is derived from a Statement and comprises of
+///         combinations of multiple statements. This could represent either
+///         a list of statements of different types but in practice will likely
+///         represent a ',' separated list of the same type i.e.
+///         'int i = 1, j = 1;'.
+/// @note   Statements held by the list are guaranteed to be valid (non null).
+///         nullptrs added to the list are implicitly dropped.
+/// @todo   Consider combination with Block
+struct StatementList : public Statement
+{
+    using UniquePtr = std::unique_ptr<StatementList>;
+
+    /// @brief Construct a new StatementList with an empty list
+    StatementList() : mList() {}
+    /// @brief  Construct a new StatementList with a single statement,
+    ///         transferring ownership of the statement to the statement list
+    ///         and updating parent data on the statement. If the statement is a
+    ///         nullptr, it is ignored.
+    /// @param  statement  The statement to construct from
+    StatementList(Statement* statement)
+        : mList() {
+        this->addStatement(statement);
+    }
+    /// @brief Construct a new StatementList from a vector of statements,
+    ///        transferring ownership of all valid statements to the statement
+    ///        list and updating parent data on the statement. Only valid (non
+    ///        null) statements are added to the statement list.
+    /// @param  statements  The vector of statements to construct from
+    StatementList(const std::vector<Statement*>& statements)
+        : mList() {
+        for (Statement* statement : statements) {
+            this->addStatement(statement);
+        }
+    }
+    /// @brief  Deep copy constructor for a StatementList, performing a deep
+    ///         copy on every held statement, ensuring parent information is
+    ///         updated.
+    /// @param  other  A const reference to another statement list to deep copy
+    StatementList(const StatementList& other) : mList() {
+        for (const Statement::UniquePtr& stmnt : other.mList) {
+            this->addStatement(stmnt->copy());
+        }
+    }
+    ~StatementList() override = default;
+
+    /// @copybrief Node::copy()
+    StatementList* copy() const override { return new StatementList(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::StatementListNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "statement list"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "stml"; }
+    /// @copybrief Node::basetype()
+    const Statement* basetype() const override { return this; }
+
+    /// @copybrief Node::children()
+    size_t children() const override final { return this->size(); }
+    /// @copybrief Node::child()
+    const Statement* child(const size_t i) const override final {
+        if (i >= mList.size()) return nullptr;
+        return mList[i].get();
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (mList.size() <= i) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        mList[i].reset(expr);
+        mList[i]->setParent(this);
+        return true;
+    }
+
+    /// @brief  Alias for StatementList::children
+    inline size_t size() const { return mList.size(); }
+    /// @brief  Adds a statement to this statement list, transferring ownership to the
+    ///         statement list and updating parent data on the statement. If the
+    ///         statement is a nullptr, it is ignored.
+    inline void addStatement(Statement* stmnt) {
+        if (stmnt) {
+            mList.emplace_back(stmnt);
+            stmnt->setParent(this);
+        }
+    }
+private:
+    std::vector<Statement::UniquePtr> mList;
+};
+
+/// @brief  A Block node represents a scoped list of statements. It may comprise
+///         of 0 or more statements, and specifically indicates that a new scope
+///         is activated, typically represented by curly braces. Note that a
+///         block does not alway have to be encapsulated by curly braces, but
+///         always represents a new scope.
+/// @note   Statements held by the block are guaranteed to be valid (non null).
+///         nullptrs added to the block are implicitly dropped.
+/// @note   While closely linked, it's important to differentiate between this
+///         class and an llvm::BasicBlock.
+/// @todo   Consider combination with StatementList
 struct Block : public Statement
 {
-    using Ptr = std::shared_ptr<Block>;
     using UniquePtr = std::unique_ptr<Block>;
 
+    /// @brief Construct a new Block with an empty list
     Block() : mList() {}
+    /// @brief  Construct a new Block with a single statement, transferring
+    ///         ownership of the statement to the block and updating parent
+    ///         data on the statement. If the statement is a nullptr, it is
+    ///         ignored.
+    /// @param  statement  The statement to construct from
+    Block(Statement* statement)
+        : mList() {
+        this->addStatement(statement);
+    }
+    /// @brief Construct a new Block from a vector of statements, transferring
+    ///        ownership of all valid statements to the block and updating
+    ///        parent data on the statement. Only valid (non null) statements
+    ///        are added to the block.
+    /// @param  statements  The vector of statements to construct from
+    Block(const std::vector<Statement*>& statements)
+        : mList() {
+        for (Statement* statement : statements) {
+            this->addStatement(statement);
+        }
+    }
+    /// @brief  Deep copy constructor for a Block, performing a deep copy on
+    ///         every held statement, ensuring parent information is updated.
+    /// @param  other  A const reference to another block to deep copy
     Block(const Block& other) : mList() {
-        for (const Statement::Ptr& expr : other.mList) {
-            mList.emplace_back(expr->copy());
+        for (const Statement::UniquePtr& stmnt : other.mList) {
+            this->addStatement(stmnt->copy());
         }
     }
     ~Block() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Block* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     Block* copy() const override final { return new Block(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::BlockNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "scoped block"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "blk"; }
+    /// @copybrief Node::basetype()
+    const Statement* basetype() const override { return this; }
 
-    std::vector<Statement::Ptr> mList;
+    /// @copybrief Node::children()
+    size_t children() const override final { return this->size(); }
+    /// @copybrief Node::child()
+    const Statement* child(const size_t i) const override final {
+        if (i >= mList.size()) return nullptr;
+        return mList[i].get();
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (mList.size() <= i) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        mList[i].reset(expr);
+        mList[i]->setParent(this);
+        return true;
+    }
+
+    /// @brief  Alias for Block::children
+    inline size_t size() const { return mList.size(); }
+    /// @brief  Adds a statement to this block, transferring ownership to the
+    ///         block and updating parent data on the statement. If the
+    ///         statement is a nullptr, it is ignored.
+    inline void addStatement(Statement* stmnt) {
+        if (stmnt) {
+            mList.emplace_back(stmnt);
+            stmnt->setParent(this);
+        }
+    }
+private:
+    std::vector<Statement::UniquePtr> mList;
 };
 
-// A tree is a list of statements that make up the whole program
+/// @brief  A Tree is the highest concrete (non-abstract) node in the entire AX
+///         AST hierarchy. It represents an entire conversion of a valid AX
+///         string.
+/// @note   A tree is the only node type which has typedefs for use as a shared
+///         pointer. All other nodes are expected to be handled through unique
+///         pointers to infer ownership.
+/// @todo   Replace block with StatementList
 struct Tree : public Node
 {
     using Ptr = std::shared_ptr<Tree>;
     using ConstPtr = std::shared_ptr<const Tree>;
     using UniquePtr = std::unique_ptr<Tree>;
 
-    Tree(Block* block) : mBlock(block) {}
-    Tree() : mBlock(new Block()) {}
-    Tree(const Tree& other) : mBlock(new Block(*other.mBlock)) {}
+    /// @brief  Construct a new Tree from a given Block, transferring ownership
+    ///         of the Block to the tree and updating parent data on the Block.
+    /// @note   The provided Block must be a valid pointer (non-null)
+    /// @param  block  The Block to construct from
+    Tree(Block* block = new Block())
+        : mBlock(block) {
+            mBlock->setParent(this);
+    }
+    /// @brief  Deep copy constructor for a Tree, performing a deep copy on
+    ///         the held Block, ensuring parent information is updated.
+    /// @param  other  A const reference to another Tree to deep copy
+    Tree(const Tree& other)
+        : mBlock(new Block(*other.mBlock)) {
+            mBlock->setParent(this);
+        }
     ~Tree() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Tree* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     Tree* copy() const override final { return new Tree(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::TreeNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "tree"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "tree"; }
+    /// @copybrief Node::basetype()
+    const Node* basetype() const override { return this; }
 
-    Block::Ptr mBlock;
+    /// @copybrief Node::children()
+    size_t children() const override final { return 1; }
+    /// @copybrief Node::child()
+    const Block* child(const size_t i) const override final {
+        if (i == 0) return mBlock.get();
+        return nullptr;
+    }
+private:
+    Block::UniquePtr mBlock;
 };
 
-struct ExpressionList : public Statement
+/// @brief  An ExpressionList is comprises of multiple expressions. These
+///         expressions are typically separated by ',' tokens to form argument
+///         lists for functions or single line declarations. This node is
+///         similar to a Block and StatementList, except that it does not
+///         represent an additional scope and holds Expressions rather than
+///         Statements.
+struct ExpressionList : public Expression
 {
-    using Ptr = std::shared_ptr<ExpressionList>;
     using UniquePtr = std::unique_ptr<ExpressionList>;
 
+    /// @brief  Construct a new ExpressionList with an empty list
     ExpressionList() : mList() {}
+    /// @brief  Construct a new ExpressionList with a single expression,
+    ///         transferring ownership of the expression to the ExpressionList
+    ///         and updating parent data on the expression. If the expression is
+    ///         a nullptr, it is ignored.
+    /// @param  expression  The Expression to construct from
+    ExpressionList(Expression* expression)
+        : mList() {
+        this->addExpression(expression);
+    }
+    /// @brief Construct a new ExpressionList from a vector of expression,
+    ///        transferring ownership of all valid expression to the
+    ///        ExpressionList and updating parent data on the statement. Only
+    ///        valid (non null) expression are added to the block.
+    /// @param  expressions  The vector of expressions to construct from
+    ExpressionList(const std::vector<Expression*>& expressions)
+        : mList() {
+        for (Expression* expression : expressions) {
+            this->addExpression(expression);
+        }
+    }
+    /// @brief  Deep copy constructor for an ExpressionList, performing a deep
+    ///         copy on every held expression, ensuring parent information is
+    ///         updated.
+    /// @param  other  A const reference to another ExpressionList to deep copy
     ExpressionList(const ExpressionList& other)
         : mList() {
-        for (const Expression::Ptr& expr : other.mList) {
-            mList.emplace_back(expr->copy());
+        for (const Expression::UniquePtr& expr : other.mList) {
+            this->addExpression(expr->copy());
         }
     }
     ~ExpressionList() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    ExpressionList* accept(Modifier& visitor) override final;
-    ExpressionList* copy() const override final { return new ExpressionList(*this); }
+    /// @copybrief Node::copy()
+    ExpressionList* copy() const override final {
+        return new ExpressionList(*this);
+    }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::ExpressionListNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "expression list"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "expl"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
 
-    std::vector<Expression::Ptr> mList;
+    /// @copybrief Node::children()
+    size_t children() const override final { return this->size(); }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i >= mList.size()) return nullptr;
+        return mList[i].get();
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (mList.size() <= i) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        mList[i].reset(expr);
+        mList[i]->setParent(this);
+        return true;
+    }
+
+    /// @brief  Alias for ExpressionList::children
+    inline size_t size() const { return mList.size(); }
+    /// @brief  Query whether this Expression list holds any valid expressions
+    /// @return True if this node if empty, false otherwise
+    inline bool empty() const { return mList.empty(); }
+    /// @brief  Adds an expression to this ExpressionList, transferring
+    ///         ownership to the ExpressionList and updating parent data on the
+    ///         expression. If the expression is a nullptr, it is ignored.
+    inline void addExpression(Expression* expr) {
+        if (expr) {
+            mList.emplace_back(expr);
+            expr->setParent(this);
+        }
+    }
+private:
+    std::vector<Expression::UniquePtr> mList;
 };
 
+/// @brief  Loops represent for, while and do-while loop constructs.
+///         These all consist of a condition - evaluated to determine if loop
+///         iteration should continue, and a body which is the logic to be
+///         repeated. For loops also have initial statements which are evaluated
+///         prior to loop execution (at loop scope) and commonly used to
+///         set up iterators, and iteration expressions which are evaluated
+///         between iterations after the body and before the condition.
+///         Both conditions and initial statements can be declarations or
+///         expressions, so are Statements, and iteration expressions can
+///         consist of multiple expressions so are stored as an ExpressionList.
+///         The loop body is a Block defining its own scope (encapsulated by
+///         initial statement scope for for-loops).
+/// @note   Only for-loops should have initial statements and/or iteration
+///         expressions. Also for-loops allow empty conditions to be given by
+///         the user, this is replaced with a 'true' expression in the parser.
+struct Loop : public Statement
+{
+    using UniquePtr = std::unique_ptr<Loop>;
+
+    /// @brief  Construct a new Loop with the type defined by a
+    ///         tokens::LoopToken, a condition Statement, a Block representing
+    ///         the body and for for-loops an optional initial Statement and
+    ///         iteration Expression. Ownership of all arguments is
+    ///         transferred to the Loop. All arguments have their parent data
+    ///         updated.
+    /// @param  loopType   The type of loop - for, while or do-while.
+    /// @param  condition  The condition Statement to determine loop repetition
+    /// @param  body       The Block to be repeated
+    /// @param  init       The (optional) for-loop initial Statement.
+    /// @param  iter       The (optional) for-loop iteration Expression.
+    Loop(const tokens::LoopToken loopType,
+         Statement* condition,
+         Block* body,
+         Statement* init = nullptr,
+         Expression* iter = nullptr)
+        : mLoopType(loopType)
+        , mConditional(condition)
+        , mBody(body)
+        , mInitial(init)
+        , mIteration(iter) {
+            assert(mConditional);
+            assert(mBody);
+            mConditional->setParent(this);
+            mBody->setParent(this);
+            if (mInitial) {
+                assert(mLoopType == tokens::LoopToken::FOR);
+                mInitial->setParent(this);
+            }
+            if (mIteration) {
+                assert(mLoopType == tokens::LoopToken::FOR);
+                 mIteration->setParent(this);
+            }
+        }
+    /// @brief  Deep copy constructor for an Loop, performing a deep copy on the
+    ///         condition, body and initial Statement/iteration Expression
+    ///         if they exist, ensuring parent information is updated.
+    /// @param  other  A const reference to another Loop to deep copy
+    Loop(const Loop& other)
+        : mLoopType(other.mLoopType)
+        , mConditional(other.mConditional->copy())
+        , mBody(other.mBody->copy())
+        , mInitial(other.hasInit() ? other.mInitial->copy() : nullptr)
+        , mIteration(other.hasIter() ? other.mIteration->copy() : nullptr) {
+            mConditional->setParent(this);
+            mBody->setParent(this);
+            if (mInitial) {
+                assert(mLoopType == tokens::LoopToken::FOR);
+                mInitial->setParent(this);
+            }
+            if (mIteration) {
+                assert(mLoopType == tokens::LoopToken::FOR);
+                 mIteration->setParent(this);
+            }
+        }
+    ~Loop() override = default;
+
+    /// @copybrief Node::copy()
+    Loop* copy() const override final { return new Loop(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::LoopNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "loop"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "loop"; }
+    /// @copybrief Node::basetype()
+    const Statement* basetype() const override { return this; }
+
+    /// @copybrief Node::children()
+    size_t children() const override final { return 4; }
+    /// @copybrief Node::child()
+    const Statement* child(const size_t i) const override final {
+        if (i == 0) return mConditional.get();
+        if (i == 1) return mBody.get();
+        if (i == 2) return mInitial.get();
+        if (i == 3) return mIteration.get();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final
+    {
+        if (i == 0 || i == 2) {
+            Statement* stmt = dynamic_cast<Statement*>(node);
+            if (!stmt) return false;
+            if (i == 0) {
+                mConditional.reset(stmt);
+                mConditional->setParent(this);
+            }
+            else {
+                mInitial.reset(stmt);
+                mInitial->setParent(this);
+            }
+            return true;
+        }
+        else if (i == 1) {
+            Block* blk = dynamic_cast<Block*>(node);
+            if (!blk) return false;
+            mBody.reset(blk);
+            mBody->setParent(this);
+            return true;
+        }
+        else if (i == 3) {
+            Expression* expr = dynamic_cast<Expression*>(node);
+            if (!expr) return false;
+            mIteration.reset(expr);
+            mIteration->setParent(expr);
+            return true;
+        }
+        return false;
+    }
+
+    /// @brief  Query the type of loop held on this node.
+    /// @return The loop type as a tokens::LoopToken
+    inline tokens::LoopToken loopType() const { return mLoopType; }
+    /// @brief  Query if this Loop has a valid initial statement
+    /// @return True if a valid initial statement exists, false otherwise
+    inline bool hasInit() const { return static_cast<bool>(this->initial()); }
+    /// @brief  Query if this Loop has a valid iteration expression list
+    /// @return True if a valid iteration list exists, false otherwise
+    inline bool hasIter() const { return static_cast<bool>(this->iteration()); }
+    /// @brief  Access a const pointer to the Loop condition as an abstract
+    ///         statement.
+    /// @return A const pointer to the condition as a statement
+    const Statement* condition() const { return mConditional.get(); }
+    /// @brief  Access a const pointer to the Loop body as a Block.
+    /// @return A const pointer to the body Block
+    const Block* body() const { return mBody.get(); }
+    /// @brief  Access a const pointer to the Loop initial statement as an
+    ///         abstract statement.
+    /// @return A const pointer to the initial statement as a statement
+    const Statement* initial() const { return mInitial.get(); }
+    /// @brief  Access a const pointer to the Loop iteration Expression
+    /// @return A const pointer to the iteration Expression
+    const Expression* iteration() const { return mIteration.get(); }
+
+private:
+    const tokens::LoopToken       mLoopType;
+    Statement::UniquePtr          mConditional;
+    Block::UniquePtr              mBody;
+    Statement::UniquePtr          mInitial;
+    Expression::UniquePtr     mIteration;
+};
+
+/// @brief  ConditionalStatements represents all combinations of 'if', 'else'
+///         and 'else if' syntax and semantics. A single ConditionalStatement
+///         only ever represents up to two branches; an 'if' (then) and an
+///         optional 'else'. Multiple ConditionalStatements are nested within
+///         the second 'else' branch to support 'else if' logic. As well as both
+///         'if' and 'else' branches, a ConditionalStatement also holds an
+///         Expression related to its primary condition.
+/// @note   The first 'if' branch is referred to as the 'then' branch. The
+///         second 'else' branch is referred to as the 'else' branch.
 struct ConditionalStatement : public Statement
 {
-    using Ptr = std::shared_ptr<ConditionalStatement>;
     using UniquePtr = std::unique_ptr<ConditionalStatement>;
 
+    /// @brief  Construct a new ConditionalStatement with an Expression
+    ///         representing the primary condition, a Block representing the
+    ///         'then' branch and an optional Block representing the 'else'
+    ///         branch. Ownership of all arguments is transferred to the
+    ///         ConditionalStatement. All arguments have their parent data
+    ///         updated.
+    /// @param  conditional The Expression to construct the condition from
+    /// @param  thenBranch  The Block to construct the then branch from
+    /// @param  elseBranch  The (optional) Block to construct the else branch
+    ///                     from
     ConditionalStatement(Expression* conditional,
                          Block* thenBranch,
-                         Block* elseBranch)
+                         Block* elseBranch = nullptr)
         : mConditional(conditional)
         , mThenBranch(thenBranch)
-        , mElseBranch(elseBranch) {}
+        , mElseBranch(elseBranch) {
+            assert(mConditional);
+            assert(mThenBranch);
+            mConditional->setParent(this);
+            mThenBranch->setParent(this);
+            if (mElseBranch) mElseBranch->setParent(this);
+        }
+    /// @brief  Deep copy constructor for an ConditionalStatement, performing a
+    ///         deep copy on the condition and both held branches (Blocks),
+    ///         ensuring parent information is updated.
+    /// @param  other  A const reference to another ConditionalStatement to deep
+    ///         copy
     ConditionalStatement(const ConditionalStatement& other)
         : mConditional(other.mConditional->copy())
-        , mThenBranch(new Block(*other.mThenBranch))
-        , mElseBranch(new Block(*other.mElseBranch)) {}
+        , mThenBranch(other.mThenBranch->copy())
+        , mElseBranch(other.hasElseBranch() ? other.mElseBranch->copy() : nullptr) {
+            mConditional->setParent(this);
+            mThenBranch->setParent(this);
+            if (mElseBranch) mElseBranch->setParent(this);
+        }
     ~ConditionalStatement() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Statement* accept(Modifier& visitor) override final;
-    ConditionalStatement* copy() const override final { return new ConditionalStatement(*this); }
+    /// @copybrief Node::copy()
+    ConditionalStatement* copy() const override final {
+        return new ConditionalStatement(*this);
+    }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::ConditionalStatementNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "conditional statement"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "cond"; }
+    /// @copybrief Node::basetype()
+    const Statement* basetype() const override { return this; }
 
-    Expression::Ptr mConditional;
-    Block::Ptr mThenBranch;
-    Block::Ptr mElseBranch;
+    /// @copybrief Node::children()
+    size_t children() const override final { return 3; }
+    /// @copybrief Node::child()
+    const Statement* child(const size_t i) const override final {
+        if (i == 0) return this->condition();
+        if (i == 1) return this->thenBranch();
+        if (i == 2) return this->elseBranch();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final
+    {
+        if (i == 0) {
+            Expression* expr = dynamic_cast<Expression*>(node);
+            if (!expr) return false;
+            mConditional.reset(expr);
+            mConditional->setParent(this);
+            return true;
+        }
+        else if (i == 1 || i == 2) {
+            Block* blk = dynamic_cast<Block*>(node);
+            if (!blk) return false;
+            if (i == 1) {
+                mThenBranch.reset(blk);
+                mThenBranch->setParent(this);
+            }
+            else {
+                mElseBranch.reset(blk);
+                mElseBranch->setParent(this);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /// @brief  Query if this ConditionalStatement has a valid 'else' branch
+    /// @return True if a valid else branch exists, false otherwise
+    inline bool hasElseBranch() const {
+        return static_cast<bool>(this->elseBranch());
+    }
+    /// @brief  Query the number of branches held by this ConditionalStatement.
+    ///         This is only ever 1 or 2.
+    /// @return 2 if a valid 'then' and 'else' branch exist, 1 otherwise
+    size_t branchCount() const {
+        return this->hasElseBranch() ? 2 : 1;
+    }
+    /// @brief  Access a const pointer to the ConditionalStatements condition
+    ///         as an abstract expression.
+    /// @return A const pointer to the condition as an expression
+    const Expression* condition() const { return mConditional.get(); }
+    /// @brief  Access a const pointer to the ConditionalStatements 'then'
+    ///         branch as a Block
+    /// @return A const pointer to the 'then' branch
+    const Block* thenBranch() const { return mThenBranch.get(); }
+    /// @brief  Access a const pointer to the ConditionalStatements 'else'
+    ///         branch as a Block
+    /// @return A const pointer to the 'else' branch
+    const Block* elseBranch() const { return mElseBranch.get(); }
+private:
+    Expression::UniquePtr mConditional;
+    Block::UniquePtr mThenBranch;
+    Block::UniquePtr mElseBranch;
 };
 
-struct Variable : public Expression
-{
-    using Ptr = std::shared_ptr<Variable>;
-    using UniquePtr = std::unique_ptr<Variable>;
-
-    Variable(const Name& name) : mName(name) {}
-    ~Variable() override = default;
-
-    virtual Variable* copy() const override = 0;
-    const Name mName;
-};
-
-// AssignExpression are of the form lvalue = expression
-// Since they can be chained together, they are also expressions
-struct AssignExpression : public Expression
-{
-    using Ptr = std::shared_ptr<AssignExpression>;
-    using UniquePtr = std::unique_ptr<AssignExpression>;
-
-    AssignExpression(Variable* variable,
-                     Expression* expression)
-        : mVariable(variable)
-        , mExpression(expression) {}
-    AssignExpression(const AssignExpression& other)
-        : mVariable(other.mVariable->copy())
-        , mExpression(other.mExpression->copy()) {}
-
-    ~AssignExpression() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    AssignExpression* copy() const override final { return new AssignExpression(*this); }
-
-    Variable::Ptr mVariable;
-    Expression::Ptr mExpression;
-};
-
-struct Crement : public Expression
-{
-    using Ptr = std::shared_ptr<Crement>;
-    using UniquePtr = std::unique_ptr<Crement>;
-
-    enum Operation {
-        Increment,
-        Decrement
-    };
-
-    Crement(Variable* variable, Expression* expression, const Operation operation, bool post)
-        : mVariable(variable)
-        , mExpression(expression)
-        , mOperation(operation)
-        , mPost(post) {}
-    Crement(const Crement& other)
-        : mVariable(other.mVariable->copy())
-        , mExpression(other.mExpression->copy())
-        , mOperation(other.mOperation)
-        , mPost(other.mPost) {}
-    ~Crement() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    Crement* copy() const override final { return new Crement(*this); }
-
-    Variable::Ptr mVariable;
-    Expression::Ptr mExpression;
-    const Operation mOperation;
-    const bool mPost;
-};
-
-struct UnaryOperator : public Expression
-{
-    using Ptr = std::shared_ptr<UnaryOperator>;
-    using UniquePtr = std::unique_ptr<UnaryOperator>;
-
-    UnaryOperator(const std::string& op, Expression* expression)
-        : mOperation(tokens::operatorTokenFromName(op))
-        , mExpression(expression) {}
-    UnaryOperator(const tokens::OperatorToken op, Expression* expression)
-        : mOperation(op)
-        , mExpression(expression) {}
-    UnaryOperator(const UnaryOperator& other)
-        : mOperation(other.mOperation)
-        , mExpression(other.mExpression->copy()) {}
-    ~UnaryOperator() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    UnaryOperator* copy() const override final { return new UnaryOperator(*this); }
-
-    const tokens::OperatorToken mOperation;
-    Expression::Ptr mExpression;
-};
-
+/// @brief  A BinaryOperator represents a single binary operation between a
+///         left hand side (LHS) and right hand side (RHS) expression. The
+///         operation type is stored as a tokens::OperatorToken enumerated type
+///         on the node. AX grammar guarantees that this token will only ever
+///         be a valid binary operator token type when initialized by the
+///         parser.
 struct BinaryOperator : public Expression
 {
-    using Ptr = std::shared_ptr<BinaryOperator>;
     using UniquePtr = std::unique_ptr<BinaryOperator>;
 
-    BinaryOperator(const std::string& op,
-            Expression* left,
-            Expression* right)
-        : mOperation(tokens::operatorTokenFromName(op))
-        , mLeft(left)
-        , mRight(right) {}
+    /// @brief  Construct a new BinaryOperator with a given
+    ///         tokens::OperatorToken and a valid LHS and RHS expression,
+    ///         transferring ownership of the expressions to the BinaryOperator
+    ///         and updating parent data on the expressions.
+    /// @param  op     The binary token representing the operation to perform.
+    ///                Should not be an assignment token.
+    /// @param  left   The left hand side of the binary expression
+    /// @param  right  The right hand side of the binary expression
     BinaryOperator(const tokens::OperatorToken op,
             Expression* left,
             Expression* right)
         : mOperation(op)
         , mLeft(left)
-        , mRight(right) {}
+        , mRight(right) {
+            assert(mLeft);
+            assert(mRight);
+            mLeft->setParent(this);
+            mRight->setParent(this);
+        }
+    /// @brief Construct a new BinaryOperator with a string, delegating
+    ///        construction to the above BinaryOperator constructor.
+    /// @param  op     A string representing the binary operation to perform
+    /// @param  left   The left hand side of the binary expression
+    /// @param  right  The right hand side of the binary expression
+    BinaryOperator(const std::string& op,
+            Expression* left,
+            Expression* right)
+        : BinaryOperator(tokens::operatorTokenFromName(op), left, right) {}
+    /// @brief  Deep copy constructor for a BinaryOperator, performing a
+    ///         deep copy on both held expressions, ensuring parent information
+    ///         is updated.
+    /// @param  other  A const reference to another BinaryOperator to deep copy
     BinaryOperator(const BinaryOperator& other)
         : mOperation(other.mOperation)
         , mLeft(other.mLeft->copy())
-        , mRight(other.mRight->copy()) {}
+        , mRight(other.mRight->copy()) {
+            mLeft->setParent(this);
+            mRight->setParent(this);
+        }
     ~BinaryOperator() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    BinaryOperator* copy() const override final { return new BinaryOperator(*this); }
+    /// @copybrief Node::copy()
+    BinaryOperator* copy() const override final {
+        return new BinaryOperator(*this);
+    }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::BinaryOperatorNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "binary"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "bin"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 2; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return mLeft.get();
+        if (i == 1) return mRight.get();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i > 1) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        if (i == 0) {
+            mLeft.reset(expr);
+            mLeft->setParent(this);
+        }
+        else if (i == 1) {
+            mRight.reset(expr);
+            mRight->setParent(this);
+        }
+        return true;
+    }
 
+    /// @brief  Query the type of binary operation held on this node.
+    /// @return The binary operation as a tokens::OperatorToken
+    inline tokens::OperatorToken operation() const { return mOperation; }
+    /// @brief  Access a const pointer to the BinaryOperator LHS as an abstract
+    ///         expression
+    /// @return A const pointer to the LHS expression
+    const Expression* lhs() const { return mLeft.get(); }
+    /// @brief  Access a const pointer to the BinaryOperator RHS as an abstract
+    ///         expression
+    /// @return A const pointer to the RHS expression
+    const Expression* rhs() const { return mRight.get(); }
+private:
     const tokens::OperatorToken mOperation;
-    Expression::Ptr mLeft;
-    Expression::Ptr mRight;
+    Expression::UniquePtr mLeft;
+    Expression::UniquePtr mRight;
 };
 
+/// @brief  AssignExpressions represents a similar object construction to a
+///         BinaryOperator, however they specifically represent right hand size
+///         (RHS) to left hand side (LHS) traversal and assignment.
+///         AssignExpressions can be chained together and are thus derived as
+///         Expressions rather than Statements.
+/// @note   The default traversal order is reversed for child nodes of
+///         AssignExpressions. Nodes are laid out in memory with the RHS
+///         followed by the LHS (in contrast to BinaryOperators where this is
+///         the other way around).
+/// @note   AssignExpressions can either be direct or compound assignments. The
+///         latter is represented by the last argument in the primary
+///         constructor. If true, it is assumed that the RHS is a BinaryOperator
+///         which also accesses the LHS target. This is guaranteed by AX grammar.
+struct AssignExpression : public Expression
+{
+    using UniquePtr = std::unique_ptr<AssignExpression>;
+
+    /// @brief  Construct a new AssignExpression with valid LHS and RHS
+    ///         expressions, transferring ownership of the expressions to the
+    ///         BinaryOperator and updating parent data on the expressions.
+    /// @param  lhs  The left hand side of the assign expression
+    /// @param  rhs  The right hand side of the assign expression
+    /// @param  isCompound  Whether this is a compound assignment or not
+    AssignExpression(Expression* lhs, Expression* rhs, const bool isCompound)
+        : mCompound(isCompound)
+        , mRHS(rhs)
+        , mLHS(lhs) {
+            assert(mLHS);
+            assert(mRHS);
+            assert(mCompound && mRHS->isType<BinaryOperator>() || !mCompound);
+            mLHS->setParent(this);
+            mRHS->setParent(this);
+        }
+    /// @brief  Deep copy constructor for an AssignExpression, performing a
+    ///         deep copy on both held expressions, ensuring parent information
+    ///         is updated.
+    /// @param  other  A const reference to another AssignExpression to deep
+    ///                copy
+    AssignExpression(const AssignExpression& other)
+        : mCompound(other.mCompound)
+        , mRHS(other.mRHS->copy())
+        , mLHS(other.mLHS->copy()) {
+            mLHS->setParent(this);
+            mRHS->setParent(this);
+        }
+    ~AssignExpression() override = default;
+
+    /// @copybrief Node::copy()
+    AssignExpression* copy() const override final {
+        return new AssignExpression(*this);
+    }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::AssignExpressionNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "assignment expression"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "asgn"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 2; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return this->rhs();
+        if (i == 1) return this->lhs();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i > 1) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        if (i == 0) {
+            mRHS.reset(expr);
+            mRHS->setParent(this);
+        }
+        else if (i == 1) {
+            mLHS.reset(expr);
+            mLHS->setParent(this);
+        }
+        return true;
+    }
+
+    /// @brief  Query whether or not this is a compound AssignExpression.
+    ///         Compound AssignExpressions are assignments which read and write
+    ///         to the LHS value. i.e. +=, -=, *= etc
+    /// @return The binary operation as a tokens::OperatorToken
+    inline bool isCompound() const { return mCompound; }
+    /// @brief  Query the actual operational type of this AssignExpression. For
+    ///         simple (non-compound) AssignExpressions, tokens::EQUALS is
+    ///         returned. If this is a compound AssignExpression, the RHS
+    ///         BinaryOperator is queried and it's operational type is used to
+    ///         determine the compound type.
+    inline tokens::OperatorToken operation() const {
+        if (this->isCompound()) {
+            assert(mRHS->isType<BinaryOperator>());
+            const tokens::OperatorToken binary =
+                static_cast<BinaryOperator*>(mRHS.get())->operation();
+
+            switch (binary) {
+                case tokens::PLUS      : return tokens::PLUSEQUALS;
+                case tokens::MINUS     : return tokens::MINUSEQUALS;
+                case tokens::MULTIPLY  : return tokens::MULTIPLYEQUALS;
+                case tokens::DIVIDE    : return tokens::DIVIDEEQUALS;
+                case tokens::MODULO    : return tokens::MODULOEQUALS;
+                case tokens::BITAND    : return tokens::BITANDEQUALS;
+                case tokens::BITXOR    : return tokens::BITXOREQUALS;
+                case tokens::BITOR     : return tokens::BITOREQUALS;
+                default : {
+                    assert(false && "Invalid compund assignment in AST.");
+                }
+            }
+        }
+        return tokens::EQUALS;
+    }
+    /// @brief  Access a const pointer to the AssignExpression LHS as an
+    ///         abstract expression
+    /// @return A const pointer to the LHS expression
+    const Expression* lhs() const { return mLHS.get(); }
+    /// @brief  Access a const pointer to the AssignExpression RHS as an
+    ////        abstract expression
+    /// @return A const pointer to the RHS expression
+    const Expression* rhs() const { return mRHS.get(); }
+private:
+    const bool mCompound;
+    Expression::UniquePtr mRHS;
+    Expression::UniquePtr mLHS;
+};
+
+/// @brief  A Crement node represents a single increment '++' and decrement '--'
+///         operation. As well as it's crement type, it also stores whether
+///         the semantics constructed a post or pre-crement i.e. ++a or a++.
+struct Crement : public Expression
+{
+    using UniquePtr = std::unique_ptr<Crement>;
+
+    /// @brief  A simple enum representing the crement type.
+    enum Operation {
+        Increment,
+        Decrement
+    };
+
+    /// @brief  Construct a new Crement with a valid expression, transferring
+    ///         ownership of the expression to the Crement node and updating
+    ///         parent data on the expression.
+    /// @param  expr   The expression to crement
+    /// @param  op     The type of crement operation; Increment or Decrement
+    /// @param  post   True if the crement operation is a post crement i.e. a++,
+    ///                false if the operation is a pre crement i.e. ++a
+    Crement(Expression* expr, const Operation op, bool post)
+        : mExpression(expr)
+        , mOperation(op)
+        , mPost(post) {
+            mExpression->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a Crement, performing a deep copy on
+    ///         the underlying expressions, ensuring parent information is
+    ///         updated.
+    /// @param  other  A const reference to another Crement to deep copy
+    Crement(const Crement& other)
+        : mExpression(other.mExpression->copy())
+        , mOperation(other.mOperation)
+        , mPost(other.mPost) {
+            mExpression->setParent(this);
+        }
+    ~Crement() override = default;
+
+    /// @copybrief Node::copy()
+    Crement* copy() const override final { return new Crement(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::CrementNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "crement"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "crmt"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    //
+    /// @copybrief Node::children()
+    size_t children() const override final { return 1; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return this->expression();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i != 0) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        mExpression.reset(expr);
+        mExpression->setParent(this);
+        return true;
+    }
+
+    /// @brief  Query the type of the Crement operation. This does not hold
+    ///         post or pre-crement information.
+    /// @return The Crement operation being performed. This is either an
+    ///         Crement::Increment or Crement::Decrement.
+    inline Operation operation() const { return mOperation; }
+    /// @brief  Query if this Crement node represents an incrementation ++
+    /// @return True if this node is performing an increment
+    inline bool increment() const { return mOperation == Increment; }
+    /// @brief  Query if this Crement node represents an decrement --
+    /// @return True if this node is performing an decrement
+    inline bool decrement() const { return mOperation == Decrement; }
+    /// @brief  Query if this Crement node represents a pre crement ++a
+    /// @return True if this node is performing a pre crement
+    inline bool pre() const { return !mPost; }
+    /// @brief  Query if this Crement node represents a post crement a++
+    /// @return True if this node is performing a post crement
+    inline bool post() const { return mPost; }
+    /// @brief  Access a const pointer to the expression being crements as an
+    ///         abstract Expression
+    /// @return A const pointer to the expression
+    const Expression* expression() const { return mExpression.get(); }
+private:
+    Expression::UniquePtr mExpression;
+    const Operation mOperation;
+    const bool mPost;
+};
+
+/// @brief  A UnaryOperator represents a single unary operation on an
+///         expression. The operation type is stored as a tokens::OperatorToken
+///         enumerated type on the node. AX grammar guarantees that this token
+///         will only every be a valid unary operator token type when
+///         initialized by the parser.
+struct UnaryOperator : public Expression
+{
+    using UniquePtr = std::unique_ptr<UnaryOperator>;
+
+    /// @brief  Construct a new UnaryOperator with a given tokens::OperatorToken
+    ///         and a valid expression, transferring ownership of the expression
+    ///         to the UnaryOperator and updating parent data on the expression.
+    /// @param  op    The unary token representing the operation to perform.
+    /// @param  expr  The expression to perform the unary operator on
+    UnaryOperator(const tokens::OperatorToken op, Expression* expr)
+        : mOperation(op)
+        , mExpression(expr) {
+            assert(mExpression);
+            mExpression->setParent(this);
+        }
+    /// @brief Construct a new UnaryOperator with a string, delegating
+    ///        construction to the above UnaryOperator constructor.
+    /// @param  op    A string representing the unary operation to perform
+    /// @param  expr  The expression to perform the unary operator on
+    UnaryOperator(const std::string& op, Expression* expr)
+        : UnaryOperator(tokens::operatorTokenFromName(op), expr) {}
+    /// @brief  Deep copy constructor for a UnaryOperator, performing a deep
+    ///         copy on the underlying expressions, ensuring parent information
+    ///         is updated.
+    /// @param  other  A const reference to another UnaryOperator to deep copy
+    UnaryOperator(const UnaryOperator& other)
+        : mOperation(other.mOperation)
+        , mExpression(other.mExpression->copy()) {
+            mExpression->setParent(this);
+        }
+    ~UnaryOperator() override = default;
+
+    /// @copybrief Node::copy()
+    UnaryOperator* copy() const override final { return new UnaryOperator(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::UnaryOperatorNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "unary"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "unry"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 1; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return this->expression();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i != 0) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        mExpression.reset(expr);
+        mExpression->setParent(this);
+        return true;
+    }
+
+    /// @brief  Query the type of unary operation held on this node.
+    /// @return The unary operation as a tokens::OperatorToken
+    inline tokens::OperatorToken operation() const { return mOperation; }
+    /// @brief  Access a const pointer to the UnaryOperator expression as an
+    ///         abstract expression
+    /// @return A const pointer to the expression
+    const Expression* expression() const { return mExpression.get(); }
+private:
+    const tokens::OperatorToken mOperation;
+    Expression::UniquePtr mExpression;
+};
+
+/// @brief  Cast nodes represent the conversion of an underlying expression to
+///         a target type. Cast nodes are typically constructed from functional
+///         notation and do not represent construction of the target type,
+///         rather a type-casted conversion.
 struct Cast : public Expression
 {
-    using Ptr = std::shared_ptr<Cast>;
     using UniquePtr = std::unique_ptr<Cast>;
 
-    Cast(Expression* expression, const std::string& type)
-        : mType(type)
-        , mExpression(expression) {}
+    /// @brief  Construct a new Cast with a valid expression and a target
+    ///         tokens::CoreType, transferring ownership of the expression to
+    ///         the Cast and updating parent data on the expression.
+    /// @param  expr  The expression to perform the cast operator on
+    /// @param  type  The target cast type
+    Cast(Expression* expr, const tokens::CoreType type)
+        : Expression()
+        , mType(type)
+        , mExpression(expr) {
+            assert(mExpression);
+            mExpression->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a Cast node, performing a deep copy on
+    ///         the underlying expressions, ensuring parent information is
+    ///         updated.
+    /// @param  other  A const reference to another Cast node to deep copy
     Cast(const Cast& other)
-        : mType(other.mType)
-        , mExpression(other.mExpression->copy()) {}
+        : Expression()
+        , mType(other.mType)
+        , mExpression(other.mExpression->copy()) {
+            mExpression->setParent(this);
+        }
     ~Cast() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     Cast* copy() const override final { return new Cast(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::CastNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "cast"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "cast"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 1; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return this->expression();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i != 0) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        mExpression.reset(expr);
+        mExpression->setParent(this);
+        return true;
+    }
 
-    const Name mType;
-    Expression::Ptr mExpression;
+    /// @brief  Access to the target type
+    /// @return a tokens::CoreType enumerable type therepresenting the target type
+    inline tokens::CoreType type() const { return mType; }
+    /// @brief  Get the target type as a front end AX type/token string
+    /// @note   This returns the associated token to the type, not necessarily
+    ///         equal to the OpenVDB type string
+    /// @return A string representing the type/token
+    inline std::string typestr() const {
+        return ast::tokens::typeStringFromToken(mType);
+    }
+    /// @brief  Access a const pointer to the Cast node's expression as an
+    ///         abstract expression
+    /// @return A const pointer to the expression
+    const Expression* expression() const { return mExpression.get(); }
+private:
+    const tokens::CoreType mType;
+    Expression::UniquePtr mExpression;
 };
 
+/// @brief FunctionCalls represent a single call to a function and any provided
+///        arguments. The argument list can be empty but must not be null. The
+///        function name is expected to exist in the AX function registry.
 struct FunctionCall : public Expression
 {
-    using Ptr = std::shared_ptr<FunctionCall>;
     using UniquePtr = std::unique_ptr<FunctionCall>;
 
-    FunctionCall(const std::string& function)
-        : mFunction(function)
-        , mArguments(new ExpressionList()) {}
-    FunctionCall(const std::string& function, ExpressionList* arguments)
-        : mFunction(function)
-        , mArguments(arguments) {}
+    /// @brief  Construct a new FunctionCall with a given function identifier
+    ///         and optional argument list, transferring ownership of any
+    ///         provided arguments to the FunctionCall and updating parent data
+    ///         on the arguments.
+    /// @param  function   The name/identifier of the function
+    /// @param  arguments  Function arguments stored in an ExpressionList
+    FunctionCall(const std::string& function,
+        ExpressionList* arguments = new ExpressionList())
+        : mFunctionName(function)
+        , mArguments(arguments) {
+            assert(arguments);
+            mArguments->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a FunctionCall, performing a deep copy
+    ///         on all held function arguments, ensuring parent information is
+    ///         updated.
+    /// @param  other  A const reference to another FunctionCall to deep copy
     FunctionCall(const FunctionCall& other)
-        : mFunction(other.mFunction)
-        , mArguments(other.mArguments->copy()) {}
+        : mFunctionName(other.mFunctionName)
+        , mArguments(other.mArguments->copy()) {
+            mArguments->setParent(this);
+        }
     ~FunctionCall() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     FunctionCall* copy() const override final { return new FunctionCall(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::FunctionCallNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "function call"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "call"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 1; }
+    /// @copybrief Node::child()
+    const ExpressionList* child(const size_t i) const override final {
+        if (i == 0) return this->args();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i != 0) return false;
+        ExpressionList* exprl = dynamic_cast<ExpressionList*>(node);
+        if (!exprl) return false;
+        mArguments.reset(exprl);
+        mArguments->setParent(this);
+        return true;
+    }
 
-    const std::string mFunction;
-    ExpressionList::Ptr mArguments;
+    /// @brief  Access a const pointer to this FunctionCall node's arguments as
+    ///         an ExpressionList
+    /// @return A const pointer to the function arguments
+    const ExpressionList* args() const { return mArguments.get(); }
+    /// @brief  Access the function name/identifier
+    /// @return A const reference to the function name
+    inline const std::string& name() const { return mFunctionName; }
+    /// @brief  Query the total number of arguments stored on this function
+    /// @note   This is different to FunctionCall::children. Whilst a
+    ///         FunctionCall only ever has one child (the ExpressionList), the
+    ///         size of the ExpressionList determines the number of arguments
+    ///         passed to the function
+    /// @return The number of arguments. Can be 0
+    inline size_t numArgs() const { return mArguments->size(); }
+private:
+    const std::string mFunctionName;
+    ExpressionList::UniquePtr mArguments;
 };
 
-struct Return : public Expression
+/// @brief  Keywords represent keyword statements defining changes in execution.
+///         These include those that define changes in loop execution such as
+///         break and continue, as well as return statements.
+struct Keyword : public Statement
 {
-    using Ptr = std::shared_ptr<Return>;
-    using UniquePtr = std::unique_ptr<Return>;
+    using UniquePtr = std::unique_ptr<Keyword>;
 
-    ~Return() override = default;
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    Return* copy() const override final { return new Return(*this); }
+    /// @brief  Construct a new Keyword with a given tokens::KeywordToken.
+    /// @param  keyw   The keyword token.
+    Keyword(const tokens::KeywordToken keyw)
+        : mKeyword(keyw) {}
+    /// @brief  Deep copy constructor for a Keyword.
+    /// @param  other  A const reference to another Keyword to deep copy
+    Keyword(const Keyword& other)
+        : mKeyword(other.mKeyword) {}
+    ~Keyword() override = default;
+
+    /// @copybrief Node::copy()
+    Keyword* copy() const override final { return new Keyword(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::KeywordNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "keyword"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "keyw"; }
+    /// @copybrief Node::basetype()
+    const Statement* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 0; }
+    /// @copybrief Node::child()
+    const Node* child(const size_t) const override final {
+        return nullptr;
+    }
+    /// @brief  Query the keyword held on this node.
+    /// @return The keyword as a tokens::KeywordToken
+    inline tokens::KeywordToken keyword() const { return mKeyword; }
+
+private:
+    const tokens::KeywordToken mKeyword;
 };
 
+/// @brief  ArrayUnpack represent indexing operations into AX container types,
+///         primarily vectors and matrices indexed by the square brackets []
+///         syntax. Multiple levels of indirection (multiple components) can
+///         be specified but current construction is limited to either a single
+///         or double component lookup. Providing two components infers a matrix
+///         indexing operation.
+/// @note   Components are consolidated into an ExpressionList, resulting in the
+///         number of child AST nodes being 2 rather than 3. This AST node is
+///         unique in this way and is implemented as such to support future
+///         behavior.
+/// @note   Single indexing operations are still valid for matrix indexing
+struct ArrayUnpack : public Expression
+{
+    using UniquePtr = std::unique_ptr<ArrayUnpack>;
+
+    /// @brief  Construct a new ArrayUnpack with a valid expression, an initial
+    ///         component (as an expression) to the first access and an optional
+    ///         second component (as an expression) to a second access.
+    /// @note   Providing a second component automatically infers this
+    ///         ArrayUnpack as a matrix indexing operation. Ownership is
+    ///         transferred and parent data is updated for all arguments.
+    /// @param  expr  The expression to perform the unpacking operation on
+    /// @param  component0  The first component access
+    /// @param  component1  The second component access
+    ArrayUnpack(Expression* expr,
+        Expression* component0,
+        Expression* component1 = nullptr)
+        : Expression()
+        , mComponents(new ExpressionList())
+        , mExpression(expr) {
+            assert(component0);
+            assert(mExpression);
+            mComponents->addExpression(component0);
+            mComponents->addExpression(component1);
+            mExpression->setParent(this);
+            mComponents->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a ArrayUnpack, performing a deep
+    ///         copy on the expression being indexed and all held components,
+    ///         ensuring parent information is updated.
+    /// @param  other  A const reference to another ArrayUnpack to deep copy
+    ArrayUnpack(const ArrayUnpack& other)
+        : mComponents(other.mComponents->copy())
+        , mExpression(other.mExpression->copy()) {
+            mExpression->setParent(this);
+            mComponents->setParent(this);
+        }
+    ~ArrayUnpack() override = default;
+
+    /// @copybrief Node::copy()
+    ArrayUnpack* copy() const override final { return new ArrayUnpack(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::ArrayUnpackNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "array unpack"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "unpk"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 2; }
+    /// @copybrief Node::child()
+    const Statement* child(const size_t i) const override final {
+        if (i == 0) return this->components();
+        if (i == 1) return this->expression();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i > 1) return false;
+        if (i == 0) {
+            ExpressionList* exprl = dynamic_cast<ExpressionList*>(node);
+            if (!exprl) return false;
+            mComponents.reset(exprl);
+            mComponents->setParent(this);
+        }
+        else if (i == 1) {
+            Expression* expr = dynamic_cast<Expression*>(node);
+            if (!expr) return false;
+            mExpression.reset(expr);
+            mExpression->setParent(this);
+        }
+        return true;
+    }
+
+    /// @brief  Access a const pointer to the first component being used as an
+    ///         abstract Expression
+    /// @return A const pointer to the first component
+    inline const Expression* component0() const { return mComponents->child(0); }
+    /// @brief  Access a const pointer to the second component being used as an
+    ///         abstract Expression
+    /// @note   This can be a nullptr for single indexing operations
+    /// @return A const pointer to the second component
+    inline const Expression* component1() const { return mComponents->child(1); }
+    /// @brief  Access a const pointer to the list of components
+    /// @return A const pointer to the list of components
+    inline const ExpressionList* components() const { return mComponents.get(); }
+    /// @brief  Access a const pointer to the expression being indexed as an
+    ///         abstract Expression
+    /// @return A const pointer to the expression
+    inline const Expression* expression() const { return mExpression.get(); }
+    /// @brief  Query whether this ArrayUnpack operation must be a matrix
+    ///         indexing operation by checking the presence of a second
+    ///         component access.
+    /// @note   This method only guarantees that the indexing operation must be
+    ///         a matrix index. Single indexing is also valid for matrices and
+    ///         other multi dimensional containers
+    /// @return True if this is a double indexing operation, only valid for
+    ///         matrices
+    inline bool isMatrixIndex() const {
+        // assumes that component0 is always valid
+        return static_cast<bool>(this->component1());
+    }
+private:
+    ExpressionList::UniquePtr mComponents;
+    Expression::UniquePtr mExpression;
+};
+
+/// @brief  ArrayPacks represent temporary container creations of arbitrary
+///         sizes, typically generated through the use of curly braces {}.
+///         It uses an ExpressionList to store its array "arguments", allowing
+///         for complex expressions to generate array elements.
+struct ArrayPack : public Expression
+{
+    using UniquePtr = std::unique_ptr<ArrayPack>;
+
+    /// @brief  Construct a new ArrayPack with a valid set of array arguments
+    ///         (stored in an ExpressionList), transferring ownership of the
+    ///         ExpressionList to the ArrayPack and updating parent data on the
+    ///         ExpressionList.
+    /// @param  arguments  The ExpressionList holding the array arguments
+    ArrayPack(ExpressionList* arguments)
+        : Expression()
+        , mArguments(arguments) {
+            assert(mArguments);
+            mArguments->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a ArrayPack, performing a deep copy
+    ///         on all held array arguments, ensuring parent information is
+    ///         updated.
+    /// @param  other  A const reference to another ArrayPack to deep copy
+    ArrayPack(const ArrayPack& other)
+        : mArguments(new ExpressionList(*other.mArguments)) {
+            mArguments->setParent(this);
+        }
+    ~ArrayPack() override = default;
+
+    /// @copybrief Node::copy()
+    ArrayPack* copy() const override final { return new ArrayPack(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::ArrayPackNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "array pack"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "pack"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 1; }
+    /// @copybrief Node::child()
+    const ExpressionList* child(const size_t i) const override final {
+        if (i == 0) return this->args();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i != 0) return false;
+        ExpressionList* exprl = dynamic_cast<ExpressionList*>(node);
+        if (!exprl) return false;
+        mArguments.reset(exprl);
+        mArguments->setParent(this);
+        return true;
+    }
+
+    /// @brief  Access a const pointer to this ArrayPack's arguments as an
+    ///         ExpressionList
+    /// @return A const pointer to the function arguments
+    const ExpressionList* args() const { return mArguments.get(); }
+    /// @brief  Query the total number of array "arguments" stored on this
+    ///         ArrayPack
+    /// @note   This is different to ArrayPack::children. Whilst a
+    ///         ArrayPack only ever has one child (the ExpressionList), the
+    ///         size of the ExpressionList determines the number of arguments
+    ///         passed to the array pack operation
+    /// @return The number of arguments
+    inline size_t numArgs() const { return mArguments->size(); }
+private:
+    ExpressionList::UniquePtr mArguments;
+};
+
+/// @brief  Attributes represent any access to a primitive value, typically
+///         associated with the '@' symbol syntax. Note that the AST does not
+///         store any additional information on the given attribute other than
+///         its name and type, which together form a unique Attribute identifier
+///         known as the Attribute 'token'. A 'primitive value' in this instance
+///         refers to a value on an OpenVDB Volume or OpenVDB Points tree.
+/// @note   The ExternalVariable AST node works in a similar way
+/// @note   An Attribute is a complete "leaf-level" AST node. It has no children
+///         and nothing derives from it.
 struct Attribute : public Variable
 {
-    using Ptr = std::shared_ptr<Attribute>;
     using UniquePtr = std::unique_ptr<Attribute>;
-    using NamePair = std::pair<Name, Name>;
 
-    Attribute(const std::string& name, const std::string& type,
-              const bool typeInferred = false)
+    /// @brief  Construct a new Attribute with a given name and type. Optionally
+    ///         also mark it as inferred type creation (no type was directly
+    ///         specified)
+    /// @param  name      The name of the attribute
+    /// @param  type      The type of the attribute
+    /// @param  inferred  Whether the provided type was directly specified
+    ///                   (false).
+    Attribute(const std::string& name, const tokens::CoreType type,
+              const bool inferred = false)
         : Variable(name)
         , mType(type)
-        , mTypeInferred(typeInferred) {}
+        , mTypeInferred(inferred) {}
+    /// @brief  Construct a new Attribute with a given name and type/token
+    ///         string, delegating construction to the above Attribute
+    ///         constructor.
+    /// @param  name      The name of the attribute
+    /// @param  token     The type/token string of the attribute
+    /// @param  inferred  Whether the provided type was directly specified
+    ///                   (false).
+    Attribute(const std::string& name, const std::string& token,
+              const bool inferred = false)
+        : Attribute(name, tokens::tokenFromTypeString(token), inferred) {}
+    /// @brief  Deep copy constructor for a Attribute
+    /// @note   No parent information needs updating as an Attribute is a
+    ///         "leaf level" node (contains no children)
+    /// @param  other  A const reference to another Attribute to deep copy
     Attribute(const Attribute& other)
-        : Variable(other.mName)
+        : Variable(other)
         , mType(other.mType)
         , mTypeInferred(other.mTypeInferred) {}
     ~Attribute() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Variable* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     Attribute* copy() const override final { return new Attribute(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::AttributeNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "attribute"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "atr"; }
+    /// @copybrief Node::basetype()
+    const Variable* basetype() const override { return this; }
 
-    const Name mType;
+    /// @brief  Query whether this attribute was accessed via inferred syntax
+    ///         i.e. \@P or \@myattribute
+    /// @return True if inferred syntax was used
+    inline bool inferred() const { return mTypeInferred; }
+    /// @brief  Access the type that was used to access this attribute
+    /// @return The type used to access this attribute as a tokens::CoreType
+    inline tokens::CoreType type() const { return mType; }
+    /// @brief  Get the access type as a front end AX type/token string
+    /// @note   This returns the associated token to the type, not necessarily
+    ///         equal to the OpenVDB type string
+    /// @return A string representing the type/token
+    inline std::string typestr() const {
+        return ast::tokens::typeStringFromToken(mType);
+    }
+    /// @brief  Construct and return the full attribute token identifier. See
+    ///         Attribute::tokenFromNameType
+    /// @return A string representing the attribute token.
+    inline std::string tokenname() const {
+        return Attribute::tokenFromNameType(this->name(), this->type());
+    }
+
+    /// @brief  Static method returning the symbol associated with an Attribute
+    ///         access as defined by AX Grammar
+    /// @return The '@' character as a char
+    static inline char symbolseparator() { return '@'; }
+    /// @brief  Static method returning the full unique attribute token
+    ///         identifier by consolidating its name and type such that
+    ///         token = tokenstr + '\@' + name, where tokenstr is the AX type
+    ///         token as a string, converted from the provided CoreType.
+    /// @note   This identifier is unique for accesses to the same attribute
+    /// @note   Due to inferred and single character accesses in AX, this return
+    ///         value does not necessarily represent the original syntax used to
+    ///         access this attribute. For example, \@myattrib will be stored
+    ///         and returned as float\@myattrib.
+    /// @param  name  The name of the attribute
+    /// @param  type  The CoreType of the attribute
+    /// @return A string representing the attribute token.
+    static inline std::string
+    tokenFromNameType(const std::string& name, const tokens::CoreType type) {
+        return ast::tokens::typeStringFromToken(type) +
+            Attribute::symbolseparator() + name;
+    }
+    /// @brief  Static method which splits a valid attribute token into its name
+    ///         and type counterparts. If the token cannot be split, neither
+    ///         name or type are updated and false is returned.
+    /// @param  token The token to split.
+    /// @param  name  Set to the second part of the attribute token,
+    ///               representing the name. If a nullptr, it is ignored
+    /// @param  type  Set to the first part of the attribute token,
+    ///               representing the type. If a nullptr, it is ignored. Note
+    ///               that this can be empty if the attribute token has an
+    ///               inferred type or a single character.
+    /// @return True if the provided attribute token could be split
+    static inline bool
+    nametypeFromToken(const std::string& token, std::string* name, std::string* type) {
+        const size_t at = token.find(symbolseparator());
+        if (at == std::string::npos) return false;
+        if (type) {
+            *type = token.substr(0, at);
+            if (type->empty()) {
+                *type = ast::tokens::typeStringFromToken(tokens::CoreType::FLOAT);
+            }
+        }
+        if (name) *name = token.substr(at + 1, token.size());
+        return true;
+    }
+private:
+    const tokens::CoreType mType;
     const bool mTypeInferred;
 };
 
+/// @brief  ExternalVariable represent any access to external (custom) data,
+///         typically associated with the '$' symbol syntax. Note that the AST
+///         does not store any additional information on the given external
+///         other than its name and type, which together form a unique external
+///         identifier known as the ExternalVariable 'token'. This token is used
+///         by the compiler to map user provided values to these external
+///         values.
+/// @note   The Attribute AST node works in a similar way
+/// @note   An ExternalVariable is a complete "leaf-level" AST node. It has no
+///         children and nothing derives from it.
 struct ExternalVariable : public Variable
 {
-    using Ptr = std::shared_ptr<ExternalVariable>;
     using UniquePtr = std::unique_ptr<ExternalVariable>;
 
-    ExternalVariable(const std::string& name, const std::string& type)
+    /// @brief  Construct a new ExternalVariable with a given name and type
+    /// @param  name      The name of the attribute
+    /// @param  type      The type of the attribute
+    ExternalVariable(const std::string& name, const tokens::CoreType type)
         : Variable(name)
         , mType(type) {}
+    /// @brief  Construct a new ExternalVariable with a given name and type/token
+    ///         string, delegating construction to the above ExternalVariable
+    ///         constructor.
+    /// @param  name      The name of the attribute
+    /// @param  token     The type/token string of the attribute
+    ExternalVariable(const std::string& name, const std::string& token)
+        : ExternalVariable(name, tokens::tokenFromTypeString(token)) {}
+    /// @brief  Deep copy constructor for a ExternalVariable
+    /// @note   No parent information needs updating as an ExternalVariable is a
+    ///         "leaf level" node (contains no children)
+    /// @param  other  A const reference to another ExternalVariable to deep
+    ///                copy
     ExternalVariable(const ExternalVariable& other)
-        : Variable(other.mName)
+        : Variable(other)
         , mType(other.mType) {}
     ~ExternalVariable() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Variable* accept(Modifier& visitor) override final;
-    ExternalVariable* copy() const override final { return new ExternalVariable(*this); }
+    /// @copybrief Node::copy()
+    ExternalVariable* copy() const override final {
+        return new ExternalVariable(*this);
+    }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::ExternalVariableNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "external"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "ext"; }
+    /// @copybrief Node::basetype()
+    const Variable* basetype() const override { return this; }
 
-    const Name mType;
+    /// @brief  Access the type that was used to access this external variable
+    /// @return The type used to access this external as a tokens::CoreType
+    inline tokens::CoreType type() const { return mType; }
+    /// @brief  Get the access type as a front end AX type/token string
+    /// @note   This returns the associated token to the type, not necessarily
+    ///         equal to the OpenVDB type string
+    /// @return A string representing the type/token
+    inline std::string typestr() const {
+        return ast::tokens::typeStringFromToken(mType);
+    }
+    /// @brief  Construct and return the full external token identifier. See
+    ///         ExternalVariable::tokenFromNameType
+    /// @return A string representing the external variable token.
+    inline const std::string tokenname() const {
+        return ExternalVariable::tokenFromNameType(this->name(), this->type());
+    }
+
+    /// @brief  Static method returning the symbol associated with an
+    ///         ExternalVariable access as defined by AX Grammar
+    /// @return The '$' character as a char
+    static inline char symbolseparator() { return '$'; }
+    /// @brief  Static method returning the full unique external token
+    ///         identifier by consolidating its name and type such that
+    ///         token = tokenstr + '$' + name, where tokenstr is the AX type
+    ///         token as a string, converted from the provided CoreType.
+    /// @note   This identifier is unique for accesses to the same external
+    /// @note   Due to inferred and single character accesses in AX, this return
+    ///         value does not necessarily represent the original syntax used to
+    ///         access this external. For example, v$data will be stored and
+    ///         returned as vec3f$data.
+    /// @param  name  The name of the external
+    /// @param  type  The CoreType of the external
+    /// @return A string representing the external token.
+    static inline std::string
+    tokenFromNameType(const std::string& name, const tokens::CoreType type) {
+        return ast::tokens::typeStringFromToken(type) +
+            ExternalVariable::symbolseparator() + name;
+    }
+    /// @brief  Static method which splits a valid external token into its name
+    ///         and type counterparts. If the token cannot be split, neither
+    ///         name or type are updated and false is returned.
+    /// @param  token The token to split.
+    /// @param  name  Set to the second part of the external token,
+    ///               representing the name. If a nullptr, it is ignored
+    /// @param  type  Set to the first part of the external token,
+    ///               representing the type. If a nullptr, it is ignored. Note
+    ///               that this can be empty if the external token has an
+    ///               inferred type or a single character.
+    /// @return True if the provided external token could be split
+    static inline bool
+    nametypeFromToken(const std::string& token, std::string* name, std::string* type) {
+        const size_t at = token.find(symbolseparator());
+        if (at == std::string::npos) return false;
+        if (type) {
+            *type = token.substr(0, at);
+            if (type->empty()) {
+                *type = ast::tokens::typeStringFromToken(tokens::CoreType::FLOAT);
+            }
+        }
+        if (name) *name = token.substr(at + 1, token.size());
+        return true;
+    }
+private:
+    const tokens::CoreType mType;
 };
 
-struct AttributeValue : public Expression
-{
-    using Ptr = std::shared_ptr<AttributeValue>;
-    using UniquePtr = std::unique_ptr<AttributeValue>;
-
-    AttributeValue(Attribute* attribute)
-        : mAttribute(attribute) {}
-    AttributeValue(const AttributeValue& other)
-        : mAttribute(new Attribute(*other.mAttribute)) {}
-    ~AttributeValue() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    AttributeValue* copy() const override final { return new AttributeValue(*this); }
-
-    Attribute::Ptr mAttribute;
-};
-
+/// @brief  DeclareLocal AST nodes symbolize a single type declaration of a
+///         local variable. Like Local AST nodes, they derive from Variable and
+///         thus store the local variables name. They also however store its
+///         specified type. These have the important distinction of representing
+///         the initial creation and allocation of a variable, in comparison to
+///         a Local node which only represents access.
+/// @note   An DeclareLocal is a complete "leaf-level" AST node. It has no
+///         children and nothing derives from it.
 struct DeclareLocal : public Variable
 {
-    using Ptr = std::shared_ptr<DeclareLocal>;
     using UniquePtr = std::unique_ptr<DeclareLocal>;
 
-    DeclareLocal(const std::string& name, const std::string& type)
+    /// @brief  Construct a new DeclareLocal with a given name and type
+    /// @param  name  The name of the local variable being declared
+    /// @param  type  The type of the declaration
+    DeclareLocal(const std::string& name, const tokens::CoreType type)
         : Variable(name)
         , mType(type) {}
+    /// @brief  Deep copy constructor for a DeclareLocal
+    /// @note   No parent information needs updating as an DeclareLocal is a
+    ///         "leaf level" node (contains no children)
+    /// @param  other  A const reference to another DeclareLocal to deep copy
     DeclareLocal(const DeclareLocal& other)
-        : Variable(other.mName)
+        : Variable(other)
         , mType(other.mType) {}
     ~DeclareLocal() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Variable* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     DeclareLocal* copy() const override final { return new DeclareLocal(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::DeclareLocalNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "declaration"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "dcl"; }
+    /// @copybrief Node::basetype()
+    const Variable* basetype() const override { return this; }
 
-    const Name mType;
+    /// @brief  Access the type that was specified at which to create the given
+    ///         local
+    /// @return The declaration type
+    inline tokens::CoreType type() const { return mType; }
+    /// @brief  Get the declaration type as a front end AX type/token string
+    /// @note   This returns the associated token to the type, not necessarily
+    ///         equal to the OpenVDB type string
+    /// @return A string representing the type/token
+    inline std::string typestr() const {
+        return ast::tokens::typeStringFromToken(mType);
+    }
+private:
+    const tokens::CoreType mType;
 };
 
+/// @brief  Local AST nodes represent a single accesses to a local variable.
+///         The only store the name of the variable being accessed.
+/// @note   A Local is a complete "leaf-level" AST node. It has no children and
+///         nothing derives from it.
 struct Local : public Variable
 {
-    using Ptr = std::shared_ptr<Local>;
     using UniquePtr = std::unique_ptr<Local>;
 
+    /// @brief  Construct a Local with a given name
+    /// @param  name  The name of the local variable being accessed
     Local(const std::string& name)
         : Variable(name) {}
     ~Local() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Variable* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     Local* copy() const override final { return new Local(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::LocalNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "local"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "lcl"; }
+    /// @copybrief Node::basetype()
+    const Variable* basetype() const override { return this; }
 };
 
-struct LocalValue : public Expression
-{
-    using Ptr = std::shared_ptr<LocalValue>;
-    using UniquePtr = std::unique_ptr<LocalValue>;
-
-    LocalValue(Local* local)
-        : mLocal(local) {}
-    LocalValue(const LocalValue& other)
-        : mLocal(new Local(*other.mLocal)) {}
-    ~LocalValue() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    LocalValue* copy() const override final { return new LocalValue(*this); }
-
-    Local::Ptr mLocal;
-};
-
-// ValueBases are a base class for anything that holds a value
-// Derived classes store the actual typed values
-struct ValueBase : public Expression
-{
-    ~ValueBase() override = default;
-};
-
-struct VectorUnpack : public Expression
-{
-    using Ptr = std::shared_ptr<VectorUnpack>;
-    using UniquePtr = std::unique_ptr<VectorUnpack>;
-
-    VectorUnpack(Expression* expression, const short index)
-        : mExpression(expression)
-        , mIndex(index) {}
-    VectorUnpack(const VectorUnpack& other)
-        : mExpression(other.mExpression->copy())
-        , mIndex(other.mIndex) {}
-    ~VectorUnpack() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    VectorUnpack* copy() const override final { return new VectorUnpack(*this); }
-
-    Expression::Ptr mExpression;
-    const short mIndex;
-};
-
-struct VectorPack : public ValueBase
-{
-    using Ptr = std::shared_ptr<VectorPack>;
-    using UniquePtr = std::unique_ptr<VectorPack>;
-
-    VectorPack(Expression* value1, Expression* value2, Expression* value3)
-        : mValue1(value1), mValue2(value2), mValue3(value3) {}
-    VectorPack(const VectorPack& other)
-        : mValue1(other.mValue1->copy())
-        , mValue2(other.mValue2->copy())
-        , mValue3(other.mValue3->copy()) {}
-    ~VectorPack() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    VectorPack* copy() const override final { return new VectorPack(*this); }
-
-    Expression::Ptr mValue1;
-    Expression::Ptr mValue2;
-    Expression::Ptr mValue3;
-};
-
-struct ArrayPack : public ValueBase
-{
-    using Ptr = std::shared_ptr<ArrayPack>;
-    using UniquePtr = std::unique_ptr<ArrayPack>;
-
-    ArrayPack(ExpressionList* arguments)
-        : mArguments(arguments) {}
-    ArrayPack(const ArrayPack& other)
-        : mArguments(new ExpressionList(*other.mArguments)) {}
-    ~ArrayPack() override = default;
-
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
-    ArrayPack* copy() const override final { return new ArrayPack(*this); }
-
-    ExpressionList::Ptr mArguments;
-};
-
+/// @brief  A Value (literal) AST node holds either literal text or absolute
+///         value information on all numerical, string and boolean constants.
+///         A single instance of a Value is templated on the requested scalar,
+///         boolean or string type. If scalar or boolean value is constructed
+///         from a string (as typically is the case in the parser), the value is
+///         automatically converted to its numerical representation. If this
+///         fails, the original text is stored instead.
+/// @note   All numerical values are stored as their highest possible precision
+///         type to support overflowing without storing the original string
+///         data. The original string data is only required if the value is too
+///         large to be stored in these highest precision types (usually a
+///         uint64_t for scalars or double for floating points).
+/// @note   Numerical values are guaranteed to be positive (if constructed from
+///         the AX parser). Negative values are represented by a combination of
+///         a UnaryOperator holding a Value AST node.
+/// @note   Note that Value AST nodes representing strings are specialized and
+///         are guranteed to be "well-formed" (there is no numerical conversion)
+/// @note   A Value is a complete "leaf-level" AST node. It has no children and
+///         nothing derives from it.
 template <typename T>
 struct Value : public ValueBase
 {
-    using Ptr = std::shared_ptr<Value<T>>;
     using UniquePtr = std::unique_ptr<Value<T>>;
 
     using Type = T;
     using LiteralLimitsT = LiteralLimits<Type>;
+    /// @brief  Integers and Floats store their value as ContainerType, which is
+    ///         guaranteed to be at least large enough to represent the maximum
+    ///         possible supported type for the requested precision.
     using ContainerType = typename LiteralLimitsT::ContainerT;
 
-    /// @note   Value literals are always positive (negation is performed
-    ///         as a unary operation)
-    /// @brief  Literals store their value as ContainerType, which is guaranteed
-    ///         to be at least large enough to represent the maximum possible
-    ///         supported type for the requested precision.
+    /// @brief  The list of supported numerical constants.
+    /// @note   Strings are specialized and handled separately
+    static constexpr bool IsSupported =
+        std::is_same<T, bool>::value ||
+        std::is_same<T, int16_t>::value ||
+        std::is_same<T, int32_t>::value ||
+        std::is_same<T, int64_t>::value ||
+        std::is_same<T, float>::value ||
+        std::is_same<T, double>::value;
+    static_assert(IsSupported, "Incompatible ast::Value node instantiated.");
 
+    /// @brief  Construct a numerical Value from a given string. The string
+    ///         should be a positive integer or floating point number.
+    ///         Exponent-signs are supported for floating point numbers.
+    /// @note   If the maximum container type cannot be used to store the value
+    ///         or if the string is invalid, the resulting value is the maximum
+    ///         possible container type for scalars or infinity for floats and
+    ///         mText is initialized to the original string
+    /// @note   This constructor should not be used to construct booleans
     Value(const std::string number)
         : mValue(LiteralLimitsT::onLimitOverflow())
         , mText(nullptr) {
@@ -600,19 +2186,69 @@ struct Value : public ValueBase
                 mText.reset(new std::string(number));
             }
         }
+    /// @brief  Directly construct a Value from a source integer, float or
+    ///         boolean, guaranteeing valid construction. Note that the provided
+    ///         argument should not be negative
     Value(const ContainerType value)
         : mValue(value), mText(nullptr) {}
-
+    /// @brief  Deep copy constructor for a Value
+    /// @note   No parent information needs updating as a Value is a "leaf
+    ///         level" node (contains no children)
+    /// @param  other  A const reference to another Value to deep copy
     Value(const Value<T>& other)
         : mValue(other.mValue)
         , mText(other.mText ? new std::string(*other.mText) : nullptr) {}
-
     ~Value() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
+    /// @copybrief Node::copy()
     Value<Type>* copy() const override final { return new Value<Type>(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override {
+        if (std::is_same<T, bool>::value)    return Node::ValueBoolNode;
+        if (std::is_same<T, int16_t>::value) return Node::ValueInt16Node;
+        if (std::is_same<T, int32_t>::value) return Node::ValueInt32Node;
+        if (std::is_same<T, int64_t>::value) return Node::ValueInt64Node;
+        if (std::is_same<T, float>::value)   return Node::ValueFloatNode;
+        if (std::is_same<T, double>::value)  return Node::ValueDoubleNode;
+    }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override {
+        if (std::is_same<T, bool>::value)    return "boolean literal";
+        if (std::is_same<T, int16_t>::value) return "short (16bit) literal";
+        if (std::is_same<T, int32_t>::value) return "integer (32bit) literal";
+        if (std::is_same<T, int64_t>::value) return "long (64bit) literal";
+        if (std::is_same<T, float>::value)   return "float (32bit) literal";
+        if (std::is_same<T, double>::value)  return "double (64bit) literal";
+    }
+    /// @copybrief Node::subname()
+    const char* subname() const override {
+        if (std::is_same<T, bool>::value)    return "bool";
+        if (std::is_same<T, int16_t>::value) return "shrt";
+        if (std::is_same<T, int32_t>::value) return "int";
+        if (std::is_same<T, int64_t>::value) return "long";
+        if (std::is_same<T, float>::value)   return "flt";
+        if (std::is_same<T, double>::value)  return "dble";
+    }
+    /// @copybrief Node::basetype()
+    const ValueBase* basetype() const override { return this; }
 
+    /// @brief  Query whether or not this Value ended up with a ContainerType
+    ///         overflow by checking to see if mText was initialized. This
+    ///         overflow is specific to the highest precision ContainerType, not
+    ///         necessarily the value type T.
+    /// @return True if mText was set
+    inline bool overflow() const { return static_cast<bool>(this->text()); }
+    /// @brief  Access any text stored on the Value. This set if construction
+    ///         of the value failed from the provided string argument
+    /// @return A const pointer to the text. Can be a nullptr
+    inline const std::string* text() const { return mText.get(); }
+    /// @brief  Access the value as its stored type
+    /// @return The value as its stored ContainerType
+    inline ContainerType asContainerType() const { return mValue; }
+    /// @brief  Access the value as its requested (templated) type
+    /// @return The value as its templed type T
+    inline T value() const { return static_cast<T>(mValue); }
+private:
     // A container of a max size defined by LiteralValueContainer to hold values
     // which may be out of scope. This is only used for warnings
     ContainerType mValue;
@@ -621,96 +2257,34 @@ struct Value : public ValueBase
     std::unique_ptr<std::string> mText;
 };
 
+/// @brief  Specialization of Values for strings
 template <>
 struct Value<std::string> : public ValueBase
 {
+    using UniquePtr = std::unique_ptr<Value<std::string>>;
+
     using Type = std::string;
+    /// @brief  Construct a new Value string from a string
+    /// @param  value The string to copy onto this Value
     Value(const Type& value) : mValue(value) {}
+    /// @brief  Deep copy constructor for a Value string
+    /// @note   No parent information needs updating as a Value is a "leaf
+    ///         level" node (contains no children)
+    /// @param  other  A const reference to another Value string to deep copy
     Value(const Value<Type>& other) : mValue(other.mValue) {}
     ~Value() override = default;
 
-    void accept(Visitor& visitor) const override final;
-    Expression* accept(Modifier& visitor) override final;
     Value<Type>* copy() const override final { return new Value<Type>(*this); }
+    NodeType nodetype() const override { return Node::ValueStrNode; }
+    const char* nodename() const override { return "string value"; }
+    const char* subname() const override { return "str"; }
+    const ValueBase* basetype() const override { return this; }
 
+    /// @brief  Access the string
+    /// @return A const reference to the string
+    inline const std::string& value() const { return mValue; }
+private:
     const Type mValue;
-};
-
-// ----------------------------------------------------------------------------
-// Visitor Objects
-// ----------------------------------------------------------------------------
-
-struct Visitor
-{
-    Visitor() = default;
-    virtual ~Visitor() = 0;
-
-    // Concrete Visitors can define a visit method for
-    // any node type
-
-    inline virtual void init(const Tree& node) {};
-    inline virtual void visit(const Tree& node) {};
-    inline virtual void visit(const Block& node) {};
-    inline virtual void visit(const ExpressionList& node) {};
-    inline virtual void visit(const ConditionalStatement& node) {};
-    inline virtual void visit(const AssignExpression& node) {};
-    inline virtual void visit(const Crement& node) {};
-    inline virtual void visit(const UnaryOperator& node) {};
-    inline virtual void visit(const BinaryOperator& node) {};
-    inline virtual void visit(const Cast& node) {};
-    inline virtual void visit(const FunctionCall& node) {};
-    inline virtual void visit(const Return& node) {};
-    inline virtual void visit(const Attribute& node) {};
-    inline virtual void visit(const AttributeValue& node) {};
-    inline virtual void visit(const ExternalVariable& node) {};
-    inline virtual void visit(const DeclareLocal& node) {};
-    inline virtual void visit(const Local& node) {};
-    inline virtual void visit(const LocalValue& node) {};
-    inline virtual void visit(const VectorUnpack& node) {};
-    inline virtual void visit(const VectorPack& node) {};
-    inline virtual void visit(const ArrayPack& node) {};
-    inline virtual void visit(const Value<bool>& node) {};
-    inline virtual void visit(const Value<int16_t>& node) {};
-    inline virtual void visit(const Value<int32_t>& node) {};
-    inline virtual void visit(const Value<int64_t>& node) {};
-    inline virtual void visit(const Value<float>& node) {};
-    inline virtual void visit(const Value<double>& node) {};
-    inline virtual void visit(const Value<std::string>& node) {};
-};
-
-
-struct Modifier
-{
-    Modifier() = default;
-    virtual ~Modifier() = 0;
-
-    inline virtual void visit(Tree& node) {};
-    inline virtual Block* visit(Block& node) { return nullptr; };
-    inline virtual ExpressionList* visit(ExpressionList& node) { return nullptr; };
-    inline virtual Statement*  visit(ConditionalStatement& node) { return nullptr; };
-    inline virtual Expression* visit(AssignExpression& node) { return nullptr; };
-    inline virtual Expression* visit(Crement& node) { return nullptr; };
-    inline virtual Expression* visit(UnaryOperator& node) { return nullptr; };
-    inline virtual Expression* visit(BinaryOperator& node) { return nullptr; };
-    inline virtual Expression* visit(Cast& node) { return nullptr; };
-    inline virtual Expression* visit(FunctionCall& node) { return nullptr; };
-    inline virtual Expression* visit(Return& node) { return nullptr; };
-    inline virtual Variable*   visit(Attribute& node) { return nullptr; };
-    inline virtual Expression* visit(AttributeValue& node) { return nullptr; };
-    inline virtual Variable*   visit(ExternalVariable& node) { return nullptr; };
-    inline virtual Variable*   visit(DeclareLocal& node) { return nullptr; };
-    inline virtual Variable*   visit(Local& node) { return nullptr; };
-    inline virtual Expression* visit(LocalValue& node) { return nullptr; };
-    inline virtual Expression* visit(VectorUnpack& node) { return nullptr; };
-    inline virtual Expression* visit(VectorPack& node) { return nullptr; };
-    inline virtual Expression* visit(ArrayPack& node) { return nullptr; };
-    inline virtual Expression* visit(Value<bool>& node) { return nullptr; };
-    inline virtual Expression* visit(Value<int16_t>& node) { return nullptr; };
-    inline virtual Expression* visit(Value<int32_t>& node) { return nullptr; };
-    inline virtual Expression* visit(Value<int64_t>& node) { return nullptr; };
-    inline virtual Expression* visit(Value<float>& node) { return nullptr; };
-    inline virtual Expression* visit(Value<double>& node) { return nullptr; };
-    inline virtual Expression* visit(Value<std::string>& node) { return nullptr; };
 };
 
 } // namespace ast

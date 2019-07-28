@@ -98,8 +98,8 @@ TestDeclare::testAttributes()
     mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3),
         {0, 5, 10});
 
-    mHarness.addAttribute("short_test", short(1));
-    mHarness.addAttribute("long_test", long(3));
+    mHarness.addAttribute("short_test", int16_t(1));
+    mHarness.addAttribute("long_test", int64_t(3));
     mHarness.addAttribute("double_test", 0.3);
 
     mHarness.executeCode("test/snippets/declare/declareAttributes");
@@ -116,7 +116,7 @@ TestDeclare::testAttributesVolume()
     mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3),
         {0, 5, 10});
 
-    mHarness.addAttribute("long_test", long(3));
+    mHarness.addAttribute("long_test", int64_t(3));
     mHarness.addAttribute("double_test", 0.3);
 
     mHarness.executeCode("test/snippets/declare/declareAttributesVolume");
@@ -133,8 +133,8 @@ TestDeclare::testNewAttributes()
     mHarness.addExpectedAttributes<int>(unittest_util::nameSequence("int_test", 3),
         {0, 5, 10});
 
-    mHarness.addExpectedAttribute("short_test", short(1));
-    mHarness.addExpectedAttribute("long_test", long(3));
+    mHarness.addExpectedAttribute("short_test", int16_t(1));
+    mHarness.addExpectedAttribute("long_test", int64_t(3));
     mHarness.addExpectedAttribute("double_test", 0.3);
 
     mHarness.executeCode("test/snippets/declare/declareAttributes");
