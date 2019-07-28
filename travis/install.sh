@@ -47,6 +47,8 @@ cmake \
     -D OPENVDB_BUILD_AX_GRAMMAR=OFF \
     -D OPENVDB_BUILD_AX_PYTHON_MODULE=OFF \
     -D OPENVDB_CXX_STRICT=ON \
+    -D OPENVDB_ENABLE_RPATH=OFF \
+    -D LLVM_DIR=/usr/lib/llvm-5.0/share/llvm/cmake \
     ../
 
 make -j2

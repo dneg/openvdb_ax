@@ -38,6 +38,8 @@ language: cpp
 
 compiler: gcc
 
+cache: ccache
+
 addons:
   apt:
     packages:
@@ -51,6 +53,8 @@ addons:
     - libghc-zlib-dev
     - libtbb-dev
     - libblosc-dev
+    - llvm-5.0-dev
+    - libedit-dev
 
 install:
     - travis/install-openvdb.sh

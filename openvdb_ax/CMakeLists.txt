@@ -101,12 +101,28 @@ endif()
 # Configure LLVM
 
 find_package(LLVM REQUIRED)
+find_library(found_LLVM LLVM HINTS ${LLVM_LIBRARY_DIRS})
+
+if(found_LLVM)
+  set(LLVM_LIBS "LLVM")
+else()
+  llvm_map_components_to_libnames(_llvm_libs all)
+  set(LLVM_LIBS "${_llvm_libs}")
+endif()
+
 message(STATUS "Found LLVM: ${LLVM_DIR} (found version \"${LLVM_PACKAGE_VERSION}\")")
-llvm_map_components_to_libnames(LLVM_LIBS all)
+
+if(LLVM_VERSION_MAJOR GREATER 5)
+  message(WARNING "The version of LLVM located is greater than 5. "
+    "OpenVDB AX has been tested fully against LLVM 5.0.0 and 5.0.1, it is "
+    "recommended that you use this version where possible. Please report "
+    "any issues encountered with newer versions."
+  )
+endif()
 
 #########################################################################
 
-# Configure other dependecies
+# Configure other dependencies
 
 find_package(Boost REQUIRED COMPONENTS random)
 
