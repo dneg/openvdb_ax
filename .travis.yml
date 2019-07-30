@@ -27,22 +27,15 @@
 #
 # Travis yaml script to configure continous integration
 #
-# Author: Matt Warner
+# Author: Nick Avramoussis
 
 dist: xenial
 sudo: required
 language: cpp
-
-os:
- - osx
-
-compiler:
- - gcc
- - clang
-
 cache: ccache
 env: LLVM_VERSION=8
 
+# Linux deps
 addons:
   apt:
     packages: &native_deps
@@ -58,92 +51,7 @@ addons:
     - libblosc-dev
     - libedit-dev
 
-# Build matrix for linux which tests against llvm 5/6/7/8
-# for both gcc and clang. Note that the test for osx is
-# done outside of this matrix by the default settings above
-matrix:
-  include:
-    - os: linux
-      cache: ccache
-      compiler: gcc
-      env: LLVM_VERSION=8
-      addons:
-        apt:
-          sources:
-          - llvm-toolchain-xenial-8
-          packages:
-            - *native_deps
-            - llvm-8-dev
-    - os: linux
-      cache: ccache
-      compiler: gcc
-      env: LLVM_VERSION=7
-      addons:
-        apt:
-          sources:
-          - llvm-toolchain-xenial-7
-          packages:
-            - *native_deps
-            - llvm-7-dev
-    - os: linux
-      cache: ccache
-      compiler: gcc
-      env: LLVM_VERSION=6.0
-      addons:
-        apt:
-          packages:
-            - *native_deps
-            - llvm-6.0-dev
-    - os: linux
-      cache: ccache
-      compiler: gcc
-      env: LLVM_VERSION=5.0
-      addons:
-        apt:
-          packages:
-            - *native_deps
-            - llvm-5.0-dev
-    - os: linux
-      cache: ccache
-      compiler: clang
-      env: LLVM_VERSION=8
-      addons:
-        apt:
-          sources:
-          - llvm-toolchain-xenial-8
-          packages:
-            - *native_deps
-            - llvm-8-dev
-    - os: linux
-      cache: ccache
-      compiler: clang
-      env: LLVM_VERSION=7
-      addons:
-        apt:
-          sources:
-          - llvm-toolchain-xenial-7
-          packages:
-            - *native_deps
-            - llvm-7-dev
-    - os: linux
-      cache: ccache
-      compiler: clang
-      env: LLVM_VERSION=6.0
-      addons:
-        apt:
-          packages:
-            - *native_deps
-            - llvm-6.0-dev
-    - os: linux
-      cache: ccache
-      compiler: clang
-      env: LLVM_VERSION=5.0
-      addons:
-        apt:
-          packages:
-            - *native_deps
-            - llvm-5.0-dev
-
+# OSX deps
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
       brew update;
@@ -155,11 +63,125 @@ before_install:
       brew install cppunit;
       brew install c-blosc;
       brew install tbb;
-      brew install llvm;
+      brew install llvm@$LLVM_VERSION;
       brew install zlib;
     fi
 
+# Build matrix for linux which tests against llvm 5/6/7/8
+# for both gcc and clang. Note that the test for osx is
+# done outside of this matrix by the default settings above
+matrix:
+  include:
+    ###############################################################
+    # Linux LLVM 5/6/7/8 - GCC
+    ###############################################################
+    - os: linux
+      compiler: gcc
+      env: LLVM_VERSION=8
+      addons:
+        apt:
+          sources:
+          - llvm-toolchain-xenial-8
+          packages:
+            - *native_deps
+            - llvm-8-dev
+    - os: linux
+      compiler: gcc
+      env: LLVM_VERSION=7
+      addons:
+        apt:
+          sources:
+          - llvm-toolchain-xenial-7
+          packages:
+            - *native_deps
+            - llvm-7-dev
+    - os: linux
+      compiler: gcc
+      env: LLVM_VERSION=6.0
+      addons:
+        apt:
+          packages:
+            - *native_deps
+            - llvm-6.0-dev
+    - os: linux
+      compiler: gcc
+      env: LLVM_VERSION=5.0
+      addons:
+        apt:
+          packages:
+            - *native_deps
+            - llvm-5.0-dev
+    ###############################################################
+    # Linux LLVM 5/6/7/8 - clang
+    ###############################################################
+    - os: linux
+      compiler: clang
+      env: LLVM_VERSION=8
+      addons:
+        apt:
+          sources:
+          - llvm-toolchain-xenial-8
+          packages:
+            - *native_deps
+            - llvm-8-dev
+    - os: linux
+      compiler: clang
+      env: LLVM_VERSION=7
+      addons:
+        apt:
+          sources:
+          - llvm-toolchain-xenial-7
+          packages:
+            - *native_deps
+            - llvm-7-dev
+    - os: linux
+      compiler: clang
+      env: LLVM_VERSION=6.0
+      addons:
+        apt:
+          packages:
+            - *native_deps
+            - llvm-6.0-dev
+    - os: linux
+      compiler: clang
+      env: LLVM_VERSION=5.0
+      addons:
+        apt:
+          packages:
+            - *native_deps
+            - llvm-5.0-dev
+    ###############################################################
+    # MacOS LLVM 5/6/7/8 - GCC
+    ###############################################################
+    - os: osx
+      compiler: gcc
+      env: LLVM_VERSION=8
+    - os: osx
+      compiler: gcc
+      env: LLVM_VERSION=7
+    - os: osx
+      compiler: gcc
+      env: LLVM_VERSION=6
+    - os: osx
+      compiler: gcc
+      env: LLVM_VERSION=5
+    ###############################################################
+    # MacOS LLVM 5/6/7/8 - clang
+    ###############################################################
+    - os: osx
+      compiler: clang
+      env: LLVM_VERSION=8
+    - os: osx
+      compiler: clang
+      env: LLVM_VERSION=7
+    - os: osx
+      compiler: clang
+      env: LLVM_VERSION=6
+    - os: osx
+      compiler: clang
+      env: LLVM_VERSION=5
+
 install:
-    - travis/install-openvdb.sh
+  - travis/install-openvdb.sh
 
 script: travis/install.sh

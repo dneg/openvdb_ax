@@ -44,7 +44,7 @@ OPENVDB_CXX_STRICT="ON"
 LLVM_DIR="/usr/lib/llvm-$LLVM_VERSION/share/llvm/cmake"
 
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
-    LLVM_DIR="/usr/local/opt/llvm/lib/cmake/llvm"
+    LLVM_DIR="/usr/local/opt/llvm@$LLVM_VERSION/lib/cmake/llvm"
     OPENVDB_CXX_STRICT="OFF"
 fi
 
