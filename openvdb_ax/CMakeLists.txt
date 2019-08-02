@@ -99,6 +99,7 @@ endif()
 #########################################################################
 
 # Configure LLVM
+set(MINIMUM_LLVM_VERSION 5.0.0)
 
 find_package(LLVM REQUIRED)
 find_library(found_LLVM LLVM HINTS ${LLVM_LIBRARY_DIRS})
@@ -110,15 +111,13 @@ else()
   set(LLVM_LIBS "${_llvm_libs}")
 endif()
 
-message(STATUS "Found LLVM: ${LLVM_DIR} (found version \"${LLVM_PACKAGE_VERSION}\")")
-
-if(LLVM_VERSION_MAJOR GREATER 5)
-  message(WARNING "The version of LLVM located is greater than 5. "
-    "OpenVDB AX has been tested fully against LLVM 5.0.0 and 5.0.1, it is "
-    "recommended that you use this version where possible. Please report "
-    "any issues encountered with newer versions."
-  )
+if(LLVM_PACKAGE_VERSION VERSION_LESS MINIMUM_LLVM_VERSION)
+  message(FATAL_ERROR "Could NOT find LLVM: Found unsuitable version \"${LLVM_PACKAGE_VERSION}\", "
+    "but required is at least \"${MINIMUM_LLVM_VERSION}\" (found ${LLVM_DIR})")
 endif()
+
+message(STATUS "Found LLVM: ${LLVM_DIR} (found suitable version \"${LLVM_PACKAGE_VERSION}\", "
+  "minimum required is \"${MINIMUM_LLVM_VERSION}\")")
 
 #########################################################################
 

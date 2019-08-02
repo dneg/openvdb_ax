@@ -134,6 +134,7 @@ Version 0.1.0 - July 28, 2019
     - Various fixes for clang and MacOS
     - Overhaul of frontend tests to compare full AST generation
     - Travis improvements including OSX builds
+    - Travis build matrices for LLVM 5/6/7/8, clang/gcc, osx/linux
 
 Version 0.0.4 - December 12, 2018
 
