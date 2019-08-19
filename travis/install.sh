@@ -38,11 +38,13 @@ mkdir build
 mkdir -p $HOME/install
 cd build
 
+echo "Testing aginst LLVM version $LLVM_VERSION"
+
 OPENVDB_CXX_STRICT="ON"
-LLVM_DIR="/usr/lib/llvm-5.0/share/llvm/cmake"
+LLVM_DIR="/usr/lib/llvm-$LLVM_VERSION/share/llvm/cmake"
 
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
-    LLVM_DIR="/usr/local/opt/llvm@5/lib/cmake/llvm"
+    LLVM_DIR="/usr/local/opt/llvm@$LLVM_VERSION/lib/cmake/llvm"
     OPENVDB_CXX_STRICT="OFF"
 fi
 
