@@ -1,7 +1,20 @@
 OpenVDB AX Version History
 ==========================
 
-Version 0.1.0 - July 28, 2019
+Version 0.1.0 - August 20, 2019
+
+      Significant API and behaviour changes to OpenVDB AX in this release. Main
+      API changes to codegen and AST components. Changes to OpenVDB Volume
+      execution involving volumes of differing topologies. Active states now
+      only determine the final application of a value rather than their impact on
+      other volumes. For example:
+
+        @a = 2;
+        @b = @a;
+
+      Irrespective of the overlapping activity, active @b voxels will be set to 2.
+      Previously, this would only occur if @a was active at the given location,
+      producing an implicit dependency of the active topology of @a on @b.
 
     New Features:
     - Support for for, while and do-while loops using standard c-like syntax.
