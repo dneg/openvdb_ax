@@ -51,7 +51,7 @@ addons:
     - libblosc-dev
     - libedit-dev
 
-# OSX deps
+# OSX deps and Linux apt repository sources
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
       brew update;
@@ -66,6 +66,13 @@ before_install:
       brew install llvm@$LLVM_VERSION;
       brew install zlib;
     fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then
+      if [ "$LLVM_VERSION" = "9" ]; then
+        sudo add-apt-repository "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-$LLVM_VERSION main" -y;
+        sudo apt-get update -q;
+        sudo apt-get install llvm-$LLVM_VERSION-dev -y --allow-unauthenticated;
+      fi
+    fi
 
 # Build matrix for linux which tests against llvm 5/6/7/8
 # for both gcc and clang. Note that the test for osx is
@@ -78,13 +85,6 @@ matrix:
     - os: linux
       compiler: gcc
       env: LLVM_VERSION=9
-      addons:
-        apt:
-          sources:
-          - llvm-toolchain-xenial-9
-          packages:
-            - *native_deps
-            - llvm-9-dev
     - os: linux
       compiler: gcc
       env: LLVM_VERSION=8
@@ -127,13 +127,6 @@ matrix:
     - os: linux
       compiler: clang
       env: LLVM_VERSION=9
-      addons:
-        apt:
-          sources:
-          - llvm-toolchain-xenial-9
-          packages:
-            - *native_deps
-            - llvm-9-dev
     - os: linux
       compiler: clang
       env: LLVM_VERSION=8
