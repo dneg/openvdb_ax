@@ -73,8 +73,18 @@ before_install:
 matrix:
   include:
     ###############################################################
-    # Linux LLVM 5/6/7/8 - GCC
+    # Linux LLVM 5/6/7/8/9 - GCC
     ###############################################################
+    - os: linux
+      compiler: gcc
+      env: LLVM_VERSION=9
+      addons:
+        apt:
+          sources:
+          - llvm-toolchain-xenial-9
+          packages:
+            - *native_deps
+            - llvm-9-dev
     - os: linux
       compiler: gcc
       env: LLVM_VERSION=8
@@ -112,8 +122,18 @@ matrix:
             - *native_deps
             - llvm-5.0-dev
     ###############################################################
-    # Linux LLVM 5/6/7/8 - clang
+    # Linux LLVM 5/6/7/8/9 - clang
     ###############################################################
+    - os: linux
+      compiler: clang
+      env: LLVM_VERSION=9
+      addons:
+        apt:
+          sources:
+          - llvm-toolchain-xenial-9
+          packages:
+            - *native_deps
+            - llvm-9-dev
     - os: linux
       compiler: clang
       env: LLVM_VERSION=8
@@ -151,8 +171,11 @@ matrix:
             - *native_deps
             - llvm-5.0-dev
     ###############################################################
-    # MacOS LLVM 6/7/8 - GCC
+    # MacOS LLVM 6/7/8/9 - GCC
     ###############################################################
+    - os: osx
+      compiler: gcc
+      env: LLVM_VERSION=9
     - os: osx
       compiler: gcc
       env: LLVM_VERSION=8
@@ -163,8 +186,11 @@ matrix:
       compiler: gcc
       env: LLVM_VERSION=6
     ###############################################################
-    # MacOS LLVM 6/7/8 - clang
+    # MacOS LLVM 6/7/8/9 - clang
     ###############################################################
+    - os: osx
+      compiler: clang
+      env: LLVM_VERSION=9
     - os: osx
       compiler: clang
       env: LLVM_VERSION=8
