@@ -1,6 +1,9 @@
 OpenVDB AX Version History
 ==========================
 
+Version 0.1.1 - In Development
+
+
 Version 0.1.0 - August 20, 2019
 
       Significant API and behaviour changes to OpenVDB AX in this release. Main
