@@ -151,7 +151,7 @@ matrix:
             - *native_deps
             - llvm-5.0-dev
     ###############################################################
-    # MacOS LLVM 5/6/7/8 - GCC
+    # MacOS LLVM 6/7/8 - GCC
     ###############################################################
     - os: osx
       compiler: gcc
@@ -162,11 +162,8 @@ matrix:
     - os: osx
       compiler: gcc
       env: LLVM_VERSION=6
-    - os: osx
-      compiler: gcc
-      env: LLVM_VERSION=5
     ###############################################################
-    # MacOS LLVM 5/6/7/8 - clang
+    # MacOS LLVM 6/7/8 - clang
     ###############################################################
     - os: osx
       compiler: clang
@@ -177,9 +174,6 @@ matrix:
     - os: osx
       compiler: clang
       env: LLVM_VERSION=6
-    - os: osx
-      compiler: clang
-      env: LLVM_VERSION=5
 
 install:
   - travis/install-openvdb.sh
