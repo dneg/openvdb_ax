@@ -48,7 +48,13 @@ if [ "$TRAVIS_OS_NAME" = "osx" ]; then
     OPENVDB_CXX_STRICT="OFF"
 fi
 
+# @todo fix clang warnings
 if [ "$TRAVIS_COMPILER" = "clang" ]; then
+    OPENVDB_CXX_STRICT="OFF"
+fi
+
+# @todo fix llvm 9 warnings
+if [ "$LLVM_VERSION" = "9" ]; then
     OPENVDB_CXX_STRICT="OFF"
 fi
 

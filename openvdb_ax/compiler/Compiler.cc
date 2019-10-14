@@ -225,8 +225,10 @@ void addOptimizationPasses(llvm::legacy::PassManagerBase& passes,
         builder.Inliner = llvm::createAlwaysInlinerLegacyPass();
     }
 
+#if LLVM_VERSION_MAJOR < 9
     // Enable IPO. This corresponds to gcc's -funit-at-a-time
     builder.DisableUnitAtATime = disableUnitAtATime;
+#endif
 
     // Disable loop unrolling in all relevant passes
     builder.DisableUnrollLoops =
