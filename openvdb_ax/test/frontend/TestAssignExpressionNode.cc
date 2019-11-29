@@ -189,6 +189,26 @@ unittest_util::CodeTests tests =
                                 true
                             ))
     },
+    { "@a <<= true;",       Node::Ptr(new AssignExpression(
+                                new Attribute("a", CoreType::FLOAT, true),
+                                new BinaryOperator(
+                                    OperatorToken::SHIFTLEFT,
+                                    new Attribute("a", CoreType::FLOAT, true),
+                                    new Value<bool>(true)
+                                ),
+                                true
+                            ))
+    },
+    { "@a >>= true;",       Node::Ptr(new AssignExpression(
+                                new Attribute("a", CoreType::FLOAT, true),
+                                new BinaryOperator(
+                                    OperatorToken::SHIFTRIGHT,
+                                    new Attribute("a", CoreType::FLOAT, true),
+                                    new Value<bool>(true)
+                                ),
+                                true
+                            ))
+    },
 
     // test component assignment
     { "vec3i@a.x = true;",      Node::Ptr(new AssignExpression(

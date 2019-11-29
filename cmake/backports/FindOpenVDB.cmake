@@ -101,7 +101,7 @@ Hints
 Instead of explicitly setting the cache variables, the following variables
 may be provided to tell this module where to look.
 
-``OPENVDB_ROOT``
+``OpenVDB_ROOT``
   Preferred installation prefix.
 ``OPENVDB_INCLUDEDIR``
   Preferred include directory e.g. <prefix>/include
@@ -114,11 +114,16 @@ may be provided to tell this module where to look.
 ``OPENVDB_{COMPONENT}_LIBRARYDIR``
   Preferred library directory of a specific component e.g. <prefix>/lib
 ``SYSTEM_LIBRARY_PATHS``
-  Paths appended to all include and lib searches.
+  Global list of library paths intended to be searched by and find_xxx call
+``OPENVDB_USE_STATIC_LIBS``
+  Only search for static openvdb libraries
+``DISABLE_CMAKE_SEARCH_PATHS``
+  Disable CMakes default search paths for find_xxx calls in this module
 
 #]=======================================================================]
 
 cmake_minimum_required(VERSION 3.3)
+
 # Monitoring <PackageName>_ROOT variables
 if(POLICY CMP0074)
   cmake_policy(SET CMP0074 NEW)
@@ -131,6 +136,11 @@ mark_as_advanced(
   OpenVDB_INCLUDE_DIR
   OpenVDB_LIBRARY
 )
+
+set(_FIND_OPENVDB_ADDITIONAL_OPTIONS "")
+if(DISABLE_CMAKE_SEARCH_PATHS)
+  set(_FIND_OPENVDB_ADDITIONAL_OPTIONS NO_DEFAULT_PATH)
+endif()
 
 set(_OPENVDB_COMPONENT_LIST
   openvdb
@@ -167,21 +177,25 @@ if(NOT openvdb IN_LIST OpenVDB_FIND_COMPONENTS)
   list(APPEND OpenVDB_FIND_COMPONENTS openvdb)
 endif()
 
-# Append OPENVDB_ROOT or $ENV{OPENVDB_ROOT} if set (prioritize the direct cmake var)
-set(_OPENVDB_ROOT_SEARCH_DIR "")
-
-if(OPENVDB_ROOT)
-  list(APPEND _OPENVDB_ROOT_SEARCH_DIR ${OPENVDB_ROOT})
-else()
-  set(_ENV_OPENVDB_ROOT $ENV{OPENVDB_ROOT})
-  if(_ENV_OPENVDB_ROOT)
-    list(APPEND _OPENVDB_ROOT_SEARCH_DIR ${_ENV_OPENVDB_ROOT})
-  endif()
+# Set _OPENVDB_ROOT based on a user provided root var. Xxx_ROOT and ENV{Xxx_ROOT}
+# are prioritised over the legacy capitalized XXX_ROOT variables for matching
+# CMake 3.12 behaviour
+# @todo  deprecate -D and ENV OPENVDB_ROOT from CMake 3.12
+if(OpenVDB_ROOT)
+  set(_OPENVDB_ROOT ${OpenVDB_ROOT})
+elseif(DEFINED ENV{OpenVDB_ROOT})
+  set(_OPENVDB_ROOT $ENV{OpenVDB_ROOT})
+elseif(OPENVDB_ROOT)
+  set(_OPENVDB_ROOT ${OPENVDB_ROOT})
+elseif(DEFINED ENV{OPENVDB_ROOT})
+  set(_OPENVDB_ROOT $ENV{OPENVDB_ROOT})
 endif()
 
 # Additionally try and use pkconfig to find OpenVDB
 
-find_package(PkgConfig)
+if(NOT DEFINED PKG_CONFIG_FOUND)
+  find_package(PkgConfig)
+endif()
 pkg_check_modules(PC_OpenVDB QUIET OpenVDB)
 
 # This CMake module supports being called from external packages AND from
@@ -206,7 +220,7 @@ elseif(${_DIR_NAME} STREQUAL "OpenVDB")
   get_filename_component(_IMPORT_PREFIX ${_IMPORT_PREFIX} DIRECTORY)
   get_filename_component(_IMPORT_PREFIX ${_IMPORT_PREFIX} DIRECTORY)
   set(_OPENVDB_INSTALL ${_IMPORT_PREFIX})
-  list(APPEND _OPENVDB_ROOT_SEARCH_DIR ${_OPENVDB_INSTALL})
+  list(APPEND _OPENVDB_ROOT ${_OPENVDB_INSTALL})
 endif()
 
 unset(_DIR_NAME)
@@ -219,7 +233,7 @@ unset(_IMPORT_PREFIX)
 set(_OPENVDB_INCLUDE_SEARCH_DIRS "")
 list(APPEND _OPENVDB_INCLUDE_SEARCH_DIRS
   ${OPENVDB_INCLUDEDIR}
-  ${_OPENVDB_ROOT_SEARCH_DIR}
+  ${_OPENVDB_ROOT}
   ${PC_OpenVDB_INCLUDE_DIRS}
   ${SYSTEM_LIBRARY_PATHS}
 )
@@ -233,14 +247,15 @@ foreach(COMPONENT ${OpenVDB_FIND_COMPONENTS})
   )
   # Look for a standard header files.
   if(${COMPONENT} STREQUAL "openvdb")
+    # Look for a standard OpenVDB header file.
     find_path(OpenVDB_${COMPONENT}_INCLUDE_DIR openvdb/version.h
-      NO_DEFAULT_PATH
-      PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
+      PATHS ${_OPENVDB_INCLUDE_SEARCH_DIRS}
       PATH_SUFFIXES include
     )
   elseif(${COMPONENT} STREQUAL "pyopenvdb")
     find_path(OpenVDB_${COMPONENT}_INCLUDE_DIR pyopenvdb.h
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES include include/openvdb include/openvdb/python
     )
@@ -248,13 +263,13 @@ foreach(COMPONENT ${OpenVDB_FIND_COMPONENTS})
     # @note  Expects both houdini_utils and openvdb_houdini folders
     #   to be located in the same place
     find_path(OpenVDB_${COMPONENT}_INCLUDE_DIR openvdb_houdini/SOP_NodeVDB.h
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES include include/openvdb
     )
   elseif(${COMPONENT} STREQUAL "openvdb_ax")
     find_path(OpenVDB_${COMPONENT}_INCLUDE_DIR openvdb_ax/compiler/Compiler.h
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES include include/openvdb_ax
     )
@@ -282,7 +297,7 @@ set(_OPENVDB_LIBRARYDIR_SEARCH_DIRS "")
 
 list(APPEND _OPENVDB_LIBRARYDIR_SEARCH_DIRS
   ${OPENVDB_LIBRARYDIR}
-  ${_OPENVDB_ROOT_SEARCH_DIR}
+  ${_OPENVDB_ROOT}
   ${PC_OpenVDB_LIBRARY_DIRS}
   ${SYSTEM_LIBRARY_PATHS}
 )
@@ -323,7 +338,7 @@ foreach(COMPONENT ${OpenVDB_FIND_COMPONENTS})
 
   if(${COMPONENT} STREQUAL "openvdb")
     find_library(OpenVDB_${COMPONENT}_LIBRARY ${LIB_NAME}
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES ${OPENVDB_PATH_SUFFIXES}
     )
@@ -331,20 +346,20 @@ foreach(COMPONENT ${OpenVDB_FIND_COMPONENTS})
     set(_OPENVDB_ORIG_CMAKE_FIND_LIBRARY_PREFIXES ${CMAKE_FIND_LIBRARY_PREFIXES})
     set(CMAKE_FIND_LIBRARY_PREFIXES ";lib")
     find_library(OpenVDB_${COMPONENT}_LIBRARY ${LIB_NAME}
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES ${OPENVDB_PYTHON_PATH_SUFFIXES}
     )
     set(CMAKE_FIND_LIBRARY_PREFIXES ${_OPENVDB_ORIG_CMAKE_FIND_LIBRARY_PREFIXES})
   elseif(${COMPONENT} STREQUAL "openvdb_houdini")
     find_library(OpenVDB_${COMPONENT}_LIBRARY ${LIB_NAME}
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES ${OPENVDB_PATH_SUFFIXES}
     )
   elseif(${COMPONENT} STREQUAL "openvdb_ax")
     find_library(OpenVDB_${COMPONENT}_LIBRARY ${LIB_NAME}
-      NO_DEFAULT_PATH
+      ${_FIND_OPENVDB_ADDITIONAL_OPTIONS}
       PATHS ${_VDB_COMPONENT_SEARCH_DIRS}
       PATH_SUFFIXES ${OPENVDB_PATH_SUFFIXES}
     )
@@ -425,6 +440,16 @@ endif()
 find_package(IlmBase REQUIRED COMPONENTS Half)
 find_package(TBB REQUIRED COMPONENTS tbb)
 find_package(ZLIB REQUIRED)
+
+if(NOT OPENVDB_USE_STATIC_LIBS)
+  # @note  Both of these must be set for Boost 1.70 (VFX2020) to link against
+  #        boost shared libraries (more specifically libraries built with -fPIC).
+  #        http://boost.2283326.n4.nabble.com/CMake-config-scripts-broken-in-1-70-td4708957.html
+  #        https://github.com/boostorg/boost_install/commit/160c7cb2b2c720e74463865ef0454d4c4cd9ae7c
+  set(BUILD_SHARED_LIBS ON)
+  set(Boost_USE_STATIC_LIBS OFF)
+endif()
+
 find_package(Boost REQUIRED COMPONENTS iostreams system)
 
 # Add deps for pyopenvdb

@@ -194,6 +194,26 @@ retrieveAccessor(VolumeFunctionArguments& args,
     }
 }
 
+
+inline openvdb::GridBase::Ptr
+createGrid(const ast::tokens::CoreType& type)
+{
+    // assert so the executer can be marked as noexcept (assuming nothing throws in compute)
+    assert(supported(type) && "Could not retrieve accessor from unsupported type");
+    switch (type) {
+        case ast::tokens::BOOL    : return openvdb::BoolGrid::create();
+        case ast::tokens::INT     : return openvdb::Int32Grid::create();
+        case ast::tokens::LONG    : return openvdb::Int64Grid::create();
+        case ast::tokens::FLOAT   : return openvdb::FloatGrid::create();
+        case ast::tokens::DOUBLE  : return openvdb::DoubleGrid::create();
+        case ast::tokens::VEC3I   : return openvdb::Vec3IGrid::create();
+        case ast::tokens::VEC3F   : return openvdb::Vec3fGrid::create();
+        case ast::tokens::VEC3D   : return openvdb::Vec3dGrid::create();
+        case ast::tokens::UNKNOWN :
+        default                   : return nullptr;
+    }
+}
+
 template <typename TreeT, typename ValueIterT>
 struct VolumeExecuterOp
 {
@@ -252,10 +272,11 @@ private:
 
 };
 
-void registerVolumes(const GridPtrVec& grids,
+void registerVolumes(GridPtrVec& grids,
     GridPtrVec& writeableGrids,
     GridPtrVec& readGrids,
-    const AttributeRegistry& registry)
+    const AttributeRegistry& registry,
+    const bool createMissing)
 {
     for (auto& iter : registry.data()) {
 
@@ -272,6 +293,15 @@ void registerVolumes(const GridPtrVec& grids,
             break;
         }
 
+        if (createMissing && !matchedGrid) {
+            matchedGrid = createGrid(iter.type());
+            if (matchedGrid) {
+                matchedGrid->setName(iter.name());
+                grids.emplace_back(matchedGrid);
+                matchedName = true;
+                type = iter.type();
+            }
+        }
         if (!matchedName && !matchedGrid) {
             OPENVDB_THROW(LookupError, "Missing grid \"@" + iter.name() + "\".");
         }
@@ -280,6 +310,7 @@ void registerVolumes(const GridPtrVec& grids,
                 "\" exists but has been accessed with type \"" +
                 ast::tokens::typeStringFromToken(iter.type()) + "\".");
         }
+
         assert(matchedGrid);
 
         if (!supported(type)) {
@@ -289,20 +320,22 @@ void registerVolumes(const GridPtrVec& grids,
         }
 
         // Populate the write/read grids based on the access registry. If a
-        // grid is being read from, written to and has non self usage, (influences
+        // grid is being written to and has non self usage, (influences
         // another grids value which isn't it's own) it must be deep copied
 
-        if (iter.writes() && iter.reads() && iter.affectsothers()) {
+        // @todo implement better execution order detection which could minimize
+        // the number of deep copies required
+
+        if (iter.writes() && iter.affectsothers()) {
+            // if affectsothers(), it's also read from at some point
+            assert(iter.reads());
             readGrids.push_back(matchedGrid->deepCopyGrid());
             writeableGrids.push_back(matchedGrid);
         }
-        else if (iter.writes()) {
-            assert(!iter.affectsothers());
-            readGrids.push_back(matchedGrid);
-            writeableGrids.push_back(matchedGrid);
-        }
-        else if (iter.reads()) {
-            assert(!iter.affectsothers());
+        else {
+            if (iter.writes()) {
+                writeableGrids.push_back(matchedGrid);
+            }
             readGrids.push_back(matchedGrid);
         }
     }
@@ -390,12 +423,13 @@ inline void run(const openvdb::GridPtrVec& writeableGrids,
 }
 } // anonymous namespace
 
-void VolumeExecutable::execute(const openvdb::GridPtrVec& grids,
-                               const IterType iterType) const
+void VolumeExecutable::execute(openvdb::GridPtrVec& grids,
+                               const IterType iterType,
+                               const bool createMissing) const
 {
     openvdb::GridPtrVec readGrids, writeableGrids;
 
-    registerVolumes(grids, writeableGrids, readGrids, *mAttributeRegistry);
+    registerVolumes(grids, writeableGrids, readGrids, *mAttributeRegistry, createMissing);
 
     KernelFunctionPtr kernel = nullptr;
     const auto iter = mFunctionAddresses.find(codegen::VolumeKernel::getDefaultName());
@@ -408,13 +442,14 @@ void VolumeExecutable::execute(const openvdb::GridPtrVec& grids,
     }
 
     if (iterType == IterType::ON)       run<ValueOnIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
-    else if(iterType == IterType::OFF)  run<ValueOffIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
+    else if (iterType == IterType::OFF) run<ValueOffIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
     else if (iterType == IterType::ALL) run<ValueAllIter>(writeableGrids, readGrids, kernel, mAttributeRegistry, mCustomData);
     else {
         OPENVDB_THROW(AXExecutionError,
             "Unrecognised voxel iterator.");
     }
 }
+
 
 }
 }

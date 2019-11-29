@@ -98,7 +98,9 @@ public:
     ~VolumeExecutable() = default;
 
     /// @brief Execute AX code on target grids
-    void execute(const openvdb::GridPtrVec& grids, const IterType iterType = IterType::ON) const;
+    void execute(openvdb::GridPtrVec& grids,
+        const IterType iterType = IterType::ON,
+        const bool createMissing = false) const;
 
 private:
 

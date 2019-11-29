@@ -165,42 +165,53 @@ void printFunctions(const bool namesOnly, const std::string& search, std::ostrea
 
     openvdb::ax::FunctionOptions opts;
     opts.mLazyFunctions = false;
-    const openvdb::ax::codegen::FunctionRegistry::UniquePtr reg =
+    const openvdb::ax::codegen::FunctionRegistry::UniquePtr registry =
         openvdb::ax::codegen::createDefaultRegistry(&opts);
 
-    if (namesOnly) {
-        std::vector<const std::string*> names;
-        for (const auto& iter : reg->map()) {
-            if (iter.second.isInternal()) continue;
-            names.emplace_back(&iter.first);
-        }
-        if (names.empty()) return;
+    // convert to ordered map for alphabetical sorting
+    // only include non internal functions and apply any search
+    // criteria
 
-        size_t pos = 0;
-        for (size_t i = 0; i < names.size() - 1; ++i) {
-            const std::string& name = (*names[i]);
-            if (i != 0 && pos > maxHelpTextWidth) {
+    std::map<std::string, openvdb::ax::codegen::FunctionBase::Ptr> functionMap;
+    for (const auto& iter : registry->map()) {
+        if (iter.second.isInternal()) continue;
+        if (!search.empty() && iter.first.find(search) == std::string::npos) {
+            continue;
+        }
+        functionMap[iter.first] = iter.second.function();
+    }
+
+    if (functionMap.empty()) return;
+
+    if (namesOnly) {
+
+        const size_t size = functionMap.size();
+        size_t pos = 0, count = 0;
+
+        auto iter = functionMap.cbegin();
+        for (; iter != functionMap.cend(); ++iter) {
+            if (count == size - 1) break;
+            const std::string& name = iter->first;
+            if (count != 0 && pos > maxHelpTextWidth) {
                 os << '\n';
                 pos = 0;
             }
             pos += name.size() + 2; // 2=", "
             os << name << ',' << ' ';
+            ++count;
         }
-        os << *names.back() << '\n';
+
+        os << iter->first << '\n';
     }
     else {
 
         llvm::LLVMContext C;
 
-        for (const auto& iter : reg->map()) {
-            if (iter.second.isInternal()) continue;
-            if (!search.empty() && iter.first.find(search) == std::string::npos) {
-                continue;
-            }
-            const openvdb::ax::codegen::FunctionBase::Ptr function = iter.second.function();
+        for (const auto& iter : functionMap) {
+            const openvdb::ax::codegen::FunctionBase::Ptr function = iter.second;
             std::string docs;
             function->getDocumentation(docs);
-            if (docs.empty()) docs = "<No documentation exists for this fuction>";
+            if (docs.empty()) docs = "<No documentation exists for this function>";
 
             // do some basic formatting on the help text
 

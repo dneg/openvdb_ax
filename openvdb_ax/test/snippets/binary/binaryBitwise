@@ -6,4 +6,7 @@ int@int_test4 = (-5) & 3;
 int@int_test5 = (-5) | 3;
 int@int_test6 = (-5) ^ 3;
 int@int_test7 = 5 ^ (-3);
+int@int_test8 = 5 << 3;
+int@int_test9 = 5 >> 3;
+int@int_test10 = -5 >> 3;
 

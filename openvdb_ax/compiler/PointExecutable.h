@@ -96,7 +96,8 @@ public:
     /// @param group Optional name of a group for filtering.  If this is not NULL,
     ///        the code will only be applied to points in this group
     void execute(points::PointDataGrid& grid,
-                 const std::string* const group = nullptr) const;
+                 const std::string* const group = nullptr,
+                 const bool createMissing = true) const;
 
 private:
 

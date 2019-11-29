@@ -42,7 +42,9 @@ VolumeExecutableWrap::VolumeExecutableWrap(openvdb::ax::VolumeExecutable::Ptr vo
 void VolumeExecutableWrap::execute(const boost::python::object& gridObj) {
     openvdb::GridBase::Ptr grid = pyopenvdb::getGridFromPyObject(gridObj);
     if (!grid) return;
-    mVolumeExecutable->execute({grid});
+    openvdb::GridPtrVec grids;
+    grids.emplace_back(grid);
+    mVolumeExecutable->execute(grids);
 }
 
 void VolumeExecutableWrap::execute(const boost::python::list& gridObjs) {

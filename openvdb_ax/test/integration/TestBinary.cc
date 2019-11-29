@@ -64,7 +64,7 @@ CPPUNIT_TEST_SUITE_REGISTRATION(TestBinary);
 void
 TestBinary::testBitwise()
 {
-    mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 7), {1, 7, 6, 3, -5, -8, -8});
+    mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 10), {1, 7, 6, 3, -5, -8, -8, 40, 0, -1});
     mHarness.executeCode("test/snippets/binary/binaryBitwise");
 
     AXTESTS_STANDARD_ASSERT()

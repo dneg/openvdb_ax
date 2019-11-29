@@ -1,8 +1,43 @@
 OpenVDB AX Version History
 ==========================
 
-Version 0.1.1 - In Development
+Version 0.1.1 - December 3, 2019
 
+    New Features:
+    - Added support for shl and ashr binary and assignment operations
+      (<<, >>, <<=, >>=)
+    - New functions added: hash, lerp, polardecompose, trace
+    - rand() can now be called without a seed argument for improved performance.
+      It must still be initialized with a seed at least once for deterministic
+      results
+    - Exposed the ability to control whether new points attributes or VDB grids
+      are automatically created when accessed if they do not exist
+
+    Improvements:
+    - Fixed some assertion errors/warnings when compiled with OPENVDB_CXX_STRICT
+    - Functions printed from the vdb_ax binary are now ordered alphabetically
+    - Simplified the logic in PointExecuterOp when a transform is required
+    - Improved the peak memory usage when reading from point positions
+
+    Houdini:
+    - New Evaluation Node Path parameter on the OpenVDB AX SOP to allow the SOP
+      to be embedded into digital assets which expose the scripting interface
+    - Renamed the label from OpenVDB AX to VDB AX and moved the SOP to the VDB
+      tab menu
+
+    CMake / Build / Testing:
+    - Updated all CMake Find modules to new standards from OpenVDB
+    - Improvements to cmake_minimum_required usage
+    - Improved the CMake branching for building against a Houdini installation
+      when not building the OpenVDB AX SOP
+    - Moved codegen/OpenSimplexNoise.h to math/OpenSimplexNoise.h
+    - Updated unit test main to match current VDB with additional -shuffle option
+    - Replaced the CMake USE_SYSTEM_LIBRARY_PATHS option with
+      DISABLE_CMAKE_SEARCH_PATHS and removed the hard coded list of
+      SYSTEM_LIBRARY_PATHS in favor of using CMake's default search procedure.
+      SYSTEM_LIBRARY_PATHS can still be used as a global list of paths for all
+      dependency searches
+    - Disabled the python module by default
 
 Version 0.1.0 - August 20, 2019
 

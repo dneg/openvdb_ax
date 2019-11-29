@@ -30,20 +30,24 @@
 
 #]=======================================================================]
 
-project(OpenVDB_AX)
 cmake_minimum_required(VERSION 3.3)
+project(OpenVDB_AX)
 
 include(CMakeDependentOption)
 
 option(OPENVDB_BUILD_AX "Build the OpenVDB AX library" ON)
 option(OPENVDB_BUILD_AX_BINARIES "Build the OpenVDB AX command line binary" ON)
-option(OPENVDB_BUILD_AX_PYTHON_MODULE "Build the OpenVDB AX Python module" ON)
+option(OPENVDB_BUILD_AX_PYTHON_MODULE "Build the OpenVDB AX Python module" OFF)
 option(OPENVDB_BUILD_AX_HOUDINI_PLUGIN "Build the OpenVDB AX Houdini plugin" OFF)
 option(OPENVDB_BUILD_AX_UNITTESTS "Build the OpenVDB AX unit tests" OFF)
 option(OPENVDB_BUILD_AX_DOCS "Build the OpenVDB AX documentation" OFF)
 option(USE_CCACHE "Build using Ccache if found on the path" ON)
 option(USE_HOUDINI "Build the library against a Houdini installation." OFF)
-option(USE_SYSTEM_LIBRARY_PATHS "Build with system library paths" ON)
+option(DISABLE_CMAKE_SEARCH_PATHS [=[
+Disable CMakes default system search paths when locating dependencies. When enabled, CMake will fall back to
+its default system search routine if it cannot find a dependency with the provided settings. When disabled, only
+paths provided through the Xxx_ROOT, supported XXX_INCLUDEDIR/XXX_LIBRARYDIR variables or the SYSTEM_LIBRARY_PATHS
+list will be searched.]=] OFF)
 
 ###### Deprecated options
 
@@ -89,6 +93,16 @@ if(OPENVDB_AX_CXX_STRICT)
   set(OPENVDB_CXX_STRICT ON)
 endif()
 
+if(DEFINED USE_SYSTEM_LIBRARY_PATHS)
+  message(DEPRECATION "The USE_SYSTEM_LIBRARY_PATHS option is deprecated and will be removed. "
+    "Use DISABLE_CMAKE_SEARCH_PATHS.")
+  if(USE_SYSTEM_LIBRARY_PATHS)
+    set(DISABLE_CMAKE_SEARCH_PATHS OFF)
+  else()
+    set(DISABLE_CMAKE_SEARCH_PATHS ON)
+  endif()
+endif()
+
 ##### Dependent options
 cmake_dependent_option(OPENVDB_BUILD_AX_GRAMMAR "Rebuild the OpenVDB AX grammar. CMake 3.4 with flex and bison."
   ON "OPENVDB_BUILD_AX" OFF)
@@ -128,6 +142,14 @@ if(OPENVDB_BUILD_AX_HOUDINI_PLUGIN)
   set(USE_HOUDINI ON)
 endif()
 
+# Can't include OpenVDBHoudiniSetup twice and finding openvdb_houdini
+# will cause it to be called, so only include here if not building the
+# openvdb_houdini lib
+
+if(USE_HOUDINI AND NOT OPENVDB_BUILD_AX_HOUDINI_PLUGIN)
+  include(OpenVDBHoudiniSetup)
+endif()
+
 #########################################################################
 
 # Add the doxygen command if required - do this here so we guarantee not
@@ -157,19 +179,6 @@ if(NOT CMAKE_BUILD_TYPE)
   )
 endif()
 message(STATUS "CMake Build Type: ${CMAKE_BUILD_TYPE}")
-
-if(USE_SYSTEM_LIBRARY_PATHS)
-  set(SYSTEM_LIBRARY_PATHS
-    ~/Library/Frameworks
-    /Library/Frameworks
-    /usr/local
-    /usr
-    /sw  # Fink
-    /opt/local  # DarwinPorts
-    /opt/csw  # Blastwave
-    /opt
-  )
-endif()
 
 #########################################################################
 
@@ -218,14 +227,14 @@ unset(HAS_AVAILABLE_WARNINGS)
 ##########################################################################
 
 set(REQUIRED_OPENVDB_COMPONENTS openvdb)
-if (USE_HOUDINI)
-    list(APPEND REQUIRED_OPENVDB_COMPONENTS openvdb_houdini)
+if (OPENVDB_BUILD_AX_HOUDINI_PLUGIN)
+  list(APPEND REQUIRED_OPENVDB_COMPONENTS openvdb_houdini)
 endif()
 if (OPENVDB_BUILD_AX_PYTHON_MODULE)
-    list(APPEND REQUIRED_OPENVDB_COMPONENTS pyopenvdb)
+  list(APPEND REQUIRED_OPENVDB_COMPONENTS pyopenvdb)
 endif()
 if (NOT OPENVDB_BUILD_AX)
-    list(APPEND REQUIRED_OPENVDB_COMPONENTS openvdb_ax)
+  list(APPEND REQUIRED_OPENVDB_COMPONENTS openvdb_ax)
 endif()
 
 find_package(OpenVDB REQUIRED COMPONENTS ${REQUIRED_OPENVDB_COMPONENTS})

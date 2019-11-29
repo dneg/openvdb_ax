@@ -162,7 +162,7 @@
 //   https://en.cppreference.com/w/cpp/language/operator_precedence
 
 %left COMMA
-%right EQUALS PLUSEQUALS MINUSEQUALS MULTIPLYEQUALS DIVIDEEQUALS MODULOEQUALS BITANDEQUALS BITXOREQUALS BITOREQUALS
+%right EQUALS PLUSEQUALS MINUSEQUALS MULTIPLYEQUALS DIVIDEEQUALS MODULOEQUALS BITANDEQUALS BITXOREQUALS BITOREQUALS SHIFTLEFTEQUALS SHIFTRIGHTEQUALS
 %left OR
 %left AND
 %left BITOR
@@ -170,6 +170,7 @@
 %left BITAND
 %left EQUALSEQUALS NOTEQUALS
 %left MORETHAN LESSTHAN MORETHANOREQUAL LESSTHANOREQUAL
+%left SHIFTLEFT SHIFTRIGHT
 %left PLUS MINUS
 %left MULTIPLY DIVIDE MODULO
 %left NOT BITNOT PLUSPLUS MINUSMINUS
@@ -350,15 +351,17 @@ function_call_expression:
 
 /// @brief  Assign expressions for attributes and local variables
 assign_expression:
-      variable_reference EQUALS expression          { $$ = new AssignExpression($1, $3, false); }
-    | variable_reference PLUSEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::PLUS, $1->copy(), $3), true); }
-    | variable_reference MINUSEQUALS expression     { $$ = new AssignExpression($1, new BinaryOperator(tokens::MINUS, $1->copy(), $3), true); }
-    | variable_reference MULTIPLYEQUALS expression  { $$ = new AssignExpression($1, new BinaryOperator(tokens::MULTIPLY, $1->copy(), $3), true); }
-    | variable_reference DIVIDEEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::DIVIDE, $1->copy(), $3), true); }
-    | variable_reference MODULOEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::MODULO, $1->copy(), $3), true); }
-    | variable_reference BITANDEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITAND, $1->copy(), $3), true); }
-    | variable_reference BITXOREQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITXOR, $1->copy(), $3), true); }
-    | variable_reference BITOREQUALS expression     { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITOR, $1->copy(), $3), true); }
+      variable_reference EQUALS expression            { $$ = new AssignExpression($1, $3, false); }
+    | variable_reference PLUSEQUALS expression        { $$ = new AssignExpression($1, new BinaryOperator(tokens::PLUS, $1->copy(), $3), true); }
+    | variable_reference MINUSEQUALS expression       { $$ = new AssignExpression($1, new BinaryOperator(tokens::MINUS, $1->copy(), $3), true); }
+    | variable_reference MULTIPLYEQUALS expression    { $$ = new AssignExpression($1, new BinaryOperator(tokens::MULTIPLY, $1->copy(), $3), true); }
+    | variable_reference DIVIDEEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::DIVIDE, $1->copy(), $3), true); }
+    | variable_reference MODULOEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::MODULO, $1->copy(), $3), true); }
+    | variable_reference BITANDEQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITAND, $1->copy(), $3), true); }
+    | variable_reference BITXOREQUALS expression      { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITXOR, $1->copy(), $3), true); }
+    | variable_reference BITOREQUALS expression       { $$ = new AssignExpression($1, new BinaryOperator(tokens::BITOR, $1->copy(), $3), true); }
+    | variable_reference SHIFTLEFTEQUALS expression   { $$ = new AssignExpression($1, new BinaryOperator(tokens::SHIFTLEFT, $1->copy(), $3), true); }
+    | variable_reference SHIFTRIGHTEQUALS expression  { $$ = new AssignExpression($1, new BinaryOperator(tokens::SHIFTRIGHT, $1->copy(), $3), true); }
 ;
 
 /// @brief  A binary expression which takes a left and right hand side expression
@@ -369,6 +372,8 @@ binary_expression:
     | expression MULTIPLY expression         { $$ = new BinaryOperator(tokens::MULTIPLY, $1, $3); }
     | expression DIVIDE expression           { $$ = new BinaryOperator(tokens::DIVIDE, $1, $3); }
     | expression MODULO expression           { $$ = new BinaryOperator(tokens::MODULO, $1, $3); }
+    | expression SHIFTLEFT expression        { $$ = new BinaryOperator(tokens::SHIFTLEFT, $1, $3); }
+    | expression SHIFTRIGHT expression       { $$ = new BinaryOperator(tokens::SHIFTRIGHT, $1, $3); }
     | expression BITAND expression           { $$ = new BinaryOperator(tokens::BITAND, $1, $3); }
     | expression BITOR expression            { $$ = new BinaryOperator(tokens::BITOR, $1, $3); }
     | expression BITXOR expression           { $$ = new BinaryOperator(tokens::BITXOR, $1, $3); }

@@ -292,32 +292,9 @@ llvmBinaryConversion(const llvm::Type* const type,
                      const std::string& twine = "")
 {
 
-#define BIND_FP_BINARY_OP(Function, __Twine) \
-    std::bind(&Function, \
-        std::placeholders::_1, \
-        std::placeholders::_2, \
-        std::placeholders::_3, \
-        __Twine, \
-        nullptr) // MDNode (metadata node - defaults to nullptr)
-
-    // Some integer operations have more than one function with the same name
-    // so ensure the correct one is selected
-#define BIND_I_BIN_OP(Function, __Twine) \
-    std::bind((llvm::Value*(llvm::IRBuilder<>::*)\
-        (llvm::Value*, llvm::Value*, const llvm::Twine&))&Function, \
-        std::placeholders::_1, \
-        std::placeholders::_2, \
-        std::placeholders::_3, \
-        __Twine)
-
-#define BIND_I_BIN_OP_NW(Function, __Twine) \
-    std::bind(&Function, \
-        std::placeholders::_1, \
-        std::placeholders::_2, \
-        std::placeholders::_3, \
-        __Twine, \
-        /*No Unsigned Wrap*/false, \
-        /*No Signed Wrap*/false)
+#define BIND_BINARY_OP(Function) \
+    [twine](llvm::IRBuilder<>& B, llvm::Value* L, llvm::Value* R) \
+        -> llvm::Value* { return B.Function(L, R, twine); }
 
     // NOTE: Binary % and / ops always take sign into account (CreateSDiv vs CreateUDiv, CreateSRem vs CreateURem).
     // See http://stackoverflow.com/questions/5346160/llvm-irbuildercreateudiv-createsdiv-createexactudiv
@@ -329,49 +306,44 @@ llvmBinaryConversion(const llvm::Type* const type,
                 + ast::tokens::operatorNameFromToken(token) + "\" on floating points values");
         }
 
-        /// @note  Last arguments for FP binary operators
-        if (token == ast::tokens::PLUS)                 return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFAdd, twine);
-        else if (token == ast::tokens::MINUS)           return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFSub, twine);
-        else if (token == ast::tokens::MULTIPLY)        return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFMul, twine);
-        else if (token == ast::tokens::DIVIDE)          return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFDiv, twine);
-        else if (token == ast::tokens::MODULO)          return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFRem, twine);
-        else if (token == ast::tokens::EQUALSEQUALS)    return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFCmpOEQ, twine);
-        else if (token == ast::tokens::NOTEQUALS)       return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFCmpONE, twine);
-        else if (token == ast::tokens::MORETHAN)        return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFCmpOGT, twine);
-        else if (token == ast::tokens::LESSTHAN)        return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFCmpOLT, twine);
-        else if (token == ast::tokens::MORETHANOREQUAL) return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFCmpOGE, twine);
-        else if (token == ast::tokens::LESSTHANOREQUAL) return BIND_FP_BINARY_OP(llvm::IRBuilder<>::CreateFCmpOLE, twine);
+        if (token == ast::tokens::PLUS)                 return BIND_BINARY_OP(CreateFAdd);
+        else if (token == ast::tokens::MINUS)           return BIND_BINARY_OP(CreateFSub);
+        else if (token == ast::tokens::MULTIPLY)        return BIND_BINARY_OP(CreateFMul);
+        else if (token == ast::tokens::DIVIDE)          return BIND_BINARY_OP(CreateFDiv);
+        else if (token == ast::tokens::MODULO)          return BIND_BINARY_OP(CreateFRem);
+        else if (token == ast::tokens::EQUALSEQUALS)    return BIND_BINARY_OP(CreateFCmpOEQ);
+        else if (token == ast::tokens::NOTEQUALS)       return BIND_BINARY_OP(CreateFCmpONE);
+        else if (token == ast::tokens::MORETHAN)        return BIND_BINARY_OP(CreateFCmpOGT);
+        else if (token == ast::tokens::LESSTHAN)        return BIND_BINARY_OP(CreateFCmpOLT);
+        else if (token == ast::tokens::MORETHANOREQUAL) return BIND_BINARY_OP(CreateFCmpOGE);
+        else if (token == ast::tokens::LESSTHANOREQUAL) return BIND_BINARY_OP(CreateFCmpOLE);
         OPENVDB_THROW(LLVMTokenError, "Unrecognised binary operator \"" +
             ast::tokens::operatorNameFromToken(token) + "\"");
     }
     else if (type->isIntegerTy()) {
-        if (token == ast::tokens::PLUS)                  return BIND_I_BIN_OP_NW(llvm::IRBuilder<>::CreateAdd, twine);
-        else if (token == ast::tokens::MINUS)            return BIND_I_BIN_OP_NW(llvm::IRBuilder<>::CreateSub, twine);
-        else if (token == ast::tokens::MULTIPLY)         return BIND_I_BIN_OP_NW(llvm::IRBuilder<>::CreateMul, twine);
-        else if (token == ast::tokens::DIVIDE) {
-            return std::bind(&llvm::IRBuilder<>::CreateSDiv,
-                std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, twine,
-                    false); // IsExact - when true, poison value if the reuslt is rounded
-        }
-        else if (token == ast::tokens::MODULO)           return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateSRem, twine);
-        else if (token == ast::tokens::EQUALSEQUALS)     return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateICmpEQ, twine);
-        else if (token == ast::tokens::NOTEQUALS)        return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateICmpNE, twine);
-        else if (token == ast::tokens::MORETHAN)         return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateICmpSGT, twine);
-        else if (token == ast::tokens::LESSTHAN)         return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateICmpSLT, twine);
-        else if (token == ast::tokens::MORETHANOREQUAL)  return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateICmpSGE, twine);
-        else if (token == ast::tokens::LESSTHANOREQUAL)  return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateICmpSLE, twine);
-        else if (token == ast::tokens::AND)              return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateAnd, twine);
-        else if (token == ast::tokens::OR)               return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateOr, twine);
-        else if (token == ast::tokens::BITAND)           return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateAnd, twine);
-        else if (token == ast::tokens::BITOR)            return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateOr, twine);
-        else if (token == ast::tokens::BITXOR)           return BIND_I_BIN_OP(llvm::IRBuilder<>::CreateXor, twine);
+        if (token == ast::tokens::PLUS)                  return BIND_BINARY_OP(CreateAdd); // No Unsigned/Signed Wrap
+        else if (token == ast::tokens::MINUS)            return BIND_BINARY_OP(CreateSub); // No Unsigned/Signed Wrap
+        else if (token == ast::tokens::MULTIPLY)         return BIND_BINARY_OP(CreateMul); // No Unsigned/Signed Wrap
+        else if (token == ast::tokens::DIVIDE)           return BIND_BINARY_OP(CreateSDiv); // IsExact = false - when true, poison value if the reuslt is rounded
+        else if (token == ast::tokens::MODULO)           return BIND_BINARY_OP(CreateSRem);
+        else if (token == ast::tokens::EQUALSEQUALS)     return BIND_BINARY_OP(CreateICmpEQ);
+        else if (token == ast::tokens::NOTEQUALS)        return BIND_BINARY_OP(CreateICmpNE);
+        else if (token == ast::tokens::MORETHAN)         return BIND_BINARY_OP(CreateICmpSGT);
+        else if (token == ast::tokens::LESSTHAN)         return BIND_BINARY_OP(CreateICmpSLT);
+        else if (token == ast::tokens::MORETHANOREQUAL)  return BIND_BINARY_OP(CreateICmpSGE);
+        else if (token == ast::tokens::LESSTHANOREQUAL)  return BIND_BINARY_OP(CreateICmpSLE);
+        else if (token == ast::tokens::AND)              return BIND_BINARY_OP(CreateAnd);
+        else if (token == ast::tokens::OR)               return BIND_BINARY_OP(CreateOr);
+        else if (token == ast::tokens::SHIFTLEFT)        return BIND_BINARY_OP(CreateShl); // No Unsigned/Signed Wrap
+        else if (token == ast::tokens::SHIFTRIGHT)       return BIND_BINARY_OP(CreateAShr); // IsExact = false - poison value if any of the bits shifted out are non-zero.
+        else if (token == ast::tokens::BITAND)           return BIND_BINARY_OP(CreateAnd);
+        else if (token == ast::tokens::BITOR)            return BIND_BINARY_OP(CreateOr);
+        else if (token == ast::tokens::BITXOR)           return BIND_BINARY_OP(CreateXor);
         OPENVDB_THROW(LLVMTokenError, "Unrecognised binary operator \"" +
             ast::tokens::operatorNameFromToken(token) + "\"");
     }
 
-#undef BIND_FP_BIN_OP
-#undef BIND_I_BIN_OP1
-#undef BIND_I_BIN_OP2
+#undef BIND_BINARY_OP
 
     std::cerr << "Attempted to generate a binary operator \""
               << ast::tokens::operatorNameFromToken(token) << "\""

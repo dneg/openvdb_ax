@@ -30,9 +30,9 @@
 
 #]=======================================================================]
 
-project(OpenVDBAX)
 # @note  Version 3.4 is required for re-generation of AX Grammar
 cmake_minimum_required(VERSION 3.3)
+project(OpenVDBAX)
 
 option(OPENVDB_AX_SHARED "Build dynamically linked version of the ax library." ON)
 option(OPENVDB_AX_STATIC "Build statically linked version of the ax library." ON)
@@ -149,7 +149,6 @@ set(OPENVDB_AX_LIBRARY_SOURCE_FILES
   codegen/ComputeGenerator.cc
   codegen/FunctionRegistry.cc
   codegen/FunctionTypes.cc
-  codegen/OpenSimplexNoise.cc
   codegen/PointComputeGenerator.cc
   codegen/PointFunctions.cc
   codegen/StandardFunctions.cc
@@ -158,6 +157,7 @@ set(OPENVDB_AX_LIBRARY_SOURCE_FILES
   compiler/Compiler.cc
   compiler/PointExecutable.cc
   compiler/VolumeExecutable.cc
+  math/OpenSimplexNoise.cc
   )
 
 set(OPENVDB_AX_AST_INCLUDE_FILES
@@ -174,12 +174,12 @@ set(OPENVDB_AX_CODEGEN_INCLUDE_FILES
   codegen/FunctionRegistry.h
   codegen/Functions.h
   codegen/FunctionTypes.h
-  codegen/OpenSimplexNoise.h
   codegen/PointComputeGenerator.h
   codegen/SymbolTable.h
   codegen/Types.h
   codegen/Utils.h
   codegen/VolumeComputeGenerator.h
+  math/OpenSimplexNoise.h
 )
 
 set(OPENVDB_AX_COMPILER_INCLUDE_FILES

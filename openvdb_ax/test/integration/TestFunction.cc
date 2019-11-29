@@ -32,7 +32,7 @@
 
 #include <openvdb_ax/test/util.h>
 #include <openvdb_ax/compiler/CustomData.h>
-#include <openvdb_ax/codegen/OpenSimplexNoise.h>
+#include <openvdb_ax/math/OpenSimplexNoise.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 

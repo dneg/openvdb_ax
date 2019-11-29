@@ -38,8 +38,8 @@
 ///
 
 #include "Functions.h"
-#include "OpenSimplexNoise.h"
 
+#include <openvdb_ax/math/OpenSimplexNoise.h>
 #include <openvdb_ax/ast/Tokens.h>
 #include <openvdb_ax/codegen/FunctionTypes.h>
 #include <openvdb_ax/codegen/Types.h>
@@ -353,19 +353,82 @@ struct Rand : public FunctionBase
 {
     DEFINE_IDENTIFIER_DOC("rand", "Creates a random number based on the provided "
         "seed. The number will be in the range of 0 to 1. The same number is "
-        "produced for the same seed.")
+        "produced for the same seed. Note that if rand is called without a seed "
+        "the previous state of the random number generator is advanced for the "
+        "currently processing element. This state is determined by the last call to "
+        "rand() with a given seed. If rand is not called with a seed, the generator "
+        "advances continuously across different elements which can produce non-"
+        "deterministic results. It is important that rand is always called with a "
+        "seed at least once for deterministic results.")
 
     inline static Ptr create(const FunctionOptions&) { return Ptr(new Rand()); }
 
     Rand() : FunctionBase({
-            DECLARE_FUNCTION_SIGNATURE(rand_double),
-            DECLARE_FUNCTION_SIGNATURE(rand_int)
+        FunctionSignature<double()>::create
+            ((double(*)())(Rand::rand), std::string("rand")),
+        FunctionSignature<double(double)>::create
+            ((double(*)(double))(Rand::rand), std::string("randd")),
+        FunctionSignature<double(int32_t)>::create
+            ((double(*)(int32_t))(Rand::rand), std::string("randi"))
     }) {}
 
 private:
-    static double rand_double(double seed);
-    static double rand_int(int32_t seed);
 
+    static double rand(const uint32_t* seed)
+    {
+        using ThreadLocalEngineContainer =
+            tbb::enumerable_thread_specific<boost::mt19937>;
+
+        // Obtain thread-local engine (or create if it doesn't exist already).
+        static ThreadLocalEngineContainer ThreadLocalEngines;
+        static boost::uniform_01<double> Generator;
+
+        boost::mt19937& engine = ThreadLocalEngines.local();
+        if (seed) {
+            engine.seed(static_cast<boost::mt19937::result_type>(*seed));
+        }
+
+        // Once we have seeded the random number generator, we then evaluate it,
+        // which returns a floating point number in the range [0,1)
+        return Generator(engine);
+    }
+
+    static double rand() { return Rand::rand(nullptr); }
+
+    static double rand(double seed)
+    {
+        // We initially hash the double-precision seed with `boost::hash`. The
+        // important thing about the hash is that it produces a "reliable" hash value,
+        // taking into account a number of special cases for floating point numbers
+        // (e.g. -0 and +0 must return the same hash value, etc). Other than these
+        // special cases, this function will usually just copy the binary
+        // representation of a float into the resultant `size_t`
+        const size_t hash = boost::hash<double>()(seed);
+
+        // Now that we have a reliable hash (with special floating-point cases taken
+        // care of), we proceed to use this hash to seed a random number generator.
+        // The generator takes an unsigned int, which is not guaranteed to be the
+        // same size as size_t.
+        //
+        // So, we must convert it. I should note that the OpenVDB math libraries will
+        // do this for us, but its implementation static_casts `size_t` to `unsigned int`,
+        // and because `boost::hash` returns a binary copy of the original
+        // double-precision number in almost all cases, this ends up producing noticable
+        // patterns in the result (e.g. by truncating the upper 4 bytes, values of 1.0,
+        // 2.0, 3.0, and 4.0 all return the same hash value because their lower 4 bytes
+        // are all zero).
+        //
+        // We use the `hashToSeed` function to reduce our `size_t` to an `unsigned int`,
+        // whilst taking all bits in the `size_t` into account.
+        const uint32_t uintseed = hashToSeed<uint32_t>(hash);
+        return Rand::rand(&uintseed);
+    }
+
+    static double rand(int32_t seed)
+    {
+        const uint32_t uintseed = static_cast<uint32_t>(seed);
+        return Rand::rand(&uintseed);
+    }
 };
 
 struct SimplexNoise : public FunctionBase
@@ -451,7 +514,7 @@ struct CurlSimplexNoise : public FunctionBase
 
 struct Print : public FunctionBase
 {
-    DEFINE_IDENTIFIER_DOC("print", "Prints the input to the standard error "
+    DEFINE_IDENTIFIER_DOC("print", "Prints the input to the standard output "
         "stream. Warning: This will be run for every element.")
 
     inline static Ptr create(const FunctionOptions&) { return Ptr(new Print()); }
@@ -484,6 +547,22 @@ private:
     template <typename T>
     inline static void printarray(const T* v) {
         std::cout << *v << std::endl;
+    }
+};
+
+struct Hash : public FunctionBase
+{
+    DEFINE_IDENTIFIER_DOC("hash", "Return a hash of the provided string.")
+
+    inline static Ptr create(const FunctionOptions&) { return Ptr(new Hash()); }
+
+    Hash() : FunctionBase({
+        DECLARE_FUNCTION_SIGNATURE(hash),
+    }) {}
+
+private:
+    inline static int64_t hash(const char* str) {
+        return static_cast<int64_t>(std::hash<std::string>{}(std::string(str)));
     }
 };
 
@@ -565,6 +644,30 @@ struct Abs : public FunctionBase
     }
 };
 
+struct Lerp : public FunctionBase
+{
+    DEFINE_IDENTIFIER_DOC("lerp",
+        "Performs bilinear interpolation between the values. If the amount is "
+        "outside the range 0 to 1, the values will be extrapolated linearly. If "
+        "amount is 0, the first value is returned. If it is 1, the second value "
+        "is returned.")
+
+    inline static Ptr create(const FunctionOptions&) {
+        return Ptr(new Lerp());
+    }
+
+    Lerp() : FunctionBase({
+        DECLARE_FUNCTION_SIGNATURE(lerp<float>),
+        DECLARE_FUNCTION_SIGNATURE(lerp<double>)
+    }) {}
+
+private:
+    template <typename ValueT>
+    static ValueT lerp(ValueT a, ValueT b, ValueT x) {
+        return (ValueT(1.0) - x) * a + x * b;
+    }
+};
+
 struct External
 {
     template <typename T>
@@ -583,7 +686,7 @@ struct External
     inline static void findv3f(const char* const name,
         const void* const data, T (*out)[3])
     {
-        const math::Vec3<T> result = find<math::Vec3<T>>(name, data);
+        const openvdb::math::Vec3<T> result = find<openvdb::math::Vec3<T>>(name, data);
         for (size_t i = 0; i < 3; ++i) {
             (*out)[i] = result[static_cast<int>(i)];
         }
@@ -1807,64 +1910,49 @@ struct MatPretransform : public FunctionBase
     }
 };
 
-
-///////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////
-
-
-double Rand::rand_double(double seed)
+struct MatPolarDecompose : public FunctionBase
 {
-    using ThreadLocalEngineContainer = tbb::enumerable_thread_specific<boost::mt19937>;
+    DEFINE_IDENTIFIER_DOC("polardecompose",
+        "Decompose an invertible 3x3 matrix into its orthogonal matrix and symmetric matrix components.")
 
-    // Obtain thread-local engine (or create if it doesn't exist already).
+    inline static Ptr create(const FunctionOptions&) { return Ptr(new MatPolarDecompose()); }
 
-    static ThreadLocalEngineContainer ThreadLocalEngines;
-    static boost::uniform_01<double> Generator;
+    MatPolarDecompose() : FunctionBase({
+        DECLARE_FUNCTION_SIGNATURE(polar_decompose<openvdb::math::Mat3<float>>),
+        DECLARE_FUNCTION_SIGNATURE(polar_decompose<openvdb::math::Mat3<double>>)
+    }) {}
 
-    // We initially hash the double-precision seed with `boost::hash`. The
-    // important thing about the hash is that it produces a "reliable" hash value,
-    // taking into account a number of special cases for floating point numbers
-    // (e.g. -0 and +0 must return the same hash value, etc). Other than these
-    // special cases, this function will usually just copy the binary
-    // representation of a float into the resultant `size_t`
-    std::size_t hash = boost::hash<double>()(seed);
+private:
+    template <typename MatrixT>
+    inline static bool polar_decompose(const MatrixT* const input, MatrixT* ortho, MatrixT* symmetric) {
+        return openvdb::math::polarDecomposition<MatrixT>(*input, *ortho, *symmetric);
+    }
+};
 
-    // Now that we have a reliable hash (with special floating-point cases taken
-    // care of), we proceed to use this hash to seed a random number generator.
-    // The generator takes an unsigned int, which is not guaranteed to be the
-    // same size as size_t.
-    //
-    // So, we must convert it. I should note that the OpenVDB math libraries will
-    // do this for us, but its implementation static_casts `size_t` to `unsigned int`,
-    // and because `boost::hash` returns a binary copy of the original
-    // double-precision number in almost all cases, this ends up producing noticable
-    // patterns in the result (e.g. by truncating the upper 4 bytes, values of 1.0,
-    // 2.0, 3.0, and 4.0 all return the same hash value because their lower 4 bytes
-    // are all zero).
-    //
-    // We use the `hashToSeed` function to reduce our `size_t` to an `unsigned int`,
-    // whilst taking all bits in the `size_t` into account.
-    boost::mt19937& engine = ThreadLocalEngines.local();
-    engine.seed(static_cast<boost::mt19937::result_type>(hashToSeed<unsigned int>(hash)));
-
-    // Once we have seeded the random number generator, we then evaluate it,
-    // which returns a floating point number in the range [0,1)
-    return Generator(engine);
-}
-
-double Rand::rand_int(int32_t seed)
+struct MatTrace : public FunctionBase
 {
-    using ThreadLocalEngineContainer = tbb::enumerable_thread_specific<boost::mt19937>;
+    DEFINE_IDENTIFIER_DOC("trace",
+        "Return the trace of a matrix, the sum of the diagonal elements.")
 
-    static ThreadLocalEngineContainer ThreadLocalEngines;
-    static boost::uniform_01<double> Generator;
+    inline static Ptr create(const FunctionOptions&) { return Ptr(new MatTrace()); }
 
-    boost::mt19937& engine = ThreadLocalEngines.local();
-    engine.seed(static_cast<uint32_t>(seed));
+    MatTrace() : FunctionBase({
+        DECLARE_FUNCTION_SIGNATURE(trace<openvdb::math::Mat3<float>>),
+        DECLARE_FUNCTION_SIGNATURE(trace<openvdb::math::Mat3<double>>),
+        DECLARE_FUNCTION_SIGNATURE(trace<openvdb::math::Mat4<float>>),
+        DECLARE_FUNCTION_SIGNATURE(trace<openvdb::math::Mat4<double>>)
+    }) {}
 
-    return Generator(engine);
-}
-
+private:
+    template <typename MatrixT>
+    inline static typename MatrixT::ValueType trace(const MatrixT* const input) {
+        typename MatrixT::ValueType value(0.0);
+        for (size_t i = 0; i < MatrixT::numRows(); ++i) {
+           value += (*input)(static_cast<int>(i),static_cast<int>(i));
+        }
+        return value;
+    }
+};
 
 ///////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
@@ -1905,23 +1993,28 @@ void insertStandardFunctions(FunctionRegistry& registry,
     add("asin", Asin::create, false);
     add("atan", Atan::create, false);
     add("atan2", Atan2::create, false);
-    add("atof", Atof::create, false);
-    add("atoi", Atoi::create, false);
     add("cbrt", Cbrt::create, false);
     add("clamp", Clamp::create, false);
     add("cosh", Cosh::create, false);
+    add("curlsimplexnoise", CurlSimplexNoise::create, false);
     add("dot", DotProd::create, false);
     add("fit", Fit::create, false);
+    add("lerp", Lerp::create, false);
     add("max", Max::create, false);
     add("min", Min::create, false);
-    add("curlsimplexnoise", CurlSimplexNoise::create, false);
-    add("print", Print::create, false);
     add("rand", Rand::create, false);
     add("signbit", Signbit::create, false);
     add("simplexnoise", SimplexNoise::create, false);
     add("sinh", Sinh::create, false);
     add("tan", Tan::create, false);
     add("tanh", Tanh::create, false);
+
+    // string manip
+
+    add("atof", Atof::create, false);
+    add("atoi", Atoi::create, false);
+    add("hash", Hash::create, false);
+    add("print", Print::create, false);
 
     // math vector
 
@@ -1940,6 +2033,8 @@ void insertStandardFunctions(FunctionRegistry& registry,
     add("transpose", MatTranspose::create, false);
     add("transform", MatTransform::create, false);
     add("pretransform", MatPretransform::create, false);
+    add("polardecompose", MatPolarDecompose::create, false);
+    add("trace", MatTrace::create, false);
     add("mmmult", MatMatMult::create, true);
 
     // externals
