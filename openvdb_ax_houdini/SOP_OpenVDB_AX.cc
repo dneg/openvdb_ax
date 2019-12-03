@@ -113,7 +113,7 @@ public:
 
     std::string getLabelName(const houdini_utils::OpFactory& factory) override
     {
-        return "Open" + factory.english();
+        return factory.english();
     }
 
     std::string getFirstName(const houdini_utils::OpFactory& factory) override
@@ -124,6 +124,11 @@ public:
     std::string getIconName(const houdini_utils::OpFactory& factory) override
     {
         return factory.flavorString() + "_OpenVDB";
+    }
+
+    std::string getTabSubMenuPath(const houdini_utils::OpFactory&) override
+    {
+        return "VDB";
     }
 };
 
@@ -245,7 +250,8 @@ public:
         /// @brief  See SOP_OpenVDB_AX::evaluateExternalExpressions
         void evaluateExternalExpressions(const double time,
                         const hax::ChannelExpressionSet& set,
-                        const bool hvars);
+                        const bool hvars,
+                        OP_Node* evaluationNode);
         /// @brief  See SOP_OpenVDB_AX::evalInsertHScriptVariable
         bool evalInsertHScriptVariable(const std::string& name,
                         const std::string& accessedType,
@@ -266,7 +272,7 @@ public:
 
 protected:
     bool updateParmsFlags() override;
-
+    void syncNodeVersion(const char*, const char*, bool*) override;
 }; // class SOP_OpenVDB_AX
 
 
@@ -304,6 +310,10 @@ newSopOperator(OP_OperatorTable* table)
             .setHelpText("Whether to run this snippet over Active, Inactive or All voxels.")
             .setChoiceListItems(PRM_CHOICELIST_SINGLE, items));
     }
+
+    execution.add(hutil::ParmFactory(PRM_TOGGLE, "createmissing", "Create Missing Attributes/Grids")
+        .setDefault(PRMoneDefaults)
+        .setHelpText("Create missing point attributes or VDB volumes accessed by @."));
 
     addSimpleFolder(&parms, "Execution", execution);
 
@@ -343,6 +353,15 @@ newSopOperator(OP_OperatorTable* table)
                      "context. As $ is used for custom parameters in AX, a warning will be generated "
                      "if a Houdini parameter also exists of the same name as the given $ variable."));
 
+    scriptModifiers.add(hutil::ParmFactory(PRM_STRING, "cwdpath", "Evaluation Node Path")
+        .setTypeExtended(PRM_TYPE_DYNAMIC_PATH)
+        .setDefault(".")
+        .setHelpText("Functions like ch() and $ syntax usually evaluate with respect to this node. "
+            "Enter a node path here to override where the path search starts from. This is useful for "
+            "embedding in a digital asset, where you want searches to start from the asset root. "
+            "Note that HScript variables (if enabled) always refer to the AX node and ignore "
+            "the evaluation path."));
+
     addSimpleFolder(&parms, "Script Modifiers", scriptModifiers);
 
     // volume modifiers
@@ -368,13 +387,14 @@ newSopOperator(OP_OperatorTable* table)
     //////////
     // Register this operator.
 
-    hutil::OpFactory(DnegVDBOpPolicy(), "VDB AX",
-        SOP_OpenVDB_AX::factory, parms, *table)
-        .addInput("VDBs to manipulate")
-        .addAliasVerbatim("DW_OpenVDBAX")
-        .addAliasVerbatim("DN_OpenVDBAX")
-        .setVerb(SOP_NodeVerb::COOK_INPLACE, []() { return new SOP_OpenVDB_AX::Cache; })
-        .setDocumentation("\
+    hutil::OpFactory factory(DnegVDBOpPolicy(), "VDB AX",
+        SOP_OpenVDB_AX::factory, parms, *table);
+
+    factory.addInput("VDBs to manipulate");
+    factory.addAliasVerbatim("DW_OpenVDBAX");
+    factory.addAliasVerbatim("DN_OpenVDBAX");
+    factory.setVerb(SOP_NodeVerb::COOK_INPLACE, []() { return new SOP_OpenVDB_AX::Cache; });
+    factory.setDocumentation("\
 #icon: COMMON/openvdb\n\
 #tags: vdb\n\
 \n\
@@ -464,134 +484,299 @@ For more information on Compiled Blocks and Python verbs [see here|/model/compil
 \n\
 Function ||\n\
     Description ||\n\
-\n\
-`int abs(int),` \n\
-`long abs(long)` |\n\
+`int abs(int)`\n\
+`long abs(long)`|\n\
     Computes the absolute value of an integer number.\n\
 \n\
-`double acos(double),` \n\
-`float acos(float)` |\n\
+`double acos(double)`\n\
+`float acos(float)`|\n\
     Computes the principal value of the arc cosine of the input.\n\
 \n\
-`void addtogroup(string)` |\n\
-    Add the current point to the given group name, effectively setting its membership to true. \n\
-    If the group does not exist, it is implicitly created. \n\
-    This function has no effect if the point already belongs to the given group.\n\
+`void addtogroup(string)`|\n\
+    Add the current point to the given group name, effectively setting its membership to true. If the group does not exist, it is implicitly created. This function has no effect if the point already belongs to the given group.\n\
 \n\
-`double asin(double),` \n\
-`float asin(float)` |\n\
+`double asin(double)`\n\
+`float asin(float)`|\n\
     Computes the principal value of the arc sine of the input.\n\
 \n\
-`double atan(double),` \n\
-`float atan(float)` |\n\
+`double atan(double)`\n\
+`float atan(float)`|\n\
     Computes the principal value of the arc tangent of the input.\n\
 \n\
-`double atan2(double, double),` \n\
-`float atan2(float, float)` |\n\
+`double atan2(double; double)`\n\
+`float atan2(float; float)`|\n\
     Computes the arc tangent of y/x using the signs of arguments to determine the correct quadrant.\n\
 \n\
-`double atof(string)` |\n\
-    Parses the string input, interpreting its content as a floating point number and returns its value\n\
-    as a double.\n\
+`double atof(string)`|\n\
+    Parses the string input, interpreting its content as a floating point number and returns its value as a double.\n\
 \n\
-`int atoi(string),` \n\
-`long atoi(string)` |\n\
-    Parses the string input, interpreting its content as a integral number and returns its value\n\
-    of type int.\n\
+`int atoi(string)`\n\
+`long atoi(string)`|\n\
+    Parses the string input interpreting its content as an integral number, which is returned as a value of type int.\n\
 \n\
-`double ch(string)` |\n\
-    Returns the value of the supplied scalar Houdini parameter channel.\n\
+`double cbrt(double)`\n\
+`float cbrt(float)`|\n\
+    Computes the cubic root of the input.\n\
 \n\
-`vector chv(string)` |\n\
-    Returns the value of the supplied vector Houdini parameter channel.\n\
+`double ceil(double)`\n\
+`float ceil(float)`|\n\
+    Computes the smallest integer value not less than arg.\n\
 \n\
-`double chramp(string, double)`,\n\
-`vec3d chramp(string, double)` |\n\
-    Samples the Houdini ramp parameter, for both scalar and vector ramps.\n\
+`double clamp(double; double; double)`\n\
+`float clamp(float; float; float)`\n\
+`int clamp(int; int; int)`|\n\
+    Clamps the first argument to the minimum second argument value and maximum third argument value\n\
 \n\
-`bool ingroup(string)` |\n\
-    Returns whether or not the point being accessed is a member of the provided group.\n\
+`double cos(double)`\n\
+`float cos(float)`|\n\
+    Computes the cosine of arg (measured in radians).\n\
 \n\
-`double sqrt(double)` |\n\
-    Return the square root of the argument.\n\
+`double cosh(double)`\n\
+`float cosh(float)`|\n\
+    Computes the hyperbolic cosine of the input\n\
 \n\
-`double sin(double)` |\n\
-    Returns the sine of the argument.\n\
+`vec3d cross(vec3d; vec3d)`\n\
+`vec3f cross(vec3f; vec3f)`\n\
+`vec3i cross(vec3i; vec3i)`|\n\
+    Computes the cross product of two vectors\n\
 \n\
-`double cos(double)` |\n\
-    Returns the cosine of the argument.\n\
+`vec3d curlsimplexnoise(vec3d)`\n\
+`vec3d curlsimplexnoise(double; double; double)`|\n\
+    Generates divergence-free 3D noise, computed using a curl function on Simplex Noise.\n\
 \n\
-`double tan(double)` |\n\
-    Returns the tangent of the argument.\n\
+`void deletepoint()`|\n\
+    Delete the current point from the point set. Note that this does not stop AX execution - any additional AX commands will be executed on the point and it will remain accessible until the end of execution.\n\
 \n\
-`double log(double)` |\n\
-    Returns the natural logarithm of the argument.\n\
+`float determinant(mat3f)`\n\
+`double determinant(mat3d)`\n\
+`float determinant(mat4f)`\n\
+`double determinant(mat4d)`|\n\
+    Returns the determinant of a matrix.\n\
 \n\
-`double log10(double)` |\n\
-    Returns the logarithm (base 10) of the argument.\n\
+`double dot(vec3d; vec3d)`\n\
+`float dot(vec3f; vec3f)`\n\
+`int dot(vec3i; vec3i)`|\n\
+    Computes the dot product of two vectors\n\
 \n\
-`double log2(double)` |\n\
-    Returns the logarithm (base 2) of the argument.\n\
+`double exp(double)`\n\
+`float exp(float)`|\n\
+    Computes e (Euler's number, 2.7182818...) raised to the given power arg.\n\
 \n\
-`double exp(double)` |\n\
-    Returns the exponential function of the argument.\n\
+`double exp2(double)`\n\
+`float exp2(float)`|\n\
+    Computes 2 raised to the given power arg.\n\
 \n\
-`double exp2(double)` |\n\
-    Returns 2 raised to the power of the argument.\n\
+`float external(string)`|\n\
+    Find a custom user parameter with a given name of type 'float' in the Custom data provided to the AX compiler. If the data can not be found, or is not of the expected type 0.0f is returned.\n\
 \n\
-`double fabs(double)` |\n\
-    Returns the absolute value of the argument.\n\
+`vec3f externalv(string)`|\n\
+    Find a custom user parameter with a given name of type 'vector float' in the Custom data provided to the AX compiler. If the data can not be found, or is not of the expected type { 0.0f, 0.0f, 0.0f } is returned.\n\
 \n\
-`double floor(double)` |\n\
-    Returns the largest integer less than or equal to the argument.\n\
+`double fabs(double)`\n\
+`float fabs(float)`|\n\
+    Computes the absolute value of a floating point value arg.\n\
 \n\
-`double ceil(double)` |\n\
-    Returns the smallest integer greater than or equal to the argument.\n\
+`double fit(double; double; double; double; double)`\n\
+`float fit(float; float; float; float; float)`\n\
+`double fit(int; int; int; int; int)`|\n\
+    Fit the first argument to the output range by first clamping the value between the second and third input range arguments and then remapping the result to the output range fourth and fifth arguments.\n\
 \n\
-`double pow(double, double)` |\n\
-    Raises the first argument to the power of the second argument.\n\
+`double floor(double)`\n\
+`float floor(float)`|\n\
+    Computes the largest integer value not greater than arg.\n\
 \n\
-`double round(double)` |\n\
-    Round to the closest integer.\n\
+`int getcoordx()`|\n\
+    Returns the current voxel's X index value in index space as an integer.\n\
 \n\
-`double min(double, double)` |\n\
-    Return the minimum of two values.\n\
+`int getcoordy()`|\n\
+    Returns the current voxel's Y index value in index space as an integer.\n\
 \n\
-`double max(double, double)` |\n\
-    Return the maximum of two values.\n\
+`int getcoordz()`|\n\
+    Returns the current voxel's Z index value in index space as an integer.\n\
 \n\
-`double clamp(double value, double min, double max)` |\n\
-    Returns value clamped between min and max.\n\
+`vec3f getvoxelpws()`|\n\
+    Returns the current voxel's position in world space as a vector float.\n\
 \n\
-`double fit(double value, double omin, double omax, double nmin, double nmax)` |\n\
-    Takes the value in the range (omin, omax) and shifts it to the corresponding value in the new range (nmin, nmax).\n\
+`long hash(string)`|\n\
+    Return a hash of the provided string.\n\
 \n\
-`double length(vec3d)` |\n\
-    Return the length (distance) of the vector.\n\
+`mat3f identity3()`|\n\
+    Returns the 3x3 identity matrix\n\
 \n\
-`double lengthsq(vec3d)` |\n\
-    Returns the squared length (distance) of the vector.\n\
+`mat4f identity4()`|\n\
+    Returns the 4x4 identity matrix\n\
 \n\
-`vec3d normalize(vec3d)` |\n\
-    Returns the normalized vector.\n\
+`bool ingroup(string)`|\n\
+    Return whether or not the current point is a member of the given group name. This returns false if the group does not exist.\n\
 \n\
-`double dot(vec3d, vec3d)` |\n\
-    Returns the dot product between the arguments.\n\
+`double length(vec3d)`\n\
+`float length(vec3f)`|\n\
+    Returns the length of the given vector\n\
 \n\
-`double dot(vec3d, vec3d)` |\n\
-    Returns the dot product between the arguments.\n\
+`double lengthsq(vec3d)`\n\
+`float lengthsq(vec3f)`\n\
+`int lengthsq(vec3i)`|\n\
+    Returns the squared length of the given vector\n\
 \n\
-`double rand(double)` |\n\
-    Generate a random floating-point number in the range `[0,1)` from a double-precision seed value. Repeated calls to this function with the same seed yields the same result.\n\
+`float lerp(float; float; float)`\n\
+`double lerp(double; double; double)`\n\
+`vec3f lerp(vec3f; vec3f; vec3f)`\n\
+`vec3d lerp(vec3d; vec3d; vec3d)`|\n\
+    Performs bilinear interpolation between the values. If the amount is outside the range 0 to 1, the values will be extrapolated linearly. If amount is 0, the first value is returned. If it is 1, the second value is returned.\n\
 \n\
-`void prescale(matrix, vector)` |\n\
-    Pre scales the matrix in three directions simultaneously by the factors in the vector. This modifies the matrix in-place, rather than returning a new matrix.\n\
+`double log(double)`\n\
+`float log(float)`|\n\
+    Computes the natural (base e) logarithm of arg.\n\
+\n\
+`double log10(double)`\n\
+`float log10(float)`|\n\
+    Computes the common (base-10) logarithm of arg.\n\
+\n\
+`double log2(double)`\n\
+`float log2(float)`|\n\
+    Computes the binary (base-2) logarithm of arg.\n\
+\n\
+`double max(double; double)`\n\
+`float max(float; float)`\n\
+`int max(int; int)`|\n\
+    Returns the larger of the given values.\n\
+\n\
+`double min(double; double)`\n\
+`float min(float; float)`\n\
+`int min(int; int)`|\n\
+    Returns the smaller of the given values.\n\
+\n\
+`vec3d normalize(vec3d)`\n\
+`vec3f normalize(vec3f)`|\n\
+    Returns the normalized result of the given vector.\n\
+\n\
+`bool polardecompose(mat3f; mat3f; mat3f)`\n\
+`bool polardecompose(mat3d; mat3d; mat3d)`|\n\
+    Decompose an invertible 3x3 matrix into its orthogonal matrix and symmetric matrix components.\n\
+\n\
+`void postscale(mat4f; vec3d)`\n\
+`void postscale(mat4d; vec3d)`|\n\
+    Post-scale a given matrix by the provided vector.\n\
+\n\
+`double pow(double; double)`\n\
+`float pow(float; float)`\n\
+`double pow(double; int)`\n\
+`float pow(float; int)`|\n\
+    Computes the value of the first argument raised to the power of the second argument.\n\
+\n\
+`void prescale(mat4f; vec3d)`\n\
+`void prescale(mat4d; vec3d)`|\n\
+    Pre-scale a given matrix by the provided vector.\n\
+\n\
+`vec3d pretransform(mat3d; vec3d)`\n\
+`vec3f pretransform(mat3f; vec3f)`\n\
+`vec3d pretransform(mat4d; vec3d)`\n\
+`vec3f pretransform(mat4f; vec3f)`\n\
+`vec4d pretransform(mat4d; vec4d)`\n\
+`vec4f pretransform(mat4f; vec4f)`|\n\
+    Return the transformed vector by transpose of this matrix. This function is equivalent to pre-multiplying the matrix.\n\
+\n\
+`void print(string)`\n\
+`void print(double)`\n\
+`void print(float)`\n\
+`void print(int)`\n\
+`void print(vec2i)`\n\
+`void print(vec2f)`\n\
+`void print(vec2d)`\n\
+`void print(vec3i)`\n\
+`void print(vec3f)`\n\
+`void print(vec3d)`\n\
+`void print(vec3i)`\n\
+`void print(vec3f)`\n\
+`void print(vec3d)`\n\
+`void print(mat3f)`\n\
+`void print(mat3d)`\n\
+`void print(mat4f)`\n\
+`void print(mat4d)`|\n\
+    Prints the input to the standard output stream. Warning: This will be run for every element.\n\
+\n\
+`double rand()`\n\
+`double rand(double)`\n\
+`double rand(int)`|\n\
+    Creates a random number based on the provided seed. The number will be in the range of 0 to 1. The same number is produced for the same seed. Note that if rand is called without a seed the previous state of the random number generator is advanced for the currently processing point. This state is determined by the last call to rand() with a given seed. If rand is not called with a seed, the generator advances continuously across different points which can produce non-deterministic results. It is important that rand is always called with a seed at least once for deterministic results.\n\
+\n\
+`void removefromgroup(string)`|\n\
+    Remove the current point from the given group name, effectively setting its membership to false. This function has no effect if the group does not exist.\n\
+\n\
+`double round(double)`\n\
+`float round(float)`|\n\
+    Computes the nearest integer value to arg (in floating-point format), rounding halfway cases away from zero.\n\
+\n\
+`bool signbit(double)`\n\
+`bool signbit(float)`|\n\
+    Determines if the given floating point number input is negative.\n\
+\n\
+`double simplexnoise(double)`\n\
+`double simplexnoise(double; double)`\n\
+`double simplexnoise(double; double; double)`\n\
+`double simplexnoise(vec3d)`|\n\
+    Compute simplex noise at coordinates x, y and z. Coordinates which are not provided will be set to 0.\n\
+\n\
+`double sin(double)`\n\
+`float sin(float)`|\n\
+    Computes the sine of arg (measured in radians).\n\
+\n\
+`double sinh(double)`\n\
+`float sinh(float)`|\n\
+    Computes the hyperbolic sine of the input\n\
+\n\
+`double sqrt(double)`\n\
+`float sqrt(float)`|\n\
+    Computes the square root of arg.\n\
+\n\
+`double tan(double)`\n\
+`float tan(float)`\n\
+`double tan(int)`|\n\
+    Computes the tangent of arg (measured in radians).\n\
+\n\
+`double tanh(double)`\n\
+`float tanh(float)`|\n\
+    Computes the hyperbolic tangent of the input\n\
+\n\
+`float trace(mat3f)`\n\
+`double trace(mat3d)`\n\
+`float trace(mat4f)`\n\
+`double trace(mat4d)`|\n\
+    Return the trace of a matrix, the sum of the diagonal elements.\n\
+\n\
+`vec3d transform(vec3d; mat3d)`\n\
+`vec3f transform(vec3f; mat3f)`\n\
+`vec3d transform(vec3d; mat4d)`\n\
+`vec3f transform(vec3f; mat4f)`\n\
+`vec4d transform(vec4d; mat4d)`\n\
+`vec4f transform(vec4f; mat4f)`|\n\
+    Return the transformed vector by this matrix. This function is equivalent to post-multiplying the matrix.\n\
+\n\
+`mat3d transpose(mat3d)`\n\
+`mat3f transpose(mat3f)`\n\
+`mat4d transpose(mat4d)`\n\
+`mat4f transpose(mat4f)`|\n\
+    Transpose of a matrix\n\
 \n\
 \n\
 :note:\n\
 For an up-to-date list of available functions, see AX documentation or call `vdb_ax --list-functions` from the command line.\n\
 \n\
 ");
+
+    // Add backward compatible support if building against VDB 6.2
+    // copy the implementation in vdb in regards to the vdb and houdini
+    // version string, but also append the ax version
+
+#if (OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER > 6 || \
+    (OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER >= 6 && OPENVDB_LIBRARY_MINOR_VERSION_NUMBER >= 2))
+    std::stringstream ss;
+    ss << "vdb" << OPENVDB_LIBRARY_VERSION_STRING << " ";
+    ss << "houdini" << SYS_Version::full() << " ";
+    ss << "vdb_ax" << OPENVDB_AX_LIBRARY_VERSION_STRING;
+    factory.addSpareData({{"operatorversion", ss.str()}});
+#endif
+
 }
 
 ////////////////////////////////////////
@@ -636,6 +821,96 @@ SOP_OpenVDB_AX::updateParmsFlags()
     changed |= enableParm("activity", !points);
     changed |= enableParm("compact", points);
     return changed;
+}
+
+void SOP_OpenVDB_AX::syncNodeVersion(const char* old_version,
+    const char* cur_version, bool* node_deleted)
+{
+    // A set of callbacks which are run each time a parameter is synchronized
+    using ParamFunctionCallback = std::function<std::string(const SOP_OpenVDB_AX&)>;
+    using ParamMap = std::map<std::string, ParamFunctionCallback>;
+
+    // This map contains sync version parameters which instances of this
+    // node are expected to apply sequentially in ascending order from their
+    // old version (exclusive) to their current version (inclusive).
+    static const std::unordered_map<std::string, ParamMap> versions = {{
+        "0.1.0", {
+            // We can't just return 0 as the expected behaviour here is for points to always
+            // create attribute and for volumes to error. This preserves that behaviour.
+            // { "createmissing", [](const SOP_OpenVDB_AX&) -> std::string { return "0"} }
+            { "createmissing",
+                [](const SOP_OpenVDB_AX& node) -> std::string {
+                    const int targetInt = static_cast<int>(node.evalInt("targettype", 0, 0));
+                    if (targetInt == 0) return "1"; // points, keep default (on)
+                    else return "0"; // volumes, turn off
+                }
+            }
+        }
+    }};
+
+    auto axVersion = [](const UT_String& version) -> std::string {
+        if (!version.startsWith("vdb")) return "";
+        std::string axversion(version.c_str());
+        const size_t pos = axversion.find("vdb_ax");
+        if (pos == std::string::npos) return "";
+        axversion = axversion.substr(pos + 6);
+        return axversion;
+    };
+
+    const UT_String old(old_version);
+    const UT_String current(cur_version);
+
+    const std::string currentAx = axVersion(current);
+    if (currentAx.empty()) {
+        // unable to parse current version
+        SOP_Node::syncNodeVersion(old_version, cur_version, node_deleted);
+        return;
+    }
+
+    std::string oldAx = axVersion(old);
+    if (oldAx.empty()) {
+        // if can't parse, old version was created before the spare data vdb_ax
+        // version name was added .i.e. version 0.0.0
+        oldAx = "0.0.0";
+    }
+
+    // @note  UT_String::compareVersionString(A, B) returns the following:
+    //   -1 if A < B  i.e. ("0.0.0", "1.0.0")
+    //    0 if A == B i.e. ("1.0.0", "1.0.0")
+    //    1 if A > B  i.e. ("1.0.0", "0.0.0")
+
+    // if current <= old, return
+    if (UT_String::compareVersionString(currentAx.c_str(), oldAx.c_str()) == -1) {
+        SOP_Node::syncNodeVersion(old_version, cur_version, node_deleted);
+        return;
+    }
+
+    // for each set of version keys in the version map that lie in-between (old, current],
+    // apply the parameter updates
+    for (const auto& versionData : versions) {
+        const std::string& version = versionData.first;
+        // only apply param updates if the version key is greater than the old version
+        if (UT_String::compareVersionString(version.c_str(), oldAx.c_str()) != 1) {
+            // oldVersion is less or equal to the current version key, continue
+            continue;
+        }
+        // exit if the current version is greater than the version key
+        if (UT_String::compareVersionString(currentAx.c_str(), version.c_str()) == 1) {
+            break;
+        }
+
+        // apply this set of updates
+        for (auto& data : versionData.second) {
+            const std::string& name = data.first;
+            const ParamFunctionCallback& callback = data.second;
+            PRM_Parm* parm = this->getParmPtr(name);
+            if (!parm) continue;
+            const std::string valuestr = callback(*this);
+            parm->setValue(/*time*/0, valuestr.c_str(), CH_STRING_LITERAL);
+         }
+    }
+
+    SOP_Node::syncNodeVersion(old_version, cur_version, node_deleted);
 }
 
 
@@ -691,6 +966,18 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
         if (snippet.length() == 0) return error();
 
         const int targetInt = static_cast<int>(evalInt("targettype", 0, time));
+
+        // get the node which is set as the current evaluation path. If we can't find the
+        // node, all channel links are zero valued. This matches VEX behaviour.
+        UT_String path;
+        this->evalString(path, "cwdpath", 0, time);
+        OP_Node* evaluationNode = this->cookparms()->getCwd()->findNode(path);
+        if (!evaluationNode) {
+            const std::string message = "The node \"" + path.toStdString() + "\" was "
+                "not found or was the wrong type for this operation. All channel "
+                "references and $ parameters will evaluate to 0.";
+            addWarning(SOP_MESSAGE, message.c_str());
+        }
 
         ParameterCache parmCache;
         parmCache.mTargetType = static_cast<hax::TargetType>(targetInt);
@@ -763,8 +1050,8 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
                 this->cookparms()->setupLocalVars();
             }
 
-            evaluateExternalExpressions(time, mChExpressionSet, /*no $ support*/false);
-            evaluateExternalExpressions(time, mDollarExpressionSet, parmCache.mHScriptSupport);
+            evaluateExternalExpressions(time, mChExpressionSet, /*no $ support*/false, evaluationNode);
+            evaluateExternalExpressions(time, mDollarExpressionSet, parmCache.mHScriptSupport, evaluationNode);
 
             if (parmCache.mTargetType == hax::TargetType::POINTS) {
 
@@ -792,8 +1079,8 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
             mHash = hash;
         }
         else {
-            evaluateExternalExpressions(time, mChExpressionSet, /*no $ support*/false);
-            evaluateExternalExpressions(time, mDollarExpressionSet, parmCache.mHScriptSupport);
+            evaluateExternalExpressions(time, mChExpressionSet, /*no $ support*/false, evaluationNode);
+            evaluateExternalExpressions(time, mDollarExpressionSet, parmCache.mHScriptSupport, evaluationNode);
         }
 
         snippet.clear();
@@ -801,6 +1088,8 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
         for (const std::string& warning : mWarnings) {
             addWarning(SOP_MESSAGE, warning.c_str());
         }
+
+        const bool createMissing = static_cast<bool>(evalInt("createmissing", 0, time));
 
         if (mParameterCache.mTargetType == hax::TargetType::POINTS) {
 
@@ -825,7 +1114,7 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
                     throw std::runtime_error("No point executable has been built");
                 }
 
-                mCompilerCache.mPointExecutable->execute(*points, &pointsGroup);
+                mCompilerCache.mPointExecutable->execute(*points, &pointsGroup, createMissing);
 
                 if (mCompilerCache.mRequiresDeletion) {
                     openvdb::points::deleteFromGroup(points->tree(), "dead", false, false);
@@ -870,18 +1159,26 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
                 guPrims.emplace_back(vdbPrim);
             }
 
-            if (!mCompilerCache. mVolumeExecutable) {
+            if (!mCompilerCache.mVolumeExecutable) {
                 throw std::runtime_error("No volume executable has been built");
             }
 
             const ax::VolumeExecutable::IterType
                 iterType = static_cast<ax::VolumeExecutable::IterType>(evalInt("activity", 0, time));
-            mCompilerCache. mVolumeExecutable->execute(grids, iterType);
+
+            const size_t size = grids.size();
+            mCompilerCache.mVolumeExecutable->execute(grids, iterType, createMissing);
 
             if (evalInt("prune", 0, time)) {
                 PruneOp op;
                 for (auto& vdbPrim : guPrims) {
                     GEOvdbProcessTypedGridTopology(*vdbPrim, op, /*make_unique*/false);
+                }
+            }
+
+            if (createMissing) {
+                for (size_t pos = size; pos < grids.size(); ++pos) {
+                    hvdb::createVdbPrimitive(*gdp, grids[pos]);
                 }
             }
         }
@@ -1016,7 +1313,8 @@ SOP_OpenVDB_AX::Cache::evalInsertHScriptVariable(const std::string& name,
 void
 SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
                                                    const hax::ChannelExpressionSet& set,
-                                                   const bool hvars)
+                                                   const bool hvars,
+                                                   OP_Node* evaluationNode)
 {
     using VectorData = TypedMetadata<math::Vec3<float>>;
     using FloatData = TypedMetadata<float>;
@@ -1045,6 +1343,9 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
 
         // Process the item as if it were a hscript token first if hscript support
         // is enabled.
+
+        // Note that hscript local variables are evaluated local to *this, not local
+        // to the evaluationNode.
 
         if (hvars) {
 
@@ -1110,33 +1411,33 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
         // @note Do NOT use OPgetParameter() directly as this seems to cause crashes
         // when used with various DOP networks
 
-        // @todo: cache channelFinder?
-
-        int index(0);
-        int subIndex(0);
+        int index(0), subIndex(0);
         OP_Node* node(nullptr);
+        bool validPath = false;
 
-        OP_ExprFindCh channelFinder;
-        bool validPath =
-            channelFinder.findParmRelativeTo(*self,
-                                             nameOrPath.c_str(),
-                                             time,
-                                             node,            /*the node holding the param*/
-                                             index,           /*parm index on the node*/
-                                             subIndex,        /*sub index of parm if not channel*/
-                                             lookForChannel); /*is_for_channel_name*/
-
-        // if no channel found and we're using CHV, try looking for the parm directly
-
-        if (!validPath && isCHVLookup) {
-            validPath =
-                channelFinder.findParmRelativeTo(*self,
+        if (evaluationNode) {
+            // @todo: cache channelFinder?
+            OP_ExprFindCh channelFinder;
+            validPath = channelFinder.findParmRelativeTo(*evaluationNode,
                                                  nameOrPath.c_str(),
                                                  time,
-                                                 node,       /*the node holding the param*/
-                                                 index,      /*parm index on the node*/
-                                                 subIndex,   /*sub index of parm if not channel*/
-                                                 false);     /*is_for_channel_name*/
+                                                 node,            /*the node holding the param*/
+                                                 index,           /*parm index on the node*/
+                                                 subIndex,        /*sub index of parm if not channel*/
+                                                 lookForChannel); /*is_for_channel_name*/
+
+            // if no channel found and we're using CHV, try looking for the parm directly
+
+            if (!validPath && isCHVLookup) {
+                validPath =
+                    channelFinder.findParmRelativeTo(*evaluationNode,
+                                                     nameOrPath.c_str(),
+                                                     time,
+                                                     node,       /*the node holding the param*/
+                                                     index,      /*parm index on the node*/
+                                                     subIndex,   /*sub index of parm if not channel*/
+                                                     false);     /*is_for_channel_name*/
+            }
         }
 
         if (validPath) {
@@ -1261,8 +1562,12 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
                 data.insertData<FloatRampData>(nameOrPath, floatRampData);
             }
 
-            const std::string message = "Invalid channel reference: " + nameOrPath;
-            addWarning(SOP_MESSAGE, message.c_str());
+            // Only warn if we can't find the channel reference on a valid
+            // evaluation node - a global warning is applied for this case
+            if (evaluationNode) {
+                const std::string message = "Invalid channel reference: " + nameOrPath;
+                addWarning(SOP_MESSAGE, message.c_str());
+            }
         }
     }
 }

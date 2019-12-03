@@ -92,6 +92,9 @@ COMMENT     "//".*
 "*"                         { return MULTIPLY; }
 "/"                         { return DIVIDE; }
 "%"                         { return MODULO; }
+
+"<<"                        { return SHIFTLEFT; }
+">>"                        { return SHIFTRIGHT; }
 "&"                         { return BITAND; }
 "|"                         { return BITOR; }
 "^"                         { return BITXOR; }
@@ -112,6 +115,8 @@ COMMENT     "//".*
 "&="                        { return BITANDEQUALS; }
 "^="                        { return BITXOREQUALS; }
 "|="                        { return BITOREQUALS; }
+"<<="                       { return SHIFTLEFTEQUALS; }
+">>="                       { return SHIFTRIGHTEQUALS; }
 
 "++"                        { return PLUSPLUS; }
 "--"                        { return MINUSMINUS; }

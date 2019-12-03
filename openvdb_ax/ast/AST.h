@@ -1149,7 +1149,7 @@ struct AssignExpression : public Expression
         , mLHS(lhs) {
             assert(mLHS);
             assert(mRHS);
-            assert(mCompound && mRHS->isType<BinaryOperator>() || !mCompound);
+            assert((mCompound && mRHS->isType<BinaryOperator>()) || !mCompound);
             mLHS->setParent(this);
             mRHS->setParent(this);
         }
@@ -1220,14 +1220,16 @@ struct AssignExpression : public Expression
                 static_cast<BinaryOperator*>(mRHS.get())->operation();
 
             switch (binary) {
-                case tokens::PLUS      : return tokens::PLUSEQUALS;
-                case tokens::MINUS     : return tokens::MINUSEQUALS;
-                case tokens::MULTIPLY  : return tokens::MULTIPLYEQUALS;
-                case tokens::DIVIDE    : return tokens::DIVIDEEQUALS;
-                case tokens::MODULO    : return tokens::MODULOEQUALS;
-                case tokens::BITAND    : return tokens::BITANDEQUALS;
-                case tokens::BITXOR    : return tokens::BITXOREQUALS;
-                case tokens::BITOR     : return tokens::BITOREQUALS;
+                case tokens::PLUS       : return tokens::PLUSEQUALS;
+                case tokens::MINUS      : return tokens::MINUSEQUALS;
+                case tokens::MULTIPLY   : return tokens::MULTIPLYEQUALS;
+                case tokens::DIVIDE     : return tokens::DIVIDEEQUALS;
+                case tokens::MODULO     : return tokens::MODULOEQUALS;
+                case tokens::SHIFTLEFT  : return tokens::SHIFTLEFTEQUALS;
+                case tokens::SHIFTRIGHT : return tokens::SHIFTRIGHTEQUALS;
+                case tokens::BITAND     : return tokens::BITANDEQUALS;
+                case tokens::BITXOR     : return tokens::BITXOREQUALS;
+                case tokens::BITOR      : return tokens::BITOREQUALS;
                 default : {
                     assert(false && "Invalid compund assignment in AST.");
                 }

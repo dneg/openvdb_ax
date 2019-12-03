@@ -41,9 +41,11 @@ public:
 
     CPPUNIT_TEST_SUITE(TestVolumeExecutable);
     CPPUNIT_TEST(testConstructionDestruction);
+    CPPUNIT_TEST(testCreateMissingGrids);
     CPPUNIT_TEST_SUITE_END();
 
     void testConstructionDestruction();
+    void testCreateMissingGrids();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestVolumeExecutable);
@@ -95,6 +97,35 @@ TestVolumeExecutable::testConstructionDestruction()
 
     CPPUNIT_ASSERT_EQUAL(0, int(wE.use_count()));
     CPPUNIT_ASSERT_EQUAL(0, int(wC.use_count()));
+}
+
+void
+TestVolumeExecutable::testCreateMissingGrids()
+{
+    openvdb::ax::Compiler::UniquePtr compiler = openvdb::ax::Compiler::create();
+    openvdb::ax::VolumeExecutable::Ptr executable =
+        compiler->compile<openvdb::ax::VolumeExecutable>("@a=v@b.x;");
+
+    openvdb::GridPtrVec grids;
+    CPPUNIT_ASSERT_THROW(executable->execute(grids, openvdb::ax::VolumeExecutable::IterType::ON, false),
+        openvdb::LookupError);
+    CPPUNIT_ASSERT(grids.empty());
+
+    executable->execute(grids, openvdb::ax::VolumeExecutable::IterType::ON, true);
+
+    openvdb::math::Transform::Ptr defaultTransform =
+        openvdb::math::Transform::createLinearTransform();
+
+    CPPUNIT_ASSERT_EQUAL(size_t(2), grids.size());
+    CPPUNIT_ASSERT(grids[0]->getName() == "b");
+    CPPUNIT_ASSERT(grids[0]->isType<openvdb::Vec3fGrid>());
+    CPPUNIT_ASSERT(grids[0]->empty());
+    CPPUNIT_ASSERT(grids[0]->transform() == *defaultTransform);
+
+    CPPUNIT_ASSERT(grids[1]->getName() == "a");
+    CPPUNIT_ASSERT(grids[1]->isType<openvdb::FloatGrid>());
+    CPPUNIT_ASSERT(grids[1]->empty());
+    CPPUNIT_ASSERT(grids[1]->transform() == *defaultTransform);
 }
 
 // Copyright (c) 2015-2019 DNEG

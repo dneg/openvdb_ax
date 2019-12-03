@@ -225,6 +225,8 @@ enum OperatorToken
     ////////////////////////////////////////////////////////////////
     ///  BITWISE
     ////////////////////////////////////////////////////////////////
+    SHIFTLEFT,
+    SHIFTRIGHT,
     BITAND,
     BITOR,
     BITXOR,
@@ -238,6 +240,8 @@ enum OperatorToken
     MULTIPLYEQUALS,
     DIVIDEEQUALS,
     MODULOEQUALS,
+    SHIFTLEFTEQUALS,
+    SHIFTRIGHTEQUALS,
     BITANDEQUALS,
     BITXOREQUALS,
     BITOREQUALS
@@ -266,33 +270,37 @@ inline OperatorType operatorType(const OperatorToken token)
 
 inline OperatorToken operatorTokenFromName(const std::string& name)
 {
-    if (name == "+")   return PLUS;
-    if (name == "-")   return MINUS;
-    if (name == "*")   return MULTIPLY;
-    if (name == "/")   return DIVIDE;
-    if (name == "%")   return MODULO;
-    if (name == "&&")  return AND;
-    if (name == "||")  return OR;
-    if (name == "!")   return NOT;
-    if (name == "==")  return EQUALSEQUALS;
-    if (name == "!=")  return NOTEQUALS;
-    if (name == ">")   return MORETHAN;
-    if (name == "<")   return LESSTHAN;
-    if (name == ">=")  return MORETHANOREQUAL;
-    if (name == "<=")  return LESSTHANOREQUAL;
-    if (name == "&")   return BITAND;
-    if (name == "|")   return BITOR;
-    if (name == "^")   return BITXOR;
-    if (name == "~")   return BITNOT;
-    if (name == "=")   return EQUALS;
-    if (name == "+=")  return PLUSEQUALS;
-    if (name == "-=")  return MINUSEQUALS;
-    if (name == "*=")  return MULTIPLYEQUALS;
-    if (name == "/=")  return DIVIDEEQUALS;
-    if (name == "%=")  return MODULOEQUALS;
-    if (name == "&=")  return BITANDEQUALS;
-    if (name == "^=")  return BITXOREQUALS;
-    if (name == "|=")  return BITOREQUALS;
+    if (name == "+")    return PLUS;
+    if (name == "-")    return MINUS;
+    if (name == "*")    return MULTIPLY;
+    if (name == "/")    return DIVIDE;
+    if (name == "%")    return MODULO;
+    if (name == "&&")   return AND;
+    if (name == "||")   return OR;
+    if (name == "!")    return NOT;
+    if (name == "==")   return EQUALSEQUALS;
+    if (name == "!=")   return NOTEQUALS;
+    if (name == ">")    return MORETHAN;
+    if (name == "<")    return LESSTHAN;
+    if (name == ">=")   return MORETHANOREQUAL;
+    if (name == "<=")   return LESSTHANOREQUAL;
+    if (name == "<<")   return SHIFTLEFT;
+    if (name == ">>")   return SHIFTRIGHT;
+    if (name == "&")    return BITAND;
+    if (name == "|")    return BITOR;
+    if (name == "^")    return BITXOR;
+    if (name == "~")    return BITNOT;
+    if (name == "=")    return EQUALS;
+    if (name == "+=")   return PLUSEQUALS;
+    if (name == "-=")   return MINUSEQUALS;
+    if (name == "*=")   return MULTIPLYEQUALS;
+    if (name == "/=")   return DIVIDEEQUALS;
+    if (name == "%=")   return MODULOEQUALS;
+    if (name == "<<=")  return SHIFTLEFTEQUALS;
+    if (name == ">>=")  return SHIFTRIGHTEQUALS;
+    if (name == "&=")   return BITANDEQUALS;
+    if (name == "^=")   return BITXOREQUALS;
+    if (name == "|=")   return BITOREQUALS;
     OPENVDB_THROW(AXSyntaxError, "Unsupported op \"" + name + "\"");
 }
 
@@ -313,6 +321,8 @@ inline std::string operatorNameFromToken(const OperatorToken token)
         case LESSTHAN          : return "<";
         case MORETHANOREQUAL   : return ">=";
         case LESSTHANOREQUAL   : return "<=";
+        case SHIFTLEFT         : return "<<";
+        case SHIFTRIGHT        : return ">>";
         case BITAND            : return "&";
         case BITOR             : return "|";
         case BITXOR            : return "^";
@@ -323,6 +333,8 @@ inline std::string operatorNameFromToken(const OperatorToken token)
         case MULTIPLYEQUALS    : return "*=";
         case DIVIDEEQUALS      : return "/=";
         case MODULOEQUALS      : return "%=";
+        case SHIFTLEFTEQUALS   : return "<<=";
+        case SHIFTRIGHTEQUALS  : return ">>=";
         case BITANDEQUALS      : return "&=";
         case BITXOREQUALS      : return "^=";
         case BITOREQUALS       : return "|=";

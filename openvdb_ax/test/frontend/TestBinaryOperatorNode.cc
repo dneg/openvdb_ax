@@ -85,6 +85,22 @@ static const unittest_util::CodeTests tests =
                                     )
                                 )
     },
+    { "a << b;",                Node::Ptr(
+                                    new BinaryOperator(
+                                        OperatorToken::SHIFTLEFT,
+                                        new Local("a"),
+                                        new Local("b")
+                                    )
+                                )
+    },
+    { "a >> b;",                Node::Ptr(
+                                    new BinaryOperator(
+                                        OperatorToken::SHIFTRIGHT,
+                                        new Local("a"),
+                                        new Local("b")
+                                    )
+                                )
+    },
     { "a & b;",                 Node::Ptr(
                                     new BinaryOperator(
                                         OperatorToken::BITAND,

@@ -30,8 +30,8 @@
 
 #]=======================================================================]
 
-project(OpenVDBAXHoudini)
 cmake_minimum_required(VERSION 3.3)
+project(OpenVDBAXHoudini)
 
 option(USE_DEFAULT_HOUDINI_INSTALL [=[
 Use the default install location returned by the Houdini CMake function,
@@ -51,6 +51,11 @@ message(STATUS "----------------------------------------------------")
 
 # Configure prefix
 
+if(OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
+  message(DEPRECATION "OPENVDB_AX_HOUDINI_INSTALL_PREFIX option is deprecated")
+  set(HOUDINI_INSTALL_LOCATION OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
+endif()
+
 if(NOT OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
   if(USE_DEFAULT_HOUDINI_INSTALL)
     # Function from the Houdini CMake which is brought in by OpenVDBHoudiniSetup.cmake
@@ -60,11 +65,15 @@ if(NOT OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
   endif()
 endif()
 
-set(OPENVDB_AX_HOUDINI_INSTALL_PREFIX ${HOUDINI_INSTALL_LOCATION}
-  CACHE PATH "Base install path for OpenVDB Houdini shared libraries, dsos and headers."
+set(OPENVDB_AX_HOUDINI_LIB_INSTALL_PREFIX ${HOUDINI_INSTALL_LOCATION}
+  CACHE PATH "Base install path for OpenVDB Houdini shared libraries and dsos."
+)
+set(OPENVDB_AX_HOUDINI_INCLUDE_INSTALL_PREFIX ${HOUDINI_INSTALL_LOCATION}
+  CACHE PATH "Base install path for OpenVDB Houdini headers."
 )
 
-message(STATUS "Houdini base install path: ${OPENVDB_AX_HOUDINI_INSTALL_PREFIX}")
+message(STATUS "Houdini base library install path: ${OPENVDB_AX_HOUDINI_LIB_INSTALL_PREFIX}")
+message(STATUS "Houdini base include install path: ${OPENVDB_AX_HOUDINI_INCLUDE_INSTALL_PREFIX}")
 
 #########################################################################
 
@@ -109,13 +118,12 @@ endif()
 
 set(OPENVDB_AX_HOUDINI_INCLUDE_FILES ax/HoudiniAXUtils.h)
 
-
 install(TARGETS SOP_OpenVDB_AX
   DESTINATION
-    ${OPENVDB_AX_HOUDINI_INSTALL_PREFIX}/dso
+    ${OPENVDB_AX_HOUDINI_LIB_INSTALL_PREFIX}/dso
 )
 
 install(FILES ${OPENVDB_AX_HOUDINI_INCLUDE_FILES}
   DESTINATION
-    ${OPENVDB_AX_HOUDINI_INSTALL_PREFIX}/include/openvdb_ax_houdini/ax
+    ${OPENVDB_AX_HOUDINI_INCLUDE_INSTALL_PREFIX}/include/openvdb_ax_houdini/ax
 )
