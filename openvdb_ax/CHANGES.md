@@ -1,6 +1,125 @@
 OpenVDB AX Version History
 ==========================
 
+Version 0.2.0 - In Development
+
+    As of this release, a C++14 compiler is required.
+
+    New Features:
+    - AX now generates all target machine (host) optimizations by default. This
+      includes any supported SIMD (sse, avx etc.) instructions for SLP
+      vectorization
+    - A full restructure of the developer Function framework with the switch to
+      IR functions implementations over C bindings (where available). Up until
+      now, natively supported functions in AX have used their C bindings by
+      default. This release defaults to their IR implementations which, along
+      with full vectorization support, allows for the full potential of all LLVM
+      optimizations. This is most noticeable when using function inside of loops
+      or in larger AX code snippets
+    - New functions added: acosh, asinh, atanh, diag
+    - New options and output to the vdb_ax binary. --try-compile provides a way
+      to test if a given AX code snippet will compile for a particular VDB
+      target. Verbose mode with -v now provides better formatted output with
+      more detailed timing reports.
+    - Added the ability to provide external string data to AX which can be
+      accessed with string$ (or chs() in Houdini)
+    - Added support for vec4 and string VDB volumes. Note that vec4 volumes are
+      not registered by default
+
+    Improvements:
+    - Significant performance improvements to AX execution with the introduction of:
+        - Proper SLP vectorization with supported host features
+        - Defaulting IR functions to ON
+        - Loop allocation fixes (see bug fixes)
+        - Constant Folding for scalar C bindings
+    - Introduced initial constant folding for scalar C bindings. Functions which
+      are called with known constants are evaluated at compile time. Note that
+      CF for IR Functions is left to LLVM's optimization passes
+    - Added support for vec2 and vec4 arguments for length() and lengthsq()
+    - Added a new floating point signature for abs() (which calls fabs) to avoid
+      implicit casting of integer arguments
+
+    Bug Fixes:
+    - Fixed a bug where assignments from functions which return void could cause
+      a crash
+    - Fixed a bug where functions which modified reference arguments (such as
+      transform, posttransform) would cast the modifiable argument, resulting in
+      the result not being set. These functions will now error with invalid
+      signatures and require the correct argument types to be provided
+    - Fixed an issue which could cause stack overflows when using scalar or
+      array (vec/mat) allocations within loops
+    - Fixed an issue which could cause a crash when using uninitialized strings
+      in compound expressions
+    - Fixed a bug where binary string concatenations could cause spurious
+      characters to appear with print()
+    - Fixed a bug where vec4 types were being interpreted as vec3
+
+    Code Generation:
+    - Assignment and binary string operators now always copy the null terminator
+    - Added new IR function logic for lerp and for normalization of integer
+      vectors
+    - The ast::FunctionCall visit now always pushes back the function result
+    - Strings are always initialized to the empty string
+    - All allocations, aside from string allocs, have been converted to function
+      prologue static allocas
+    - New codegen/ConstantFolding.h which provides the generic framework for
+      constant folding C bindings
+    - Renamed the FunctionBase class to FunctionGroup
+    - Renamed the FunctionSignatureBase class to Function and re-structured its
+      member implementations
+    - New classes for derived Functions, CFunctionBase and IRFunctionBase, which
+      can be further subclassed for the respective function type.
+    - A new interface class SRetFunction for functions which require structural
+      returns
+    - New framework for building and creating a function. The FunctionBuilder
+      provides a way to interface with the function types in FunctionTypes.h
+      without having to manually subclass.
+    - Exposed the ability to customize llvm function attributes.
+    - Removed the unnecessary use of std::function on templated classes and
+      methods
+    - Re-structured all native functions to use the new FunctionBuilder
+    - A variety of IR fixes to some native functions
+    - Re-structured all IR functions which required structural returns.
+      Previously, these function would produce invalid results unless they were
+      forcefully inlined. SRET IR methods now behave in the same way as SRET C
+      bindings
+    - Improvements to the LLVMType trait structures. These have been mostly
+      consolidated to take advantage of new LLVM methods
+    - Added a new AliasTypeMap trait structure in Types.h to allow for safer
+      and restricted front-end to back-end type mapping
+    - New insertStaticAlloca utility method for creating function prologue
+      static allocations. New isValidCast utility method to check if a cast is
+      valid between two types
+    - Removed a number of unused utility methods
+
+    Compiler:
+    - Initial implementation of LLVM's new PassManager. Currently disabled by
+      default. This has not been fully configured to work with target machine
+      optimizations.
+    - Introduced an internal compiler function, initializeTargetMachine, to
+      create the target machine representing the available feature set of the
+      host
+    - Renamed the mPrioritiseFunctionIR Function Option to mPrioritiseIR and
+      defaulted it to ON
+    - Introduced a mConstantFoldCBindings Function Option which defaults to ON
+    - Added support for AXStringMetadata during global mapping for external
+      values
+
+    Math:
+    - Exposed the curlnoise functions from StandardFunctions to the
+      OpenSimplexNoise headers
+
+    CMake / Build / Testing:
+    - Added CMake SIMD options. Note that these optional apply to the compiled
+      CXX source files of OpenVDB AX, not the JIT LLVM IR. The IR is always
+      optimized to the host specification.
+    - Set the required LANGUAGES for OpenVDB AX projects to CXX
+    - Added significantly more function tests with profiling options
+    - BISON 3.0 is now marked as required if the grammar is to be regenerated
+    - New developer options, USE_NEW_PASS_MANAGER and OPENVDB_AX_TEST_PROFILE
+    - Travis fixes to build against VDB 6.2.1
+    - Removed the deprecated Makefiles
+
 Version 0.1.1 - December 3, 2019
 
     New Features:
