@@ -521,6 +521,9 @@ hax_chramp(const openvdb::ax::FunctionOptions& op)
         .addSignature<Sample>((Sample*)(sample))
         .setArgumentNames({"out", "ramp", "pos", "custom_data"})
         .setConstantFold(false)
+        .addParameterAttribute(0, llvm::Attribute::NoAlias)
+        .addParameterAttribute(0, llvm::Attribute::WriteOnly)
+        .addParameterAttribute(1, llvm::Attribute::ReadOnly)
         .setPreferredImpl(op.mPrioritiseIR ?
             openvdb::ax::codegen::FunctionBuilder::IR :
             openvdb::ax::codegen::FunctionBuilder::C)
@@ -548,6 +551,7 @@ haxchramp(const openvdb::ax::FunctionOptions& op)
         .setArgumentNames({"ramp", "pos"})
         .addParameterAttribute(0, llvm::Attribute::NoAlias)
         .addParameterAttribute(0, llvm::Attribute::WriteOnly)
+        .addParameterAttribute(1, llvm::Attribute::ReadOnly)
         .setConstantFold(false)
         .setEmbedIR(true) // must be embedded
         .setPreferredImpl(op.mPrioritiseIR ?
