@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -54,8 +54,8 @@
 
 // Library major, minor and patch version numbers
 #define OPENVDB_AX_LIBRARY_MAJOR_VERSION_NUMBER 0
-#define OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER 1
-#define OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER 1
+#define OPENVDB_AX_LIBRARY_MINOR_VERSION_NUMBER 2
+#define OPENVDB_AX_LIBRARY_PATCH_VERSION_NUMBER 0
 
 #define OPENVDB_AX_VERSION_NAME                                          \
     OPENVDB_PREPROC_CONCAT(v,                                            \
@@ -126,6 +126,6 @@ inline constexpr const char* getLibraryVersionString() { return OPENVDB_AX_LIBRA
 
 #endif // OPENVDB_AX_VERSION_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

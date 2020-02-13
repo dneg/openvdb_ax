@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -68,7 +68,8 @@ TestWorldSpaceAccessors::testWorldSpaceAssign()
          openvdb::Vec3d(0.0, 1.0, 0.0),
          openvdb::Vec3d(1.0, 1.0, 0.0)};
 
-    PointDataGrid::Ptr grid = mHarness.mInputPointGrids["four_point"];
+    CPPUNIT_ASSERT(mHarness.mInputPointGrids.size() > 0);
+    PointDataGrid::Ptr grid = mHarness.mInputPointGrids.back();
 
     openvdb::points::PointDataTree* tree = &(grid->tree());
 
@@ -145,7 +146,8 @@ TestWorldSpaceAccessors::testWorldSpaceAssignComponent()
          openvdb::Vec3d(0.0, 1.0, 0.0),
          openvdb::Vec3d(1.0, 1.0, 0.0)};
 
-    PointDataGrid::Ptr grid = mHarness.mInputPointGrids["four_point"];
+    CPPUNIT_ASSERT(mHarness.mInputPointGrids.size() > 0);
+    PointDataGrid::Ptr grid = mHarness.mInputPointGrids.back();
 
     openvdb::points::PointDataTree& tree = grid->tree();
 
@@ -207,7 +209,7 @@ TestWorldSpaceAccessors::testWorldSpaceAssignComponent()
 
 
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
 

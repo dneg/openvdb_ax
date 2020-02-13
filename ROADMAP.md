@@ -8,6 +8,12 @@ A list of completed features/milestones that previously appeared on the OpenVDB 
 
 * Travis support for OpenVDB AX core library.
 * Improved syntax and performance for the access of Custom Data (custom user parameters).
+* CMake support for building OpenVDB AX on OSX.
+* Support for string variables and string point attributes.
+* Bison/Flex CMake Support for re-generating language grammar and lexer files.
+* Noise functions supported by AX.
+* Support for matrix variables and matrix point attributes.
+* For/while loops.
 
 ## Current goals
 
@@ -20,20 +26,14 @@ Most current work is aimed at our first stable release of OpenVDB AX. This is pr
 #### Improvements:
 * Improved developer and user facing documentation.
 * Additional tests.
-
-#### Features:
-* CMake support for building OpenVDB AX on OSX.
-* Noise functions supported by AX.
-* Support for string variables and string point attributes.
-* Bison/Flex CMake Support for re-generating language grammar and lexer files.
+* Better backend architecture for strings
+* Solidifying the Compiler API and error/warning management
 
 ## Further down the road...
 
 This section is where we talk about other longer term ambitions we have for OpenVDB AX. These generally take the shape of features to be added to the language. These are in no particular order and we are hoping for input from the community to help drive the direction we go with these.
 
-* Support for matrix variables and matrix point attributes.
 * Support for array variables and array point attributes.
-* For/while loops.
 * Ternary operators.
 * User defined function declarations.
 * Syntax highlighting for AX in Houdini and possibly some text editors.

@@ -25,6 +25,7 @@ function option.
     - @ref subseccurlsimplexnoise
     - @ref subsecdeletepoint
     - @ref subsecdeterminant
+    - @ref subsecdiag
     - @ref subsecdot
     - @ref subsecexp
     - @ref subsecexp2
@@ -181,6 +182,18 @@ function option.
   - float determinant(mat4f)
   - double determinant(mat4d)
 
+@subsection subsecdiag diag
+ - Create a diagonal matrix from a vector, or return the diagonal components of a matrix as a vector.
+
+  - void diag(vec3f; mat3f)
+  - void diag(vec4f; mat4f)
+  - void diag(vec3d; mat3d)
+  - void diag(vec4d; mat4d)
+  - void diag(mat3f; vec3f)
+  - void diag(mat4f; vec4f)
+  - void diag(mat3d; vec3d)
+  - void diag(mat4d; vec4d)
+
 @subsection subsecdot dot
  - Computes the dot product of two vectors
 
@@ -295,8 +308,6 @@ function option.
 
   - float lerp(float; float; float)
   - double lerp(double; double; double)
-  - vec3f lerp(vec3f; vec3f; vec3f)
-  - vec3d lerp(vec3d; vec3d; vec3d)
 
 @subsection subseclog log
  - Computes the natural (base e) logarithm of arg.
@@ -376,19 +387,19 @@ function option.
 @subsection subsecprint print
  - Prints the input to the standard output stream. Warning: This will be run for every element.
 
-  - void print(string)
   - void print(double)
   - void print(float)
   - void print(int)
+  - void print(string)
   - void print(vec2i)
   - void print(vec2f)
   - void print(vec2d)
   - void print(vec3i)
   - void print(vec3f)
   - void print(vec3d)
-  - void print(vec3i)
-  - void print(vec3f)
-  - void print(vec3d)
+  - void print(vec4i)
+  - void print(vec4f)
+  - void print(vec4d)
   - void print(mat3f)
   - void print(mat3d)
   - void print(mat4f)
@@ -397,9 +408,9 @@ function option.
 @subsection subsecrand rand
  - Creates a random number based on the provided seed. The number will be in the range of 0 to 1. The
    same number is produced for the same seed. Note that if rand is called without a seed the
-   previous state of the random number generator is advanced for the currently processing point.
+   previous state of the random number generator is advanced for the currently processing element.
    This state is determined by the last call to rand() with a given seed. If rand is not called
-   with a seed, the generator advances continuously across different points which can produce
+   with a seed, the generator advances continuously across different elements which can produce
    non-deterministic results. It is important that rand is always called with a seed at least once
    for deterministic results.
 

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -37,105 +37,95 @@
 #include <memory>
 #include <string>
 
-template <typename T>
-using FunctionSignature = openvdb::ax::codegen::FunctionSignature<T>;
-using FunctionSignatureBase = openvdb::ax::codegen::FunctionSignatureBase;
-using FunctionBase = openvdb::ax::codegen::FunctionBase;
+using Function = openvdb::ax::codegen::Function;
+using CFunctionBase = openvdb::ax::codegen::CFunctionBase;
+using IRFunctionBase = openvdb::ax::codegen::IRFunctionBase;
+using FunctionGroup = openvdb::ax::codegen::FunctionGroup;
+using FunctionBuilder = openvdb::ax::codegen::FunctionBuilder;
 template <typename T>
 using LLVMType = openvdb::ax::codegen::LLVMType<T>;
 
-struct TestScalarFunction : public FunctionBase
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
+// Framework methods for the subsequent unit tests
+
+static inline void test() {}
+template <typename T1, typename RetT> static inline RetT test1(T1) { return RetT(); }
+template <typename T1> static inline void test1(T1) {}
+
+template <typename T1, typename T2, typename RetT> static inline RetT test2(T1, T2) { return RetT(); }
+template <typename T1, typename T2> static inline void test2(T1, T2) {}
+
+template <typename T1, typename T2, typename T3, typename RetT> static inline RetT test3(T1, T2, T3) { return RetT(); }
+template <typename T1, typename T2, typename T3> static inline void test3(T1, T2, T3) {}
+
+
+inline FunctionGroup::Ptr axtestscalar()
 {
-    inline const std::string identifier() const override final { return std::string("TestScalarFunction"); }
+    return FunctionBuilder("TestScalarFunction")
+        .addSignature<void(double)>((void(*)(double))(test1), "tsfd")
+        .addSignature<void(float)>((void(*)(float))(test1), "tsff")
+        .addSignature<void(int64_t)>((void(*)(int64_t))(test1), "tsfi64")
+        .addSignature<void(int32_t)>((void(*)(int32_t))(test1), "tsfi32")
+        .addSignature<void(int16_t)>((void(*)(int16_t))(test1), "tsfi16")
+        .addSignature<void(bool)>((void(*)(bool))(test1), "tsfb")
+        .get();
+}
 
-    TestScalarFunction() : FunctionBase({
-            FunctionSignature<void(double)>::create
-                ((void(*)(double))(TestScalarFunction::scalar), std::string("tsfd")),
-            FunctionSignature<void(float)>::create
-                ((void(*)(float))(TestScalarFunction::scalar), std::string("tsff")),
-            FunctionSignature<void(int64_t)>::create
-                ((void(*)(int64_t))(TestScalarFunction::scalar), std::string("tsfi64")),
-            FunctionSignature<void(int32_t)>::create
-                ((void(*)(int32_t))(TestScalarFunction::scalar), std::string("tsfi32")),
-            FunctionSignature<void(int16_t)>::create
-                ((void(*)(int16_t))(TestScalarFunction::scalar), std::string("tsfi16")),
-            FunctionSignature<void(bool)>::create
-                ((void(*)(bool))(TestScalarFunction::scalar), std::string("tsfb"))
-        }) {}
-
-    template <typename T>
-    static inline void scalar(const T) {}
-};
-
-struct TestSizeFunction : public FunctionBase
+inline FunctionGroup::Ptr axtestsize()
 {
-    inline const std::string identifier() const override final { return std::string("TestSizeFunction"); }
+    return FunctionBuilder("TestSizeFunction")
+        .addSignature<void()>((void(*)())(test), "tsf")
+        .addSignature<void(double)>((void(*)(double))(test1), "tsfd")
+        .addSignature<void(double,double)>((void(*)(double,double))(test2), "tsfdd")
+        .get();
+}
 
-    TestSizeFunction() : FunctionBase({
-            FunctionSignature<void()>::create
-                ((void(*)())(TestSizeFunction::test), std::string("tsf")),
-            FunctionSignature<void(double)>::create
-                ((void(*)(double))(TestSizeFunction::test), std::string("tsfd")),
-            FunctionSignature<void(double, double)>::create
-                ((void(*)(double, double))(TestSizeFunction::test), std::string("tsfdd"))
-        }) {}
-
-    static inline void test() {}
-    static inline void test(double) {}
-    static inline void test(double, double) {}
-};
-
-struct TestMultiFunction : public FunctionBase
+inline FunctionGroup::Ptr axtestmulti()
 {
-    inline const std::string identifier() const override final { return std::string("TestMultiFunction"); }
+    /// @todo  There are a bunch of invalid methods that conflict in this definition.
+    ///        The function framework needs to be updated to catch these:
+    /// 1) tmf and tmfvi2r rebuild to the same arg signature
+    /// 2) tmfdd and tmfiid are ambiguous on implicit match
+    return FunctionBuilder("TestMultiFunction")
+        .addSignature<void()>((void(*)())(test), "tmf")
+        .addSignature<void(int32_t)>((void(*)(int32_t))(test1), "tmfi")
+        .addSignature<void(double,double)>((void(*)(double,double))(test2), "tmfdd")
+        .addSignature<int32_t(int32_t,double)>((int32_t(*)(int32_t,double))(test2), "tmfiid")
+        .addSignature<void(double*,int32_t,double), true>((void(*)(double*,int32_t,double))(test3), "tmfidd")
+        .addSignature<void(int32_t(*)[1])>((void(*)(int32_t(*)[1]))(test1), "tmfvi1")
+        .addSignature<void(int32_t(*)[2])>((void(*)(int32_t(*)[2]))(test1), "tmfvi2")
+        .addSignature<void(int32_t(*)[2]), true>((void(*)(int32_t(*)[2]))(test1), "tmfvi2r")
+        .get();
+}
 
-    TestMultiFunction() : FunctionBase({
-        DECLARE_FUNCTION_SIGNATURE(TestMultiFunction::test0),  // empty function
-        DECLARE_FUNCTION_SIGNATURE(TestMultiFunction::test1),  // void(int32) - no return
-        DECLARE_FUNCTION_SIGNATURE(TestMultiFunction::test2),  // void(double, double) - no return
-        DECLARE_FUNCTION_SIGNATURE(TestMultiFunction::test3),  // int(int32, double)
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(TestMultiFunction::test4),  // void(int32, double, double*) - output arg double
-        DECLARE_FUNCTION_SIGNATURE(TestMultiFunction::test5),  // void(int32[1]) - no return
-        DECLARE_FUNCTION_SIGNATURE(TestMultiFunction::test6),  // void(int32[2]) - no return
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(TestMultiFunction::test6)   // void(int32[2]) - output arg int32[2]
-    }) {}
-
-    static inline void test0() {}
-    static inline void test1(int32_t) {}
-    static inline void test2(double, double) {}
-    static inline int test3(int32_t, double) { return int(); }
-    static inline void test4(int32_t, double, double*) {}
-    static inline void test5(int32_t(*)[1]) {}
-    static inline void test6(int32_t(*)[2]) {}
-};
-
-struct TestIRFunction : public FunctionBase
+inline FunctionGroup::Ptr axirfunction()
 {
-    inline const std::string identifier() const override final { return std::string("TestIRFunction"); }
-
-    TestIRFunction() : FunctionBase({
-            FunctionSignature<double(double)>::create(nullptr, std::string("double")),
-            FunctionSignature<float(float)>::create(nullptr, std::string("float")),
-            FunctionSignature<int32_t(int32_t)>::create(nullptr, std::string("int32")),
-            FunctionSignature<void(int8_t)>::create(nullptr, std::string("int8"))
-        }) {}
-
-    inline llvm::Value*
-    generate(const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>&,
-             llvm::IRBuilder<>& builder) const override final
+    static auto generate =
+        [](const std::vector<llvm::Value*>& args,
+           const std::unordered_map<std::string, llvm::Value*>&,
+           llvm::IRBuilder<>& B) -> llvm::Value*
     {
         if (args.empty())     return nullptr;
         if (args.size() != 1) return nullptr;
-
-        if (args[0]->getType()->isDoubleTy())     return llvm::ConstantFP::get(LLVMType<double>::get(builder.getContext()), 1.0);
-        if (args[0]->getType()->isFloatTy())      return llvm::ConstantFP::get(LLVMType<float>::get(builder.getContext()), 1.0f);
-        if (args[0]->getType()->isIntegerTy(32))  return builder.getInt32(1);
-        if (args[0]->getType()->isIntegerTy(8))   return builder.getInt32(1); // unexpected return type for int8
-
+        if (args[0]->getType()->isDoubleTy())     return llvm::ConstantFP::get(LLVMType<double>::get(B.getContext()), 1.0);
+        if (args[0]->getType()->isFloatTy())      return llvm::ConstantFP::get(LLVMType<float>::get(B.getContext()), 1.0f);
+        if (args[0]->getType()->isIntegerTy(32))  return B.getInt32(1);
+        if (args[0]->getType()->isIntegerTy(8))   return B.getInt32(1); // unexpected return type for int8
         return nullptr;
     };
-};
+
+    return FunctionBuilder("TestIRFunction")
+        .addSignature<double(double)>(generate, "double")
+        .addSignature<float(float)>(generate, "float")
+        .addSignature<int32_t(int32_t)>(generate, "int32")
+        .addSignature<void(int8_t)>(generate, "int8")
+        .get();
+}
+
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
 
 class TestFunctionBase : public CppUnit::TestCase
 {
@@ -161,19 +151,18 @@ TestFunctionBase::testCreate()
 {
     unittest_util::LLVMState state;
 
-    FunctionBase::Ptr function;
-    function.reset(new TestScalarFunction());
+    FunctionGroup::Ptr group = axtestscalar();
 
-    CPPUNIT_ASSERT_EQUAL(std::string("TestScalarFunction"), function->identifier());
+    CPPUNIT_ASSERT_EQUAL(std::string("TestScalarFunction"), std::string(group->name()));
 
-    const std::vector<FunctionSignatureBase::Ptr>* list = &function->list();
+    const std::vector<Function::Ptr>* list = &group->list();
     CPPUNIT_ASSERT_EQUAL(size_t(6), list->size());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfd"), (*list)[0]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsff"), (*list)[1]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfi64"), (*list)[2]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfi32"), (*list)[3]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfi16"), (*list)[4]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfb"), (*list)[5]->symbolName());
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfd"), std::string((*list)[0]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsff"), std::string((*list)[1]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfi64"), std::string((*list)[2]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfi32"), std::string((*list)[3]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfi16"), std::string((*list)[4]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfb"), std::string((*list)[5]->symbol()));
 
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[0]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[1]->size());
@@ -182,75 +171,78 @@ TestFunctionBase::testCreate()
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[4]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[5]->size());
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[1]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[2]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[3]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[4]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[5]->hasReturnValue(state.context()));
+    std::vector<const CFunctionBase*> bindings;
+    bindings.reserve(6);
+    for (auto& decl : *list) {
+        bindings.emplace_back(dynamic_cast<const CFunctionBase*>(decl.get()));
+    }
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[1]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[2]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[3]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[4]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[5]->hasOutputArgument());
-
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestScalarFunction::scalar<double>), (*list)[0]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestScalarFunction::scalar<float>), (*list)[1]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestScalarFunction::scalar<int64_t>), (*list)[2]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestScalarFunction::scalar<int32_t>), (*list)[3]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestScalarFunction::scalar<int16_t>), (*list)[4]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestScalarFunction::scalar<bool>), (*list)[5]->functionPointer());
+    CPPUNIT_ASSERT(bindings[0]);
+    CPPUNIT_ASSERT(bindings[1]);
+    CPPUNIT_ASSERT(bindings[2]);
+    CPPUNIT_ASSERT(bindings[3]);
+    CPPUNIT_ASSERT(bindings[4]);
+    CPPUNIT_ASSERT(bindings[5]);
+    CPPUNIT_ASSERT(bindings[0]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[1]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[2]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[3]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[4]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[5]->address() != uint64_t(0));
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<double>), bindings[0]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<float>), bindings[1]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<int64_t>), bindings[2]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<int32_t>), bindings[3]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<int16_t>), bindings[4]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<bool>), bindings[5]->address());
 
     //
 
-    function.reset(new TestSizeFunction());
+    group = axtestsize();
+    CPPUNIT_ASSERT_EQUAL(std::string("TestSizeFunction"), std::string(group->name()));
 
-    CPPUNIT_ASSERT_EQUAL(std::string("TestSizeFunction"), function->identifier());
-
-    list = &function->list();
+    list = &group->list();
     CPPUNIT_ASSERT_EQUAL(size_t(3), list->size());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsf"), (*list)[0]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfd"), (*list)[1]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("tsfdd"), (*list)[2]->symbolName());
+    CPPUNIT_ASSERT_EQUAL(std::string("tsf"), std::string((*list)[0]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfd"), std::string((*list)[1]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tsfdd"), std::string((*list)[2]->symbol()));
 
     CPPUNIT_ASSERT_EQUAL(size_t(0), (*list)[0]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[1]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(2), (*list)[2]->size());
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[1]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[2]->hasReturnValue(state.context()));
+    bindings.clear();
+    bindings.reserve(3);
+    for (auto& decl : *list) {
+        bindings.emplace_back(dynamic_cast<const CFunctionBase*>(decl.get()));
+    }
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[1]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[2]->hasOutputArgument());
-
-    auto test0 = static_cast<void(*)()>(&TestSizeFunction::test);
-    auto test1 = static_cast<void(*)(double)>(&TestSizeFunction::test);
-    auto test2 = static_cast<void(*)(double, double)>(&TestSizeFunction::test);
-
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(test0), (*list)[0]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(test1), (*list)[1]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(test2), (*list)[2]->functionPointer());
+    CPPUNIT_ASSERT(bindings[0]);
+    CPPUNIT_ASSERT(bindings[1]);
+    CPPUNIT_ASSERT(bindings[2]);
+    CPPUNIT_ASSERT(bindings[0]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[1]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[2]->address() != uint64_t(0));
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test), bindings[0]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test1<double>), bindings[1]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>(&test2<double, double>), bindings[2]->address());
 
     //
 
-    function.reset(new TestMultiFunction());
+    group = axtestmulti();
 
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction"), function->identifier());
+    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction"), std::string(group->name()));
 
-    list = &function->list();
+    list = &group->list();
     CPPUNIT_ASSERT_EQUAL(size_t(8), list->size());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test0"), (*list)[0]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test1"), (*list)[1]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test2"), (*list)[2]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test3"), (*list)[3]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test4"), (*list)[4]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test5"), (*list)[5]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test6"), (*list)[6]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("TestMultiFunction::test6"), (*list)[7]->symbolName());
+    CPPUNIT_ASSERT_EQUAL(std::string("tmf"), std::string((*list)[0]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfi"), std::string((*list)[1]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfdd"), std::string((*list)[2]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfiid"), std::string((*list)[3]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfidd"), std::string((*list)[4]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfvi1"), std::string((*list)[5]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfvi2"), std::string((*list)[6]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("tmfvi2r"), std::string((*list)[7]->symbol()));
 
     CPPUNIT_ASSERT_EQUAL(size_t(0), (*list)[0]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[1]->size());
@@ -261,66 +253,65 @@ TestFunctionBase::testCreate()
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[6]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[7]->size());
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[1]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[2]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT((*list)[3]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[4]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[5]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[6]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[7]->hasReturnValue(state.context()));
+    bindings.clear();
+    bindings.reserve(8);
+    for (auto& decl : *list) {
+        bindings.emplace_back(dynamic_cast<const CFunctionBase*>(decl.get()));
+    }
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[1]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[2]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[3]->hasOutputArgument());
-    CPPUNIT_ASSERT((*list)[4]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[5]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[6]->hasOutputArgument());
-    CPPUNIT_ASSERT((*list)[7]->hasOutputArgument());
-
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test0), (*list)[0]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test1), (*list)[1]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test2), (*list)[2]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test3), (*list)[3]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test4), (*list)[4]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test5), (*list)[5]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test6), (*list)[6]->functionPointer());
-    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<void(*)()>(&TestMultiFunction::test6), (*list)[7]->functionPointer());
-
+    CPPUNIT_ASSERT(bindings[0]);
+    CPPUNIT_ASSERT(bindings[1]);
+    CPPUNIT_ASSERT(bindings[2]);
+    CPPUNIT_ASSERT(bindings[3]);
+    CPPUNIT_ASSERT(bindings[4]);
+    CPPUNIT_ASSERT(bindings[5]);
+    CPPUNIT_ASSERT(bindings[6]);
+    CPPUNIT_ASSERT(bindings[7]);
+    CPPUNIT_ASSERT(bindings[0]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[1]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[2]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[3]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[4]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[5]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[6]->address() != uint64_t(0));
+    CPPUNIT_ASSERT(bindings[7]->address() != uint64_t(0));
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)())(test)), bindings[0]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)(int32_t))(test1)), bindings[1]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)(double,double))(test2)), bindings[2]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((int32_t(*)(int32_t,double))(test2)), bindings[3]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)(double*,int32_t,double))(test3)), bindings[4]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)(int32_t(*)[1]))(test1)), bindings[5]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)(int32_t(*)[2]))(test1)), bindings[6]->address());
+    CPPUNIT_ASSERT_EQUAL(reinterpret_cast<uint64_t>((void(*)(int32_t(*)[2]))(test1)), bindings[7]->address());
 
     //
 
-    function.reset(new TestIRFunction());
+    group = axirfunction();
 
-    CPPUNIT_ASSERT_EQUAL(std::string("TestIRFunction"), function->identifier());
+    CPPUNIT_ASSERT_EQUAL(std::string("TestIRFunction"), std::string(group->name()));
 
-    list = &function->list();
+    list = &group->list();
     CPPUNIT_ASSERT_EQUAL(size_t(4), list->size());
-    CPPUNIT_ASSERT_EQUAL(std::string("double"), (*list)[0]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("float"), (*list)[1]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("int32"), (*list)[2]->symbolName());
-    CPPUNIT_ASSERT_EQUAL(std::string("int8"), (*list)[3]->symbolName());
+    CPPUNIT_ASSERT_EQUAL(std::string("double"), std::string((*list)[0]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("float"), std::string((*list)[1]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("int32"), std::string((*list)[2]->symbol()));
+    CPPUNIT_ASSERT_EQUAL(std::string("int8"), std::string((*list)[3]->symbol()));
 
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[0]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[1]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[2]->size());
     CPPUNIT_ASSERT_EQUAL(size_t(1), (*list)[3]->size());
 
-    CPPUNIT_ASSERT((*list)[0]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT((*list)[1]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT((*list)[2]->hasReturnValue(state.context()));
-    CPPUNIT_ASSERT(!(*list)[3]->hasReturnValue(state.context()));
+    std::vector<const IRFunctionBase*> irfunctions;
+    irfunctions.reserve(4);
+    for (auto& decl : *list) {
+        irfunctions.emplace_back(dynamic_cast<const IRFunctionBase*>(decl.get()));
+    }
 
-    CPPUNIT_ASSERT(!(*list)[0]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[1]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[2]->hasOutputArgument());
-    CPPUNIT_ASSERT(!(*list)[3]->hasOutputArgument());
-
-    CPPUNIT_ASSERT((*list)[0]->functionPointer() == nullptr);
-    CPPUNIT_ASSERT((*list)[1]->functionPointer() == nullptr);
-    CPPUNIT_ASSERT((*list)[2]->functionPointer() == nullptr);
-    CPPUNIT_ASSERT((*list)[3]->functionPointer() == nullptr);
+    CPPUNIT_ASSERT(irfunctions[0]);
+    CPPUNIT_ASSERT(irfunctions[1]);
+    CPPUNIT_ASSERT(irfunctions[2]);
+    CPPUNIT_ASSERT(irfunctions[3]);
 }
 
 void
@@ -329,13 +320,13 @@ TestFunctionBase::testMatching()
     unittest_util::LLVMState state;
     llvm::IRBuilder<> builder(state.scratchBlock());
 
-    FunctionBase::Ptr function;
-    function.reset(new TestScalarFunction());
+    FunctionGroup::Ptr group = axtestscalar();
 
-    const std::vector<FunctionSignatureBase::Ptr>* list = &function->list();
+    const std::vector<Function::Ptr>* list = &group->list();
 
     std::vector<llvm::Type*> types;
-    FunctionBase::FunctionMatch match;
+    Function::SignatureMatch match;
+    Function::Ptr result;
 
     types.resize(1);
 
@@ -343,68 +334,68 @@ TestFunctionBase::testMatching()
 
     types[0] = LLVMType<bool>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[5], match.first);
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[5], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[5], result);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[5], result);
 
     //
 
     types[0] = LLVMType<int16_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[4], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[4], result);
 
     //
 
     types[0] = LLVMType<int32_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[3], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[3], result);
 
     //
 
     types[0] = LLVMType<int64_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     //
 
     types[0] = LLVMType<float>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[1], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[1], result);
 
     //
 
     types[0] = LLVMType<double>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[0], result);
 
     //
 
     types[0] = LLVMType<int64_t>::get(state.context()); // int64_t
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     // test unsigned integers automatic type creation - these are not supported in the
     // language however can be constructed from the API. The function framework does
@@ -412,87 +403,74 @@ TestFunctionBase::testMatching()
 
     types[0] = LLVMType<uint64_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     // test implicit matching - types should match to the first available castable signature
     // which is always the void(double) "tsfd" function for all provided scalars
 
     types[0] = LLVMType<int8_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Implicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[0], result);
 
     types.clear();
 
     // test invalid matching - Size matching returns the first function which matched
     // the size
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None == match.second);
-    CPPUNIT_ASSERT(!match.first);
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None == match.second);
-    CPPUNIT_ASSERT(!match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT_EQUAL(Function::SignatureMatch::None, match);
+    CPPUNIT_ASSERT(!result);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::None == match);
+    CPPUNIT_ASSERT(!result);
 
     //
 
     types.emplace_back(LLVMType<bool*>::get(state.context()));
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size == match.second);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
-    CPPUNIT_ASSERT(match.first);
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size == match.second);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
-    CPPUNIT_ASSERT(match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Size == match);
+    CPPUNIT_ASSERT(!result);
 
     //
 
     types[0] = LLVMType<bool[1]>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size == match.second);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
-    CPPUNIT_ASSERT(match.first);
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Size == match.second);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
-    CPPUNIT_ASSERT(match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Size == match);
+    CPPUNIT_ASSERT(!result);
 
     //
 
     types[0] = LLVMType<bool>::get(state.context());
     types.emplace_back(LLVMType<bool>::get(state.context()));
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None == match.second);
-    CPPUNIT_ASSERT(!match.first);
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None == match.second);
-    CPPUNIT_ASSERT(!match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::None == match);
+    CPPUNIT_ASSERT(!result);
 
     // Test varying argument size function
 
     // test explicit matching
 
-    function.reset(new TestSizeFunction());
-    list = &function->list();
+    group = axtestsize();
+    list = &group->list();
 
     types.resize(2);
 
     types[0] = LLVMType<double>::get(state.context());
     types[1] = LLVMType<double>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     //
 
@@ -500,19 +478,19 @@ TestFunctionBase::testMatching()
 
     types[0] = LLVMType<double>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[1], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[1], result);
 
     //
 
     types.clear();
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[0], result);
 
     // Test implicit matching
 
@@ -521,10 +499,10 @@ TestFunctionBase::testMatching()
     types[0] = LLVMType<float>::get(state.context());
     types[1] = LLVMType<int32_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Implicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     // Test non matching
 
@@ -534,23 +512,23 @@ TestFunctionBase::testMatching()
     types[1] = LLVMType<double>::get(state.context());
     types[2] = LLVMType<double>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::None == match.second);
-    CPPUNIT_ASSERT(!match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::None == match);
+    CPPUNIT_ASSERT(!result);
 
     // Test multi function
 
-    function.reset(new TestMultiFunction());
-    list = &function->list();
+    group = axtestmulti();
+    list = &group->list();
 
     // test explicit/implicit matching
 
     types.clear();
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[0], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[0], result);
 
     //
 
@@ -559,37 +537,30 @@ TestFunctionBase::testMatching()
     types[0] = LLVMType<double>::get(state.context());
     types[1] = LLVMType<double>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     //
 
     types[0] = LLVMType<int32_t>::get(state.context());
     types[1] = LLVMType<double>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[3], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[3], result);
 
     //
 
     types[0] = LLVMType<int32_t>::get(state.context());
     types[1] = LLVMType<int32_t>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[2], match.first);
-
-    // add output arguments
-
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Implicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[4], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Implicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[2], result);
 
     //
 
@@ -597,31 +568,20 @@ TestFunctionBase::testMatching()
 
     types[0] = LLVMType<int32_t(*)[1]>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[5], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[5], result);
 
     //
 
     types[0] = LLVMType<int32_t(*)[2]>::get(state.context());
 
-    match = function->match(types, state.context(), /*add output arguments*/false);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[6], match.first);
-
-    // add output arguments
-
-    types.clear();
-
-    match = function->match(types, state.context(), /*add output arguments*/true);
-    CPPUNIT_ASSERT(FunctionSignatureBase::SignatureMatch::Explicit == match.second);
-    CPPUNIT_ASSERT(match.first);
-    CPPUNIT_ASSERT_EQUAL((*list)[7], match.first);
+    result = group->match(types, state.context(), &match);
+    CPPUNIT_ASSERT(Function::SignatureMatch::Explicit == match);
+    CPPUNIT_ASSERT(result);
+    CPPUNIT_ASSERT_EQUAL((*list)[6], result);
 }
-
-using Globals = std::unordered_map<std::string, llvm::Value*>;
 
 void
 TestFunctionBase::testExecuteCall()
@@ -629,34 +589,31 @@ TestFunctionBase::testExecuteCall()
     unittest_util::LLVMState state;
     llvm::IRBuilder<> builder(state.scratchBlock());
 
-    FunctionBase::Ptr function;
-    function.reset(new TestScalarFunction());
+    FunctionGroup::Ptr group = axtestscalar();
 
-    const std::vector<FunctionSignatureBase::Ptr>* list = &function->list();
+    const std::vector<Function::Ptr>* list = &group->list();
 
     // test execution
 
     llvm::Value* result = nullptr;
     llvm::CallInst* call = nullptr;
     llvm::Function* target = nullptr;
-    std::vector<llvm::Value*> args, results;
+    std::vector<llvm::Value*> args;
 
     // test invalid arguments throws
 
-    CPPUNIT_ASSERT_THROW(function->execute(/*args*/{}, Globals(), builder, &results),
+    CPPUNIT_ASSERT_THROW(group->execute(/*args*/{}, /*globals*/{}, builder),
         openvdb::LLVMFunctionError);
-    CPPUNIT_ASSERT(results.empty());
 
     args.resize(1);
 
     // test llvm function calls - execute and get the called function. check this is already
-    // inserted into the module and is expected llvm::Function using toLLVMFunction on the
+    // inserted into the module and is expected llvm::Function using create on the
     // expected function signature
 
     args[0] = builder.getTrue();
-    result = function->execute(args, Globals(), builder, &results);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -664,14 +621,13 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[5]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[5]->create(state.module()), target);
 
     //
 
     args[0] = builder.getInt16(1);
-    result = function->execute(args, Globals(), builder, &results);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -679,14 +635,13 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[4]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[4]->create(state.module()), target);
 
     //
 
     args[0] = builder.getInt32(1);
-    result = function->execute(args, Globals(), builder, &results);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -694,14 +649,13 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[3]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[3]->create(state.module()), target);
 
     //
 
     args[0] = builder.getInt64(1);
-    result = function->execute(args, Globals(), builder, &results);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -709,14 +663,13 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[2]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[2]->create(state.module()), target);
 
     //
 
     args[0] = llvm::ConstantFP::get(LLVMType<float>::get(state.context()), 1.0f);
-    result = function->execute(args, Globals(), builder, &results);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -724,14 +677,13 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[1]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[1]->create(state.module()), target);
 
     //
 
     args[0] = llvm::ConstantFP::get(LLVMType<double>::get(state.context()), 1.0);
-    result = function->execute(args, Globals(), builder, &results);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -739,20 +691,18 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[0]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[0]->create(state.module()), target);
 
 
-    // Test multi function with output arguments and results
+    // Test multi function
 
-    function.reset(new TestMultiFunction());
+    group = axtestmulti();
 
-    list = &function->list();
-    results.clear();
+    list = &group->list();
     args.clear();
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -760,33 +710,16 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[0]->toLLVMFunction(state.module()), target);
-
-    // test empty with output arg
-
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/true);
-
-    CPPUNIT_ASSERT_EQUAL(size_t(1), results.size());
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<int32_t(*)[2]>::get(state.context())), results.front()->getType());
-    CPPUNIT_ASSERT(result);
-    CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
-    call = llvm::cast<llvm::CallInst>(result);
-
-    CPPUNIT_ASSERT(call);
-    target = call->getCalledFunction();
-    CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[6]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[0]->create(state.module()), target);
 
     //
 
-    results.clear();
     args.resize(1);
 
     args[0] = builder.CreateAlloca(llvm::ArrayType::get(LLVMType<int32_t>::get(state.context()), 1));
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -794,15 +727,14 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[5]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[5]->create(state.module()), target);
 
     //
 
     args[0] = builder.CreateAlloca(llvm::ArrayType::get(LLVMType<int32_t>::get(state.context()), 2));
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -810,7 +742,7 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[6]->toLLVMFunction(state.module()), target);
+    CPPUNIT_ASSERT_EQUAL((*list)[6]->create(state.module()), target);
 
     //
 
@@ -819,9 +751,8 @@ TestFunctionBase::testExecuteCall()
     args[0] = llvm::ConstantFP::get(LLVMType<double>::get(state.context()), 1.0);
     args[1] = llvm::ConstantFP::get(LLVMType<double>::get(state.context()), 1.0);
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
     CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     call = llvm::cast<llvm::CallInst>(result);
@@ -829,23 +760,7 @@ TestFunctionBase::testExecuteCall()
     CPPUNIT_ASSERT(call);
     target = call->getCalledFunction();
     CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[2]->toLLVMFunction(state.module()), target);
-
-    // test with output arg
-
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/true);
-
-    CPPUNIT_ASSERT_EQUAL(size_t(1), results.size());
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(LLVMType<double*>::get(state.context())), results.front()->getType());
-    CPPUNIT_ASSERT(result);
-    CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
-    call = llvm::cast<llvm::CallInst>(result);
-
-    CPPUNIT_ASSERT(call);
-    target = call->getCalledFunction();
-    CPPUNIT_ASSERT(target);
-    CPPUNIT_ASSERT_EQUAL((*list)[4]->toLLVMFunction(state.module()), target);
-    CPPUNIT_ASSERT_EQUAL(LLVMType<void>::get(state.context()), target->getReturnType());
+    CPPUNIT_ASSERT_EQUAL((*list)[2]->create(state.module()), target);
 }
 
 void
@@ -854,71 +769,65 @@ TestFunctionBase::testGenerate()
     unittest_util::LLVMState state;
     llvm::IRBuilder<> builder(state.scratchBlock());
 
-    FunctionBase::Ptr function;
-    function.reset(new TestIRFunction());
+    FunctionGroup::Ptr group = axirfunction();
 
     llvm::Value* result = nullptr;
-    std::vector<llvm::Value*> args, results;
+    std::vector<llvm::Value*> args;
 
     // test invalid arguments throws
 
-    CPPUNIT_ASSERT_THROW(function->execute(/*args*/{}, Globals(), builder, &results),
+    CPPUNIT_ASSERT_THROW(group->execute(/*args*/{}, /*globals*/{}, builder),
         openvdb::LLVMFunctionError);
-    CPPUNIT_ASSERT(results.empty());
 
     // test IR generation
 
     args.resize(1);
     args[0] = llvm::ConstantFP::get(LLVMType<double>::get(state.context()), 1.0);
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
-    CPPUNIT_ASSERT(!llvm::isa<llvm::CallInst>(result));
+    CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     CPPUNIT_ASSERT_EQUAL(LLVMType<double>::get(state.context()), result->getType());
 
     //
 
     args[0] = llvm::ConstantFP::get(LLVMType<float>::get(state.context()), 1.0);
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
-    CPPUNIT_ASSERT(!llvm::isa<llvm::CallInst>(result));
+    CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     CPPUNIT_ASSERT_EQUAL(LLVMType<float>::get(state.context()), result->getType());
 
     //
 
     args[0] = builder.getInt32(1);
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
-    CPPUNIT_ASSERT(!llvm::isa<llvm::CallInst>(result));
+    CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     CPPUNIT_ASSERT_EQUAL(LLVMType<int32_t>::get(state.context()), result->getType());
 
     // test values are cast with implicit matching
 
     args[0] = builder.getInt16(1);
 
-    result = function->execute(args, Globals(), builder, &results, /*add output arguments*/false);
+    result = group->execute(args, {}, builder);
 
-    CPPUNIT_ASSERT(results.empty());
     CPPUNIT_ASSERT(result);
-    CPPUNIT_ASSERT(!llvm::isa<llvm::CallInst>(result));
+    CPPUNIT_ASSERT(llvm::isa<llvm::CallInst>(result));
     CPPUNIT_ASSERT_EQUAL(LLVMType<double>::get(state.context()), result->getType());
 
     // test throw on unexpected return type
 
     args[0] = builder.getInt8(1);
 
-    CPPUNIT_ASSERT_THROW(function->execute(/*args*/{}, Globals(), builder, &results),
+    CPPUNIT_ASSERT_THROW(group->execute(/*args*/{}, {}, builder),
         openvdb::LLVMFunctionError);
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -39,49 +39,36 @@ using namespace openvdb::points;
 class TestString : public unittest_util::AXTestCase
 {
 public:
-    void setUp() override;
+    void setUp() override {
+        unittest_util::AXTestCase::setUp();
+        mHarness.testVolumes(false);
+    }
 
     CPPUNIT_TEST_SUITE(TestString);
-    CPPUNIT_TEST(testDeclare);
-    CPPUNIT_TEST(testAssignFromLocals);
+    CPPUNIT_TEST(testAssignCompound);
     CPPUNIT_TEST(testAssignFromAttributes);
-    CPPUNIT_TEST(testBinaryConcat);
+    CPPUNIT_TEST(testAssignFromLocals);
     CPPUNIT_TEST(testAssignNewOverwrite);
+    CPPUNIT_TEST(testBinaryConcat);
+    CPPUNIT_TEST(testDeclare);
     CPPUNIT_TEST_SUITE_END();
 
-    void testDeclare();
-    void testAssignFromLocals();
+    void testAssignCompound();
     void testAssignFromAttributes();
-    void testBinaryConcat();
+    void testAssignFromLocals();
     void testAssignNewOverwrite();
+    void testBinaryConcat();
+    void testDeclare();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestString);
 
-// we override this since none of these tests should be run on volumes, so it's easier to enforce
-// this in one place
-void TestString::setUp()
-{
-    unittest_util::AXTestCase::setUp();
-    mHarness.testVolumes(false);
-}
-
 void
-TestString::testDeclare()
+TestString::testAssignCompound()
 {
-    mHarness.addAttribute<std::string>("string_test", "test");
-    mHarness.executeCode("test/snippets/string/declare");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestString::testAssignFromLocals()
-{
-    mHarness.addAttributes<std::string>(unittest_util::nameSequence("string_test", 4),
-        {"test", "test", "new string size", ""});
-    mHarness.executeCode("test/snippets/string/assignFromLocals");
-
+    mHarness.addAttributes<std::string>(unittest_util::nameSequence("test", 3),
+        {"foo", "foobar", "aaaaaaaaaa"});
+    mHarness.executeCode("test/snippets/string/assignCompound");
     AXTESTS_STANDARD_ASSERT();
 }
 
@@ -92,17 +79,15 @@ TestString::testAssignFromAttributes()
     mHarness.addExpectedAttributes<std::string>(unittest_util::nameSequence("string_test", 6),
         {"new value", "test", "new value", "new value", "", ""});
     mHarness.executeCode("test/snippets/string/assignFromAttributes");
-
     AXTESTS_STANDARD_ASSERT();
 }
 
 void
-TestString::testBinaryConcat()
+TestString::testAssignFromLocals()
 {
-    mHarness.addExpectedAttributes<std::string>(unittest_util::nameSequence("string_test", 6),
-        {"test new value", "test new value", "test new value", "test new value", "", "test new value"});
-    mHarness.executeCode("test/snippets/string/binaryConcat");
-
+    mHarness.addAttributes<std::string>(unittest_util::nameSequence("string_test", 4),
+        {"test", "test", "new string size", ""});
+    mHarness.executeCode("test/snippets/string/assignFromLocals");
     AXTESTS_STANDARD_ASSERT();
 }
 
@@ -112,10 +97,26 @@ TestString::testAssignNewOverwrite()
     mHarness.addExpectedAttributes<std::string>({"string_test1", "string_test2"},
         {"next_value", "new_value"});
     mHarness.executeCode("test/snippets/string/assignNewOverwrite");
-
     AXTESTS_STANDARD_ASSERT();
 }
 
-// Copyright (c) 2015-2019 DNEG
+void
+TestString::testBinaryConcat()
+{
+    mHarness.addExpectedAttributes<std::string>(unittest_util::nameSequence("string_test", 6),
+        {"test new value", "test new value", "test new value", "test new value", "", "test new value"});
+    mHarness.executeCode("test/snippets/string/binaryConcat");
+    AXTESTS_STANDARD_ASSERT();
+}
+
+void
+TestString::testDeclare()
+{
+    mHarness.addAttribute<std::string>("string_test", "test");
+    mHarness.executeCode("test/snippets/string/declare");
+    AXTESTS_STANDARD_ASSERT();
+}
+
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

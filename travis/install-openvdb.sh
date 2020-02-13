@@ -1,6 +1,6 @@
 #!/bin/bash -e
 #
-# Copyright (c) 2015-2019 DNEG
+# Copyright (c) 2015-2020 DNEG
 #
 # All rights reserved. This software is distributed under the
 # Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -34,7 +34,7 @@ echo "Building and installing openvdb..."
 
 # Working Directory - /home/travis/build/dneg/openvdb_ax/
 
-git clone https://github.com/AcademySoftwareFoundation/openvdb.git openvdb
+git clone --branch v6.2.1 https://github.com/AcademySoftwareFoundation/openvdb.git openvdb
 mkdir -p $HOME/openvdb/install
 mkdir openvdb/build
 cd openvdb/build

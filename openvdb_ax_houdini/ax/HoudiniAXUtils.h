@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -69,22 +69,26 @@ enum class TargetType
     LOCAL
 };
 
+/// @brief Holds the name (path) and type of a channel expression. Note that
+///        this cannot be a core AX Type enum as we additionally support
+///        Houdini ramps as custom data.
 using ChannelExpressionPair = std::pair<std::string, std::string>;
+/// @brief Typedef for a unique set of channel expression
 using ChannelExpressionSet = std::set<ChannelExpressionPair>;
 
 /// @brief  Find any Houdini channel expressions represented inside the
 ///         provided Syntax Tree.
 ///
-/// @param  tree              The AST to parse
-/// @param  exprSet           The expression set to populate
+/// @param  tree     The AST to parse
+/// @param  exprSet  The expression set to populate
 inline void findChannelExpressions(const openvdb::ax::ast::Tree& tree,
                             ChannelExpressionSet& exprSet);
 
 /// @brief  Find any Houdini $ expressions represented inside the
 ///         provided Syntax Tree.
 ///
-/// @param  tree              The AST to parse
-/// @param  exprSet           The expression set to populate
+/// @param  tree     The AST to parse
+/// @param  exprSet  The expression set to populate
 inline void findDollarExpressions(const openvdb::ax::ast::Tree& tree,
                             ChannelExpressionSet& exprSet);
 
@@ -110,7 +114,7 @@ inline void convertASTKnownLookups(openvdb::ax::ast::Tree& tree);
 /// @brief  Register custom Houdini functions, making them available to the
 ///         core compiler. These functions generally have specific Houdini only
 ///         functionality.
-/// @param  reg   The function registry to add register the new functions into
+/// @param  reg      The function registry to add register the new functions into
 /// @param  options The function options
 inline void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& reg,
                                         const openvdb::ax::FunctionOptions* options = nullptr);
@@ -145,18 +149,21 @@ struct FindChannelExpressions :
     /// @param  node The FunctionCall AST node being visited
     bool visit(const openvdb::ax::ast::FunctionCall* node)
     {
+        const std::string& name = node->name();
+        if (name.empty()) return true;
+
         std::string type;
 
-        if (node->name() == "external" ||
-            node->name() == "ch") {
-            type = openvdb::typeNameAsString<float>();
+        if (name[0] == 'c') {
+            if (name == "ch")          type = openvdb::typeNameAsString<float>();
+            else if (name == "chv")    type = openvdb::typeNameAsString<openvdb::Vec3s>();
+            else if (name == "chs")    type = openvdb::typeNameAsString<std::string>();
+            else if (name == "chramp") type = "ramp";
         }
-        else if (node->name() == "externalv" ||
-                 node->name() == "chv") {
-            type = openvdb::typeNameAsString<openvdb::Vec3f>();
-        }
-        else if (node->name() == "chramp") {
-            type = "ramp";
+        else if (name[0] == 'e') {
+            if (name == "external")       type = openvdb::typeNameAsString<float>();
+            else if (name == "externalv") type = openvdb::typeNameAsString<openvdb::Vec3s>();
+            else if (name == "externals") type = openvdb::typeNameAsString<std::string>();
         }
 
         if (type.empty()) return true;
@@ -165,11 +172,9 @@ struct FindChannelExpressions :
         // the compiler code generation function error system to report proper
         // errors later
 
-        const openvdb::ax::ast::ExpressionList* args = node->args();;
-        const std::string* path = getChannelPath(args);
-        if (!path) return true;
+        const std::string* path = getChannelPath(node->args());
+        if (path) mExpressions.emplace(type, *path);
 
-        mExpressions.emplace(type, *path);
         return true;
     }
 
@@ -177,8 +182,9 @@ private:
     ChannelExpressionSet& mExpressions;
 };
 
-inline void findChannelExpressions(const openvdb::ax::ast::Tree& tree,
-                                   ChannelExpressionSet& exprSet)
+inline void
+findChannelExpressions(const openvdb::ax::ast::Tree& tree,
+                       ChannelExpressionSet& exprSet)
 {
     FindChannelExpressions op(exprSet);
     op.traverse(&tree);
@@ -222,9 +228,14 @@ struct ConvertFromVEX :
     /// @param  node  The FunctionCall AST node being visited
     bool visit(openvdb::ax::ast::FunctionCall* node)
     {
+        const std::string& name = node->name();
+        if (name.empty())   return true;
+        if (name[0] != 'c') return true;
+
         std::string identifier;
-        if (node->name() == "ch")       identifier = "external";
-        else if (node->name() == "chv") identifier = "externalv";
+        if (name == "ch")       identifier = "external";
+        else if (name == "chv") identifier = "externalv";
+        else if (name == "chs") identifier = "externals";
         else return true;
 
         openvdb::ax::ast::ExpressionList::UniquePtr args(node->args()->copy());
@@ -245,33 +256,35 @@ struct ConvertFromVEX :
     {
         if (mTargetType != TargetType::VOLUMES) return true;
 
-        if (node->name() != "P"  && node->name() != "ix" &&
-            node->name() != "iy" && node->name() != "iz") {
+        const std::string& name = node->name();
+
+        if (name != "P"  && name != "ix" &&
+            name != "iy" && name != "iz") {
             return true;
         }
 
         if (std::find(mWrite.cbegin(), mWrite.cend(), node) != mWrite.cend()) {
             throw std::runtime_error("Unable to write to a volume name \"@" +
-                node->name() + "\". This is a keyword identifier");
+                name + "\". This is a keyword identifier");
         }
 
         openvdb::ax::ast::FunctionCall::UniquePtr replacement;
-        if (node->name() == "P") {
+        if (name == "P") {
             replacement.reset(new openvdb::ax::ast::FunctionCall("getvoxelpws"));
         }
-        else if (node->name() == "ix") {
+        else if (name == "ix") {
             replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordx"));
         }
-        else if (node->name() == "iy") {
+        else if (name == "iy") {
             replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordy"));
         }
-        else if (node->name() == "iz") {
+        else if (name == "iz") {
             replacement.reset(new openvdb::ax::ast::FunctionCall("getcoordz"));
         }
 
         if (!node->replace(replacement.get())) {
             throw std::runtime_error("Unable to convert AX snippet to VEX. Attribute \"" +
-                node->name() + "\" produced errors.");
+                name + "\" produced errors.");
         }
         replacement.release();
         return true;
@@ -310,9 +323,17 @@ struct ConvertKnownExternalLookups :
     /// @param  node  The FunctionCall AST node being visited
     bool visit(openvdb::ax::ast::FunctionCall* node)
     {
-        const bool isFloatLookup(node->name() == "external");
-        const bool isVec3fLookup(node->name() == "externalv");
-        if (!isFloatLookup && !isVec3fLookup) return true;
+        const std::string& name = node->name();
+        if (name.empty())   return true;
+        if (name[0] != 'e') return true;
+
+        openvdb::ax::ast::tokens::CoreType type =
+            openvdb::ax::ast::tokens::UNKNOWN;
+
+        if (name == "external")       type = openvdb::ax::ast::tokens::FLOAT;
+        else if (name == "externalv") type = openvdb::ax::ast::tokens::VEC3F;
+        else if (name == "externals") type = openvdb::ax::ast::tokens::STRING;
+        else return true;
 
         const std::string* path =
             FindChannelExpressions::getChannelPath(node->args());
@@ -323,16 +344,12 @@ struct ConvertKnownExternalLookups :
         // and, correctly support string attribute arguments provided by s@attribute
         // (although are much slower)
 
-        if (path) {
-            std::string type;
-            if (isFloatLookup) type = openvdb::typeNameAsString<float>();
-            else type = openvdb::typeNameAsString<openvdb::Vec3f>();
+        if (!path) return true;
 
-            openvdb::ax::ast::ExternalVariable::UniquePtr replacement;
-            replacement.reset(new openvdb::ax::ast::ExternalVariable(*path, type));
-            node->replace(replacement.get());
-            replacement.release();
-        }
+        openvdb::ax::ast::ExternalVariable::UniquePtr replacement;
+        replacement.reset(new openvdb::ax::ast::ExternalVariable(*path, type));
+        node->replace(replacement.get());
+        replacement.release();
 
         return true;
     }
@@ -401,164 +418,149 @@ private:
     RampType mData;
 };
 
-/// @brief chramp function to query channel referenced ramps in Houdini
-///
-struct Chramp : public openvdb::ax::codegen::FunctionBase
+inline openvdb::ax::codegen::FunctionGroup::Ptr
+hax_chramp(const openvdb::ax::FunctionOptions& op)
 {
-    using FunctionBase = openvdb::ax::codegen::FunctionBase;
-
-    struct Internal : public FunctionBase
+    static auto sample =
+        [](float (*out)[3],
+           const char* const name,
+           float position,
+           const void* const data)
     {
-        inline const std::string identifier() const override final {
-            return std::string("internal_chramp");
-        }
-        inline void getDocumentation(std::string& doc) const override final {
-            doc = "Internal function for querying ramp data";
-        }
+        using FloatRampCacheType = RampDataCache<float>;
+        using FloatRamp = FloatRampCacheType::RampType;
+        using VectorRampCacheType = RampDataCache<openvdb::math::Vec3<float>>;
+        using VectorRamp = VectorRampCacheType::RampType;
 
-        inline static FunctionBase::Ptr
-        create(const openvdb::ax::FunctionOptions&) {
-            return FunctionBase::Ptr(new Internal());
-        }
+        const openvdb::ax::CustomData* const customData =
+            static_cast<const openvdb::ax::CustomData* const>(data);
 
-        Internal() : FunctionBase({
-                DECLARE_FUNCTION_SIGNATURE_OUTPUT(sample_map)
-            }) {}
+        // clamp
+        position = position > 0.0f ? position < 1.0f ? position : 1.0f : 0.0f;
 
-    private:
+        const std::string nameString(name);
 
-        static void sample_map(const uint8_t* const name, float position, const void* const data, float (*out)[3])
-        {
-            using FloatRampCacheType = RampDataCache<float>;
-            using FloatRamp = FloatRampCacheType::RampType;
-            using VectorRampCacheType = RampDataCache<openvdb::math::Vec3<float>>;
-            using VectorRamp = VectorRampCacheType::RampType;
+        const FloatRampCacheType* const floatRampData =
+            customData->getData<FloatRampCacheType>(nameString);
 
-            const openvdb::ax::CustomData* const customData =
-                static_cast<const openvdb::ax::CustomData* const>(data);
+        if (floatRampData) {
+            const FloatRamp& ramp = floatRampData->value();
+            auto upper = ramp.upper_bound(position);
 
-            // clamp
-            position = position > 0.0f ? position < 1.0f ? position : 1.0f : 0.0f;
+            if (upper == ramp.begin()) {
+                (*out)[0] = upper->second;
+                (*out)[1] = (*out)[0];
+                (*out)[2] = (*out)[0];
+            }
+            else if (upper == ramp.end()) {
+                (*out)[0] = (--upper)->second;
+                (*out)[1] = (*out)[0];
+                (*out)[2] = (*out)[0];
+            }
+            else {
+                const float maxPos = upper->first;
+                const float maxVal = upper->second;
 
-            const std::string nameString(reinterpret_cast<const char* const>(name));
+                --upper;
 
-            const FloatRampCacheType* const floatRampData =
-                customData->getData<FloatRampCacheType>(nameString);
+                const float minPos = upper->first;
+                const float minVal = upper->second;
+                const float coef = (position - minPos) / (maxPos - minPos);
 
-            if (floatRampData) {
-                const FloatRamp& ramp = floatRampData->value();
-                auto upper = ramp.upper_bound(position);
-
-                if (upper == ramp.begin()) {
-                    (*out)[0] = upper->second;
-                    (*out)[1] = (*out)[0];
-                    (*out)[2] = (*out)[0];
-                }
-                else if (upper == ramp.end()) {
-                    (*out)[0] = (--upper)->second;
-                    (*out)[1] = (*out)[0];
-                    (*out)[2] = (*out)[0];
-                }
-                else {
-                    const float maxPos = upper->first;
-                    const float maxVal = upper->second;
-
-                    --upper;
-
-                    const float minPos = upper->first;
-                    const float minVal = upper->second;
-                    const float coef = (position - minPos) / (maxPos - minPos);
-
-                    // lerp
-                    (*out)[0] = (minVal * (1.0f - coef)) + (maxVal * coef);
-                    (*out)[1] = (*out)[0];
-                    (*out)[2] = (*out)[0];
-                }
-
-                return;
+                // lerp
+                (*out)[0] = (minVal * (1.0f - coef)) + (maxVal * coef);
+                (*out)[1] = (*out)[0];
+                (*out)[2] = (*out)[0];
             }
 
-            const VectorRampCacheType* const vectorRampData =
-                customData->getData<VectorRampCacheType>(nameString);
+            return;
+        }
 
-            if (vectorRampData) {
-                const VectorRamp& ramp = vectorRampData->value();
-                auto upper = ramp.upper_bound(position);
+        const VectorRampCacheType* const vectorRampData =
+            customData->getData<VectorRampCacheType>(nameString);
 
-                if (upper == ramp.begin()) {
-                    const openvdb::Vec3f& value = upper->second;
-                    (*out)[0] = value[0];
-                    (*out)[1] = value[1];
-                    (*out)[2] = value[2];
-                }
-                else if (upper == ramp.end()) {
-                    const openvdb::Vec3f& value = (--upper)->second;
-                    (*out)[0] = value[0];
-                    (*out)[1] = value[1];
-                    (*out)[2] = value[2];
-                }
-                else {
-                    const float maxPos = upper->first;
-                    const openvdb::Vec3f& maxVal = upper->second;
+        if (vectorRampData) {
+            const VectorRamp& ramp = vectorRampData->value();
+            auto upper = ramp.upper_bound(position);
 
-                    --upper;
+            if (upper == ramp.begin()) {
+                const openvdb::Vec3f& value = upper->second;
+                (*out)[0] = value[0];
+                (*out)[1] = value[1];
+                (*out)[2] = value[2];
+            }
+            else if (upper == ramp.end()) {
+                const openvdb::Vec3f& value = (--upper)->second;
+                (*out)[0] = value[0];
+                (*out)[1] = value[1];
+                (*out)[2] = value[2];
+            }
+            else {
+                const float maxPos = upper->first;
+                const openvdb::Vec3f& maxVal = upper->second;
 
-                    const float minPos = upper->first;
-                    const openvdb::Vec3f& minVal = upper->second;
-                    const float coef = (position - minPos) / (maxPos - minPos);
+                --upper;
 
-                    // lerp
-                    const openvdb::Vec3f value = (minVal * (1.0f - coef)) + (maxVal * coef);
-                    (*out)[0] = value[0];
-                    (*out)[1] = value[1];
-                    (*out)[2] = value[2];
-                }
+                const float minPos = upper->first;
+                const openvdb::Vec3f& minVal = upper->second;
+                const float coef = (position - minPos) / (maxPos - minPos);
+
+                // lerp
+                const openvdb::Vec3f value = (minVal * (1.0f - coef)) + (maxVal * coef);
+                (*out)[0] = value[0];
+                (*out)[1] = value[1];
+                (*out)[2] = value[2];
             }
         }
     };
 
-    inline const std::string identifier() const override final {
-        return std::string("chramp");
-    }
-    inline void getDocumentation(std::string& doc) const override final {
-        doc = "Evaluate the channel referenced ramp value.";
-    }
+    using Sample = void(float(*)[3], const char* const, float,
+           const void* const);
 
-    Chramp() : openvdb::ax::codegen::FunctionBase({
-            openvdb::ax::codegen::FunctionSignature<
-                openvdb::ax::codegen::V3F*(const uint8_t* const, float)>::create
-                    (nullptr, std::string("chramp"), 0)
-        }) {}
+    return openvdb::ax::codegen::FunctionBuilder("_chramp")
+        .addSignature<Sample>((Sample*)(sample))
+        .setArgumentNames({"out", "ramp", "pos", "custom_data"})
+        .setConstantFold(false)
+        .setPreferredImpl(op.mPrioritiseIR ?
+            openvdb::ax::codegen::FunctionBuilder::IR :
+            openvdb::ax::codegen::FunctionBuilder::C)
+        .setDocumentation("Internal function for querying ramp data.")
+        .get();
+}
 
-    inline void getDependencies(std::vector<std::string>& identifiers) const override {
-        identifiers.emplace_back("internal_chramp");
-    }
+inline openvdb::ax::codegen::FunctionGroup::Ptr
+haxchramp(const openvdb::ax::FunctionOptions& op)
+{
+    auto generate =
+        [op](const std::vector<llvm::Value*>& args,
+             const std::unordered_map<std::string, llvm::Value*>& globals,
+             llvm::IRBuilder<>& B) -> llvm::Value*
+    {
+        std::vector<llvm::Value*> inputs(args);
+        inputs.emplace_back(globals.at("custom_data"));
+        hax_chramp(op)->execute(inputs, globals, B);
+        return nullptr;
+    };
 
-    inline static FunctionBase::Ptr
-    create(const openvdb::ax::FunctionOptions&) {
-        return FunctionBase::Ptr(new Chramp());
-    }
-
-    llvm::Value*
-    generate(const std::vector<llvm::Value*>& args,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>& builder) const override {
-
-        std::vector<llvm::Value*> internalArgs(args);
-        internalArgs.emplace_back(globals.at("custom_data"));
-
-        std::vector<llvm::Value*> results;
-        Internal func;
-        func.execute(internalArgs, globals, builder, &results);
-        return results.front();
-     }
-};
-
+    return openvdb::ax::codegen::FunctionBuilder("chramp")
+        .addSignature<void(openvdb::math::Vec3<float>*, char*, float), true>(generate)
+        .addDependency("_chramp")
+        .setArgumentNames({"ramp", "pos"})
+        .addParameterAttribute(0, llvm::Attribute::NoAlias)
+        .addParameterAttribute(0, llvm::Attribute::WriteOnly)
+        .setConstantFold(false)
+        .setEmbedIR(true) // must be embedded
+        .setPreferredImpl(op.mPrioritiseIR ?
+            openvdb::ax::codegen::FunctionBuilder::IR :
+            openvdb::ax::codegen::FunctionBuilder::C)
+        .setDocumentation("Evaluate the channel referenced ramp value.")
+        .get();
+}
 
 ///////////////////////////////////////////////////////////////////////////
 
 
-void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& reg,
+void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& registry,
                                     const openvdb::ax::FunctionOptions* options)
 {
     // @note - we could alias matching functions such as ch and chv here, but we opt
@@ -566,21 +568,23 @@ void registerCustomHoudiniFunctions(openvdb::ax::codegen::FunctionRegistry& reg,
     // is a re-implemented function and is not currently supported outside of the Houdini
     // plugin
 
-    if (options && !options->mLazyFunctions) {
-        reg.insertAndCreate("chramp", openvdb_ax_houdini::Chramp::create, *options);
-        reg.insertAndCreate("internal_chramp",
-            openvdb_ax_houdini::Chramp::Internal::create, *options, true);
-    }
-    else {
-        reg.insert("chramp", openvdb_ax_houdini::Chramp::create);
-        reg.insert("internal_chramp", openvdb_ax_houdini::Chramp::Internal::create,  true);
-    }
+    const bool create = options && !options->mLazyFunctions;
+    auto add = [&](const std::string& name,
+        const openvdb::ax::codegen::FunctionRegistry::ConstructorT creator,
+        const bool internal = false)
+    {
+        if (create) registry.insertAndCreate(name, creator, *options, internal);
+        else        registry.insert(name, creator, internal);
+    };
+
+    add("_chramp", hax_chramp, true);
+    add("chramp", haxchramp);
 }
 
 } // namespace openvdb_ax_houdini
 
 #endif // OPENVDB_AX_HOUDINI_AX_UTILS_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

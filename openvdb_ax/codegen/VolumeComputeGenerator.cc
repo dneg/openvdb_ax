@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -79,19 +79,13 @@ VolumeComputeGenerator::VolumeComputeGenerator(llvm::Module& module,
 
 AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
 {
-    // Override the ComputeGenerators default init() with the custom
-    // functions requires for Volume execution
+    llvm::FunctionType* type =
+        llvmFunctionTypeFromSignature<VolumeKernel::Signature>(mContext);
 
-    using FunctionSignatureT = FunctionSignature<VolumeKernel::Signature>;
-
-    // Use the function signature type to generate the llvm function
-
-    const FunctionSignatureT::Ptr volumeKernelSignature =
-        FunctionSignatureT::create(nullptr, VolumeKernel::getDefaultName(), 0);
-
-    // Set the base code generator function to the compute voxel function
-
-    mFunction = volumeKernelSignature->toLLVMFunction(mModule);
+    mFunction = llvm::Function::Create(type,
+        llvm::Function::ExternalLinkage,
+        VolumeKernel::getDefaultName(),
+        &mModule);
 
     // Set up arguments for initial entry
 
@@ -206,9 +200,10 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
 
             // get the accessor
             llvm::Value* accessor = mLLVMArguments.get("write_acccessor");
+            llvm::Type* type = value->getType()->getPointerElementType();
 
-            // load the result if its not an array
-            if (!value->getType()->getPointerElementType()->isArrayTy()) {
+            // load the result (if its a scalar)
+            if (type->isIntegerTy() || type->isFloatingPointTy()) {
                 value = mBuilder.CreateLoad(value);
             }
 
@@ -217,7 +212,7 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
                 accessor, mLLVMArguments.get("coord_is"), value
             };
 
-            const FunctionBase::Ptr function = this->getFunction("setvoxel", mOptions, true);
+            const FunctionGroup::Ptr function = this->getFunction("setvoxel", mOptions, true);
             function->execute(argumentValues, mLLVMArguments.map(), mBuilder);
 
             mBuilder.CreateBr(continueBlock);
@@ -232,8 +227,7 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
 
 bool VolumeComputeGenerator::visit(const ast::Attribute* node)
 {
-    const std::string globalName =
-        getGlobalAttributeAccess(node->name(), node->typestr());
+    const std::string globalName = node->tokenname();
     SymbolTable* localTable = this->mSymbolTables.getOrInsert(1);
     llvm::Value* value = localTable->get(globalName);
     assert(value);
@@ -249,7 +243,7 @@ bool VolumeComputeGenerator::visit(const ast::Attribute* node)
 void VolumeComputeGenerator::getAccessorValue(const std::string& globalName, llvm::Value* location)
 {
     std::string name, type;
-    isGlobalAttributeAccess(globalName, name, type);
+    ast::Attribute::nametypeFromToken(globalName, &name, &type);
 
     llvm::Value* registeredIndex = llvm::cast<llvm::GlobalVariable>
         (mModule.getOrInsertGlobal(globalName, LLVMType<int64_t>::get(mContext)));
@@ -268,8 +262,8 @@ void VolumeComputeGenerator::getAccessorValue(const std::string& globalName, llv
         accessor, transform, mLLVMArguments.get("coord_ws"), location
     };
 
-    const FunctionBase::Ptr function = this->getFunction("getvoxel", mOptions, true);
-    function->execute(args, mLLVMArguments.map(), mBuilder, nullptr, /*add output args*/false);
+    const FunctionGroup::Ptr function = this->getFunction("getvoxel", mOptions, true);
+    function->execute(args, mLLVMArguments.map(), mBuilder);
 }
 
 llvm::Value* VolumeComputeGenerator::accessorHandleFromToken(const std::string& globalName)
@@ -302,6 +296,6 @@ llvm::Value* VolumeComputeGenerator::accessorHandleFromToken(const std::string& 
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

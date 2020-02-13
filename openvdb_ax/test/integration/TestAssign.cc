@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -326,6 +326,8 @@ TestAssign::testAssignFromExternals()
     mHarness.addAttribute<openvdb::Vec3f>("vector_test2", openvdb::Vec3f(1.f, 2.f, 6.f));
     mHarness.addAttribute<openvdb::Vec3i>("vector_test3", openvdb::Vec3i(10, 11, 12));
     mHarness.addAttribute<openvdb::Vec3d>("vector_test4", openvdb::Vec3d(4.5, 4.4, 4.3));
+    mHarness.addAttribute<std::string>("string_test1", "foo");
+    mHarness.addAttribute<std::string>("string_test2", "bar");
 
     openvdb::ax::CustomData::Ptr data = openvdb::ax::CustomData::create();
     data->insertData("short_test1", openvdb::TypedMetadata<int16_t>(-3).copy());
@@ -338,12 +340,14 @@ TestAssign::testAssignFromExternals()
     data->insertData("vector_test2", openvdb::TypedMetadata<openvdb::Vec3f>(openvdb::Vec3f(1.f, 2.f, 6.f)).copy());
     data->insertData("vector_test3", openvdb::TypedMetadata<openvdb::Vec3i>(openvdb::Vec3i(10, 11, 12)).copy());
     data->insertData("vector_test4", openvdb::TypedMetadata<openvdb::Vec3d>(openvdb::Vec3d(4.5, 4.4, 4.3)).copy());
+    data->insertData("string_test1", openvdb::ax::AXStringMetadata("foo").copy());
+    data->insertData("string_test2", openvdb::ax::AXStringMetadata("bar").copy());
 
     mHarness.executeCode("test/snippets/assign/assignFromExternals", nullptr, nullptr, data);
 
     AXTESTS_STANDARD_ASSERT();
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

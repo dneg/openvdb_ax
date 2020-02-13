@@ -10,3 +10,5 @@ v@vector_test1 = v$vector_test1;
 vec3f@vector_test2 = vec3f$vector_test2;
 vec3i@vector_test3 = vec3i$vector_test3;
 vec3d@vector_test4 = vec3d$vector_test4;
+s@string_test1 = s$string_test1;
+string@string_test2 = string$string_test2;

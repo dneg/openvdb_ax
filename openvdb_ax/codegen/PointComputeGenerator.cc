@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -95,19 +95,13 @@ PointComputeGenerator::PointComputeGenerator(llvm::Module& module,
 
 AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
 {
-    // Override the ComputeGenerators default init() with the custom
-    // functions requires for Point execution
+    llvm::FunctionType* type =
+        llvmFunctionTypeFromSignature<PointKernel::Signature>(mContext);
 
-    using FunctionSignatureT = FunctionSignature<PointKernel::Signature>;
-
-    // Use the function signature type to generate the llvm function
-
-    const FunctionSignatureT::Ptr pointKernelSignature =
-        FunctionSignatureT::create(nullptr, PointKernel::getDefaultName());
-
-    // Set the base code generator function to the compute voxel function
-
-    mFunction = pointKernelSignature->toLLVMFunction(mModule);
+    mFunction = llvm::Function::Create(type,
+        llvm::Function::ExternalLinkage,
+        PointKernel::getDefaultName(),
+        &mModule);
 
     // Set up arguments for initial entry
 
@@ -122,10 +116,12 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
         }
     }
 
-    const FunctionSignatureT::Ptr pointRangeKernelSignature =
-        FunctionSignatureT::create(nullptr, PointRangeKernel::getDefaultName());
+    type = llvmFunctionTypeFromSignature<PointRangeKernel::Signature>(mContext);
 
-    llvm::Function* rangeFunction = pointRangeKernelSignature->toLLVMFunction(mModule);
+    llvm::Function* rangeFunction = llvm::Function::Create(type,
+        llvm::Function::ExternalLinkage,
+        PointRangeKernel::getDefaultName(),
+        &mModule);
 
     // Set up arguments for initial entry for the range function
 
@@ -258,11 +254,11 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
             }
 
             llvm::Type* type = value->getType()->getPointerElementType();
-            llvm::Type* strType = LLVMType<std::string>::get(mContext);
+            llvm::Type* strType = LLVMType<AXString>::get(mContext);
             const bool usingString = type == strType;
 
             llvm::Value* handlePtr = this->attributeHandleFromToken(token);
-            const FunctionBase::Ptr function = this->getFunction("setattribute", mOptions, true);
+            const FunctionGroup::Ptr function = this->getFunction("setattribute", mOptions, true);
 
             // load the result (if its a scalar)
             if (type->isIntegerTy() || type->isFloatingPointTy()) {
@@ -277,10 +273,6 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
             };
 
             if (usingString) {
-                // get the string pointer
-                value = mBuilder.CreateStructGEP(strType, value, 0); // char**
-                value = mBuilder.CreateLoad(value); // char*
-                args[2] = value;
                 args.emplace_back(mLLVMArguments.get("leaf_data"));
             }
 
@@ -293,8 +285,7 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
 
 bool PointComputeGenerator::visit(const ast::Attribute* node)
 {
-    const std::string globalName =
-        getGlobalAttributeAccess(node->name(), node->typestr());
+    const std::string globalName = node->tokenname();
     SymbolTable* localTable = this->mSymbolTables.getOrInsert(1);
     llvm::Value* value = localTable->get(globalName);
     assert(value);
@@ -308,7 +299,7 @@ bool PointComputeGenerator::visit(const ast::Attribute* node)
 void PointComputeGenerator::getAttributeValue(const std::string& globalName, llvm::Value* location)
 {
     std::string name, type;
-    isGlobalAttributeAccess(globalName, name, type);
+    ast::Attribute::nametypeFromToken(globalName, &name, &type);
 
     llvm::Value* handlePtr = this->attributeHandleFromToken(globalName);
 
@@ -317,22 +308,24 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
     const bool usingString = type == "string";
 
     if (usingString) {
-        const FunctionBase::Ptr function = this->getFunction("strattribsize", mOptions, true);
+        const FunctionGroup::Ptr function = this->getFunction("strattribsize", mOptions, true);
         llvm::Value* size =
             function->execute({handlePtr, mLLVMArguments.get("point_index"), mLLVMArguments.get("leaf_data")},
-                mLLVMArguments.map(), mBuilder, nullptr, true);
+                mLLVMArguments.map(), mBuilder);
+
+        // add room for the null terminator
+        llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
+        llvm::Value* sizeTerm = binaryOperator(size, one, ast::tokens::PLUS, mBuilder);
 
         // re-allocate the string array and store the size. The copying will be performed by
         // the getattribute function
-        llvm::Type* strType = LLVMType<std::string>::get(mContext);
-        llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), size);
+        llvm::Type* strType = LLVMType<AXString>::get(mContext);
+        llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), sizeTerm);
         llvm::Value* lstrptr = mBuilder.CreateStructGEP(strType, location, 0); // char**
-        llvm::Value* lsize = mBuilder.CreateStructGEP(strType, location, 1); // int64_t*
+        llvm::Value* lsize = mBuilder.CreateStructGEP(strType, location, 1); // AXString::SizeType*
         mBuilder.CreateStore(string, lstrptr);
         mBuilder.CreateStore(size, lsize);
 
-        // get_atribute_string takes the allocated char* array
-        location = string;
         args.reserve(4);
     }
     else {
@@ -345,8 +338,8 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
 
     if (usingString) args.emplace_back(mLLVMArguments.get("leaf_data"));
 
-    const FunctionBase::Ptr function = this->getFunction("getattribute", mOptions, true);
-    function->execute(args, mLLVMArguments.map(), mBuilder, nullptr, /*add output args*/false);
+    const FunctionGroup::Ptr function = this->getFunction("getattribute", mOptions, true);
+    function->execute(args, mLLVMArguments.map(), mBuilder);
 }
 
 llvm::Value* PointComputeGenerator::attributeHandleFromToken(const std::string& token)
@@ -382,6 +375,6 @@ llvm::Value* PointComputeGenerator::attributeHandleFromToken(const std::string& 
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

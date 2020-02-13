@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -28,7 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-/// @file codegen/VolumeFunctions.h
+/// @file codegen/VolumeFunctions.cc
 ///
 /// @authors Nick Avramoussis, Richard Jones
 ///
@@ -36,7 +36,6 @@
 ///         volume compute function generation, to be inserted into the FunctionRegistry.
 ///         These define the functions available when operating on volumes.
 ///         Also includes the definitions for the volume value retrieval and setting.
-///
 ///
 
 #include "Functions.h"
@@ -58,181 +57,228 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-// Macro for defining the function identifier and context. All functions must
-// define these values
-
-#define DEFINE_IDENTIFIER_DOC(Identifier, Documentation) \
-    inline const std::string identifier() const override final { \
-        return std::string(Identifier); \
-    } \
-    inline void getDocumentation(std::string& doc) const override final { \
-        doc = Documentation; \
-    }
-
-struct GetVoxelPWS : public FunctionBase
+inline FunctionGroup::Ptr axgetvoxelpws(const FunctionOptions& op)
 {
-    DEFINE_IDENTIFIER_DOC("getvoxelpws",
-        "Returns the current voxel's position in world space as a vector float.")
-
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new GetVoxelPWS()); }
-
-    GetVoxelPWS() : FunctionBase({
-        FunctionSignature<V3F*()>::create(nullptr, std::string("getvoxelpws"), 0)
-    }) {}
-
-    llvm::Value*
-    generate(const std::vector<llvm::Value*>&,
+    static auto generate = [](const std::vector<llvm::Value*>&,
          const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>&) const override final {
+         llvm::IRBuilder<>&) -> llvm::Value* {
         return globals.at("coord_ws");
-    }
-};
+    };
 
-struct GetCoordX : public FunctionBase
+    return FunctionBuilder("getvoxelpws")
+        .addSignature<openvdb::math::Vec3<float>*()>(generate)
+        .setEmbedIR(true)
+        .setConstantFold(false)
+        .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
+        .setDocumentation("Returns the current voxel's position in world space as a vector float.")
+        .get();
+}
+
+template <size_t Index>
+inline FunctionGroup::Ptr axgetcoord(const FunctionOptions& op)
 {
-    DEFINE_IDENTIFIER_DOC("getcoordx",
-        "Returns the current voxel's X index value in index space as an integer.")
+    static_assert(Index <= 2, "Invalid index for axgetcoord");
 
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new GetCoordX()); }
-
-    GetCoordX() : FunctionBase({
-        FunctionSignature<int()>::create(nullptr, std::string("getcoordx"), 0)
-    }) {}
-
-    llvm::Value*
-    generate(const std::vector<llvm::Value*>&,
+    static auto generate = [](const std::vector<llvm::Value*>&,
          const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>& builder) const override final {
-        return builder.CreateLoad(builder.CreateConstGEP2_64(globals.at("coord_is"), 0, 0));
-    }
-};
+         llvm::IRBuilder<>& B) -> llvm::Value* {
+        return B.CreateLoad(B.CreateConstGEP2_64(globals.at("coord_is"), 0, Index));
+    };
 
-struct GetCoordY : public FunctionBase
+    return FunctionBuilder((Index == 0 ? "getcoordx" : Index == 1 ? "getcoordy" : "getcoordz"))
+        .addSignature<int()>(generate)
+        .setEmbedIR(true)
+        .setConstantFold(false)
+        .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
+        .setDocumentation((
+             Index == 0 ? "Returns the current voxel's X index value in index space as an integer." :
+             Index == 1 ? "Returns the current voxel's Y index value in index space as an integer." :
+                          "Returns the current voxel's Z index value in index space as an integer."))
+        .get();
+}
+
+inline FunctionGroup::Ptr axsetvoxel(const FunctionOptions& op)
 {
-    DEFINE_IDENTIFIER_DOC("getcoordy",
-        "Returns the current voxel's Y index value in index space as an integer.")
-
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new GetCoordY()); }
-
-    GetCoordY() : FunctionBase({
-        FunctionSignature<int()>::create(nullptr, std::string("getcoordy"), 0)
-    }) {}
-
-    llvm::Value*
-    generate(const std::vector<llvm::Value*>&,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>& builder) const override final {
-        return builder.CreateLoad(builder.CreateConstGEP2_64(globals.at("coord_is"), 0, 1));
-    }
-};
-
-struct GetCoordZ : public FunctionBase
-{
-    DEFINE_IDENTIFIER_DOC("getcoordz",
-        "Returns the current voxel's Z index value in index space as an integer.")
-
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new GetCoordZ()); }
-
-    GetCoordZ() : FunctionBase({
-        FunctionSignature<int()>::create(nullptr, std::string("getcoordz"), 0)
-    }) {}
-
-    llvm::Value*
-    generate(const std::vector<llvm::Value*>&,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>& builder) const override final {
-        return builder.CreateLoad(builder.CreateConstGEP2_64(globals.at("coord_is"), 0, 2));
-    }
-};
-
-struct SetVoxel : public FunctionBase
-{
-    DEFINE_IDENTIFIER_DOC("setvoxel",
-        "Internal function for setting the value of a voxel.")
-
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new SetVoxel()); }
-
-    SetVoxel() : FunctionBase({
-        // pod types pass by value
-        DECLARE_FUNCTION_SIGNATURE(set_voxel<double>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel<float>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel<int64_t>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel<int32_t>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel<int16_t>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel<bool>),
-        // non-pod types pass by ptr
-        DECLARE_FUNCTION_SIGNATURE(set_voxel_ptr<openvdb::Vec3d>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel_ptr<openvdb::Vec3f>),
-        DECLARE_FUNCTION_SIGNATURE(set_voxel_ptr<openvdb::Vec3i>)
-    }) {}
-
-private:
-    template <typename ValueT>
-    inline static void set_voxel_ptr(void* accessor, const int32_t (*coord)[3], const ValueT* value)
+    static auto setvoxelptr =
+        [](void* accessor,
+           const openvdb::math::Vec3<int32_t>* coord,
+           const auto value)
     {
-        using GridType = typename openvdb::BoolGrid::ValueConverter<ValueT>::Type;
+        using ValueType = typename std::remove_const
+            <typename std::remove_pointer
+                <decltype(value)>::type>::type;
+        using GridType = typename openvdb::BoolGrid::ValueConverter<ValueType>::Type;
         using AccessorType = typename GridType::Accessor;
 
         assert(accessor);
         assert(coord);
 
+        // set value only to avoid changing topology
+        const openvdb::Coord* ijk = reinterpret_cast<const openvdb::Coord*>(coord);
         AccessorType* const accessorPtr = static_cast<AccessorType* const>(accessor);
+        accessorPtr->setValueOnly(*ijk, *value);
+    };
 
-        // Currently set value only to avoid changing topology
-        accessorPtr->setValueOnly(openvdb::Coord(coord[0]), *value);
-    }
-
-    template <typename ValueT>
-    inline static void set_voxel(void* accessor, const int32_t (*coord)[3], const ValueT value)
+    static auto setvoxelstr =
+        [](void* accessor,
+           const openvdb::math::Vec3<int32_t>* coord,
+           const AXString* value)
     {
-        set_voxel_ptr<ValueT>(accessor, coord, &value);
-    }
+        const std::string copy(value->ptr, value->size);
+        setvoxelptr(accessor, coord, &copy);
+    };
 
-};
+    static auto setvoxel =
+        [](void* accessor,
+           const openvdb::math::Vec3<int32_t>* coord,
+           const auto value) {
+        setvoxelptr(accessor, coord, &value);
+    };
 
-struct GetVoxel : public FunctionBase
+    using SetVoxelD = void(void*, const openvdb::math::Vec3<int32_t>*, const double);
+    using SetVoxelF = void(void*, const openvdb::math::Vec3<int32_t>*, const float);
+    using SetVoxelI64 = void(void*, const openvdb::math::Vec3<int32_t>*, const int64_t);
+    using SetVoxelI32 = void(void*, const openvdb::math::Vec3<int32_t>*, const int32_t);
+    using SetVoxelI16 = void(void*, const openvdb::math::Vec3<int32_t>*, const int16_t);
+    using SetVoxelB = void(void*, const openvdb::math::Vec3<int32_t>*, const bool);
+    using SetVoxelV3D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec3<double>*);
+    using SetVoxelV3F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec3<float>*);
+    using SetVoxelV3I = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec3<int32_t>*);
+    // @note Vec4 types are NOT registered by default by VDB or VDB AX - hooks are provided
+    // in case of custom registration and the VDB AX unit tests
+    using SetVoxelV4D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec4<double>*);
+    using SetVoxelV4F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec4<float>*);
+    using SetVoxelV4I = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec4<int32_t>*);
+    using SetVoxelStr = void(void*, const openvdb::math::Vec3<int32_t>*, const AXString*);
+
+    return FunctionBuilder("setvoxel")
+        .addSignature<SetVoxelD>((SetVoxelD*)(setvoxel))
+        .addSignature<SetVoxelF>((SetVoxelF*)(setvoxel))
+        .addSignature<SetVoxelI64>((SetVoxelI64*)(setvoxel))
+        .addSignature<SetVoxelI32>((SetVoxelI32*)(setvoxel))
+        .addSignature<SetVoxelI16>((SetVoxelI16*)(setvoxel))
+        .addSignature<SetVoxelB>((SetVoxelB*)(setvoxel))
+            .addParameterAttribute(0, llvm::Attribute::NoAlias)
+            .addParameterAttribute(0, llvm::Attribute::ReadOnly)
+            .addParameterAttribute(1, llvm::Attribute::ReadOnly)
+            .addFunctionAttribute(llvm::Attribute::NoUnwind)
+            .addFunctionAttribute(llvm::Attribute::NoRecurse)
+            .setConstantFold(false)
+        .addSignature<SetVoxelV3D>((SetVoxelV3D*)(setvoxelptr))
+        .addSignature<SetVoxelV3F>((SetVoxelV3F*)(setvoxelptr))
+        .addSignature<SetVoxelV3I>((SetVoxelV3I*)(setvoxelptr))
+        .addSignature<SetVoxelV4D>((SetVoxelV4D*)(setvoxelptr))
+        .addSignature<SetVoxelV4F>((SetVoxelV4F*)(setvoxelptr))
+        .addSignature<SetVoxelV4I>((SetVoxelV4I*)(setvoxelptr))
+        .addSignature<SetVoxelStr>((SetVoxelStr*)(setvoxelstr))
+            .addParameterAttribute(0, llvm::Attribute::NoAlias)
+            .addParameterAttribute(0, llvm::Attribute::ReadOnly)
+            .addParameterAttribute(1, llvm::Attribute::ReadOnly)
+            .addParameterAttribute(2, llvm::Attribute::ReadOnly)
+            .addFunctionAttribute(llvm::Attribute::NoUnwind)
+            .addFunctionAttribute(llvm::Attribute::NoRecurse)
+            .setConstantFold(false)
+        .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
+        .setDocumentation("Internal function for setting the value of a voxel.")
+        .get();
+}
+
+inline FunctionGroup::Ptr axgetvoxel(const FunctionOptions& op)
 {
-    DEFINE_IDENTIFIER_DOC("getvoxel",
-        "Internal function for getting the value of a voxel.")
-
-    inline static Ptr create(const FunctionOptions&) { return Ptr(new GetVoxel()); }
-
-    GetVoxel() : FunctionBase({
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<double>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<float>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<int64_t>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<int32_t>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<int16_t>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<bool>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<openvdb::Vec3d>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<openvdb::Vec3f>),
-        DECLARE_FUNCTION_SIGNATURE_OUTPUT(get_voxel<openvdb::Vec3i>)
-    }) {}
-
-private:
-    template <typename ValueT>
-    inline static void get_voxel(void* accessor, void* transform, const float (*coord)[3], ValueT* value)
+    static auto getvoxel =
+        [](void* accessor,
+           void* transform,
+           const openvdb::math::Vec3<float>* wspos,
+           auto value)
     {
-        using GridType = typename openvdb::BoolGrid::ValueConverter<ValueT>::Type;
+        using ValueType = typename std::remove_pointer<decltype(value)>::type;
+        using GridType = typename openvdb::BoolGrid::ValueConverter<ValueType>::Type;
         using AccessorType = typename GridType::Accessor;
 
         assert(accessor);
-        assert(coord);
+        assert(wspos);
         assert(transform);
 
         const AccessorType* const accessorPtr = static_cast<const AccessorType* const>(accessor);
         const openvdb::math::Transform* const transformPtr =
                 static_cast<const openvdb::math::Transform* const>(transform);
-        openvdb::Vec3d coordWS(*coord);
-        openvdb::Coord coordIS = transformPtr->worldToIndexCellCentered(coordWS);
-
+        const openvdb::Coord coordIS = transformPtr->worldToIndexCellCentered(*wspos);
         (*value) = accessorPtr->getValue(coordIS);
-    }
-};
+    };
+
+    // @todo  This is inherently flawed as we're not allocating the data in IR when passing
+    //        this back. When, in the future, grids can be written to and read from at the
+    //        same time we might need to revisit string accesses.
+    static auto getvoxelstr =
+        [](void* accessor,
+           void* transform,
+           const openvdb::math::Vec3<float>* wspos,
+           AXString* value)
+    {
+        using GridType = typename openvdb::BoolGrid::ValueConverter<std::string>::Type;
+        using AccessorType = typename GridType::Accessor;
+
+        assert(accessor);
+        assert(wspos);
+        assert(transform);
+
+        const AccessorType* const accessorPtr = static_cast<const AccessorType* const>(accessor);
+        const openvdb::math::Transform* const transformPtr =
+                static_cast<const openvdb::math::Transform* const>(transform);
+        openvdb::Coord coordIS = transformPtr->worldToIndexCellCentered(*wspos);
+        const std::string& str = accessorPtr->getValue(coordIS);
+        value->ptr = str.c_str();
+        value->size = static_cast<AXString::SizeType>(str.size());
+    };
+
+    using GetVoxelD = void(void*, void*, const openvdb::math::Vec3<float>*, double*);
+    using GetVoxelF = void(void*, void*, const openvdb::math::Vec3<float>*, float*);
+    using GetVoxelI64 = void(void*, void*, const openvdb::math::Vec3<float>*, int64_t*);
+    using GetVoxelI32 = void(void*, void*, const openvdb::math::Vec3<float>*, int32_t*);
+    using GetVoxelI16 = void(void*, void*, const openvdb::math::Vec3<float>*, int16_t*);
+    using GetVoxelB = void(void*, void*, const openvdb::math::Vec3<float>*, bool*);
+    using GetVoxelV3D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec3<double>*);
+    using GetVoxelV3F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec3<float>*);
+    using GetVoxelV3I = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec3<int32_t>*);
+    // @note Vec4 types are NOT registered by default by VDB or VDB AX - hooks are provided
+    // in case of custom registration and the VDB AX unit tests
+    using GetVoxelV4D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec4<double>*);
+    using GetVoxelV4F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec4<float>*);
+    using GetVoxelV4I = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec4<int32_t>*);
+    using GetVoxelStr = void(void*, void*, const openvdb::math::Vec3<float>*, AXString*);
+
+
+    return FunctionBuilder("getvoxel")
+        .addSignature<GetVoxelD>((GetVoxelD*)(getvoxel))
+        .addSignature<GetVoxelF>((GetVoxelF*)(getvoxel))
+        .addSignature<GetVoxelI64>((GetVoxelI64*)(getvoxel))
+        .addSignature<GetVoxelI32>((GetVoxelI32*)(getvoxel))
+        .addSignature<GetVoxelI16>((GetVoxelI16*)(getvoxel))
+        .addSignature<GetVoxelB>((GetVoxelB*)(getvoxel))
+        .addSignature<GetVoxelV3D>((GetVoxelV3D*)(getvoxel))
+        .addSignature<GetVoxelV3F>((GetVoxelV3F*)(getvoxel))
+        .addSignature<GetVoxelV3I>((GetVoxelV3I*)(getvoxel))
+        .addSignature<GetVoxelV4D>((GetVoxelV4D*)(getvoxel))
+        .addSignature<GetVoxelV4F>((GetVoxelV4F*)(getvoxel))
+        .addSignature<GetVoxelV4I>((GetVoxelV4I*)(getvoxel))
+        .addSignature<GetVoxelStr>((GetVoxelStr*)(getvoxelstr))
+            .addParameterAttribute(0, llvm::Attribute::NoAlias)
+            .addParameterAttribute(0, llvm::Attribute::ReadOnly)
+            .addParameterAttribute(1, llvm::Attribute::NoAlias)
+            .addParameterAttribute(1, llvm::Attribute::ReadOnly)
+            .addParameterAttribute(2, llvm::Attribute::ReadOnly)
+            .addParameterAttribute(3, llvm::Attribute::WriteOnly)
+            .addParameterAttribute(3, llvm::Attribute::NoAlias)
+            .addFunctionAttribute(llvm::Attribute::NoUnwind)
+            .addFunctionAttribute(llvm::Attribute::NoRecurse)
+            .setConstantFold(false)
+        .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
+        .setDocumentation("Internal function for setting the value of a voxel.")
+        .get();
+}
 
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
-
 
 void insertVDBVolumeFunctions(FunctionRegistry& registry,
     const FunctionOptions* options)
@@ -240,7 +286,7 @@ void insertVDBVolumeFunctions(FunctionRegistry& registry,
     const bool create = options && !options->mLazyFunctions;
     auto add = [&](const std::string& name,
         const FunctionRegistry::ConstructorT creator,
-        const bool internal)
+        const bool internal = false)
     {
         if (create) registry.insertAndCreate(name, creator, *options, internal);
         else        registry.insert(name, creator, internal);
@@ -248,12 +294,12 @@ void insertVDBVolumeFunctions(FunctionRegistry& registry,
 
     // volume functions
 
-    add("getvoxel", GetVoxel::create, true);
-    add("setvoxel", SetVoxel::create, true);
-    add("getcoordx", GetCoordX::create, false);
-    add("getcoordy", GetCoordY::create, false);
-    add("getcoordz", GetCoordZ::create, false);
-    add("getvoxelpws", GetVoxelPWS::create, false);
+    add("getcoordx", axgetcoord<0>);
+    add("getcoordy", axgetcoord<1>);
+    add("getcoordz", axgetcoord<2>);
+    add("getvoxelpws", axgetvoxelpws);
+    add("getvoxel", axgetvoxel, true);
+    add("setvoxel", axsetvoxel, true);
 }
 
 }
@@ -261,6 +307,6 @@ void insertVDBVolumeFunctions(FunctionRegistry& registry,
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

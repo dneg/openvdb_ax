@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -33,19 +33,76 @@
 ///
 /// @authors Nick Avramoussis
 ///
-/// @brief  Definitions for function types and function signatures for
-///         automatic conversion, registration and execution within the
-///         compute generation
+/// @brief  Contains frameworks for creating custom AX functions which can
+///   be registered within the FunctionRegistry and used during code
+///   generation. The intended and safest way to build a function is to
+///   use the FunctionBuilder struct with its addSignature methods. Note
+///   that the derived Function classes provided can also be subclassed
+///   for more granular control, however may be subject to more substantial
+///   API changes.
+///
+/// @details  There are a variety of different ways to build a function
+///   which are tailored towards different function types. The two currently
+///   supported function implementations are C Bindings and IR generation.
+///   Additionally, depending on the return type of the function, you may
+///   need to declare your function an SRET (structural return) function.
+///
+///   C Bindings:
+///     As the name suggests, the CFunction class infrastructure provides
+///     the quickest and easiest way to bind to methods in your host
+///     application. The most important thing to consider when choosing
+///     this approach is performance. LLVM will have no knowledge of the
+///     function body during optimization passes. Depending on the
+///     implementation of your method and the user's usage from AX, C
+///     bindings may be subject to limited optimizations in comparison to
+///     IR functions. For example, a static function which is called from
+///     within a loop cannot be unrolled. See the CFunction templated
+///     class.
+///
+///   IR Functions:
+///     IR Functions expect implementations to generate the body of the
+///     function directly into IR during code generation. This ensures
+///     optimal performance during optimization passes however can be
+///     trickier to design. Note that, in the future, AX functions will
+///     be internally supported to provide a better solution for
+///     IR generated functions. See the IRFunction templated class.
+///
+///   SRET Functions:
+///     Both C Bindings and IR Functions can be marked as SRET methods.
+///     SRET methods, in AX, are any function which returns a value which
+///     is not a scalar (e.g. vectors, matrices). This follows the same
+///     optimization logic as clang which will rebuild function signatures
+///     with their return type as the first argument if the return type is
+///     greater than a given size. You should never attempt to return
+///     alloca's directly from functions (unless malloced).
+///
+///   Some other things to consider:
+///     - Ensure C Binding dependencies have been correctly mapped.
+///     - Avoid calling B.CreateAlloca inside of IR functions - instead
+///       rely on the utility method insertStaticAlloca() where possible.
+///     - Ensure both floating point and integer argument signatures are
+///       provided if you wish to avoid floats truncating.
+///     - Array arguments (vectors/matrices) are always passed by pointer.
+///       Scalar arguments are always passed by copy.
+///     - Ensure array arguments which will not be modified are marked as
+///       readonly. Currently, only array arguments can be passed by
+///       "reference".
+///     - Ensure function bodies, return types and parameters and marked
+///       with desirable llvm attributes.
 ///
 
 #ifndef OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 
 #include <openvdb_ax/codegen/Types.h>
+#include <openvdb_ax/codegen/Utils.h> // isValidCast
+#include <openvdb_ax/codegen/ConstantFolding.h>
 
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <stack>
@@ -60,41 +117,23 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-class PrioritiseIRGeneration {};
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-/// @brief  Parse a set amount of llvm Values from the stack and "format" them
-///         such that they are in the default expected state. This state defined
-///         scalars to be loaded, arrays to be pointers to the underlying array and
-///         strings to be a pointer to the start of the string.
-///
-/// @param arguments  A vector of llvm arguments to populate
-/// @param values     The value stack from the computer generation
-/// @param count      The number of values to pop from the stack
-/// @param builder    The current llvm IRBuilder
-///
-void
-stackValuesForFunction(std::vector<llvm::Value*>& arguments,
-                   std::stack<llvm::Value*>& values,
-                   const size_t count,
-                   llvm::IRBuilder<>& builder);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// @brief  Object to array conversion methods to allow functions to return vector types.
-///         These containers provided an interface for automatic conversion of C++ objects
-///         to LLVM types as array types.
+/// @brief  Object to array conversion methods to allow functions to return
+///         vector types. These containers provided an interface for automatic
+///         conversion of C++ objects to LLVM types as array types.
 
 template <typename T, size_t _SIZE = 1>
 struct ArgType {
     using Type = T;
     static const size_t SIZE = _SIZE;
     using ArrayType = Type[SIZE];
+    ArrayType mData;
 };
 
 template <typename T, size_t S>
-struct LLVMType<ArgType<T,S>> : public LLVMType<T[S]> {};
+struct LLVMType<ArgType<T,S>> : public AliasTypeMap<ArgType<T,S>, T[S]> {};
 
 using V2D = ArgType<double, 2>;
 using V2F = ArgType<float, 2>;
@@ -110,462 +149,933 @@ using M3F = ArgType<float, 9>;
 using M4D = ArgType<double, 16>;
 using M4F = ArgType<float, 16>;
 
-////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-/// @brief  Templated function traits which take a std::function object and provides
-///          compile-time index access to the types of the function signature
-///
-template<typename T>
-struct FunctionTraits;
+/// @brief  Type to symbol conversions - these characters are used to build each
+///         functions unique signature. They differ from standard AX or LLVM
+///         syntax to be as short as possible i.e. vec4d, [4 x double] = d4
 
-template<typename ReturnT, typename ...Args>
-struct FunctionTraits<std::function<ReturnT(Args...)>>
-{
-    using ReturnType = ReturnT;
-    static const size_t N_ARGS = sizeof...(Args);
-    template <size_t I>
-    struct Arg {
-        using Type = typename std::tuple_element<I, std::tuple<Args...>>::type;
-        static_assert(!std::is_reference<Type>::value,
-            "Reference types/arguments are not supported for automatic "
-            "LLVM Type conversion. Use pointers instead.");
-    };
+template <typename T> struct TypeToSymbol { static inline std::string s() { return "?"; } };
+template <> struct TypeToSymbol<void> { static inline std::string s() { return "v"; } };
+template <> struct TypeToSymbol<char> { static inline std::string s() { return "c"; } };
+template <> struct TypeToSymbol<int16_t> { static inline std::string s() { return "s"; } };
+template <> struct TypeToSymbol<int32_t> { static inline std::string s() { return "i"; } };
+template <> struct TypeToSymbol<int64_t> { static inline std::string s() { return "l"; } };
+template <> struct TypeToSymbol<float> { static inline std::string s() { return "f"; } };
+template <> struct TypeToSymbol<double> { static inline std::string s() { return "d"; } };
+template <> struct TypeToSymbol<AXString> { static inline std::string s() { return "a"; } };
+
+template <typename T>
+struct TypeToSymbol<T*> {
+    static inline std::string s() { return TypeToSymbol<T>::s() + "*"; }
 };
 
-/// @brief  Templated argument iterator which takes a std::function object and
-///          an argument index and provides compile time instantiation of function
-///          argument type conversions to corresponding llvm values
+template <typename T, size_t S>
+struct TypeToSymbol<T[S]> {
+    static inline std::string s() { return TypeToSymbol<T>::s() + std::to_string(S); }
+};
+
+template <typename T, size_t S> struct TypeToSymbol<ArgType<T,S>> : public TypeToSymbol<T[S]> {};
+template <typename T> struct TypeToSymbol<math::Vec2<T>> : public TypeToSymbol<T[2]> {};
+template <typename T> struct TypeToSymbol<math::Vec3<T>> : public TypeToSymbol<T[3]> {};
+template <typename T> struct TypeToSymbol<math::Vec4<T>> : public TypeToSymbol<T[4]> {};
+template <typename T> struct TypeToSymbol<math::Mat3<T>> : public TypeToSymbol<T[9]> {};
+template <typename T> struct TypeToSymbol<math::Mat4<T>> : public TypeToSymbol<T[16]> {};
+template <typename T> struct TypeToSymbol<const T> : public TypeToSymbol<T> {};
+template <typename T> struct TypeToSymbol<const T*> : public TypeToSymbol<T*> {};
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+/// @brief  Templated argument iterator which implements various small functions
+///         per argument type, resolved at compile time.
 ///
-template <typename FunctionT, size_t I>
+template <typename SignatureT, size_t I = FunctionTraits<SignatureT>::N_ARGS>
 struct ArgumentIterator
 {
-    using ArgumentValueType =
-        typename FunctionTraits<FunctionT>::template Arg<I-1>::Type;
+    using ArgT = typename FunctionTraits<SignatureT>::template Arg<I-1>;
+    using ArgumentValueType = typename ArgT::Type;
 
-    static void iter(std::vector<llvm::Type*>& args, llvm::LLVMContext& C) {
-        ArgumentIterator<FunctionT, I-1>::iter(args, C);
+    static void iter(std::vector<llvm::Type*>& args,
+                     llvm::LLVMContext& C)
+    {
+        ArgumentIterator<SignatureT, I-1>::iter(args, C);
         args.emplace_back(LLVMType<ArgumentValueType>::get(C));
     }
-};
 
-template <typename FunctionT>
-struct ArgumentIterator<FunctionT, 0> {
-    static void iter(std::vector<llvm::Type*>&, llvm::LLVMContext&) {}
-};
-
-/// @brief  Populate a vector of llvm types from a function signature object.
-///         The signature should be stored in an std::function object. Returns
-///         the return type of the function signature.
-/// @note   Reference arguments are not supported.
-///
-/// @param C  The llvm context
-/// @param types   A vector of types to populate
-///
-template<typename FunctionT>
-inline llvm::Type*
-llvmTypesFromFunction(llvm::LLVMContext& C, std::vector<llvm::Type*>* types)
-{
-    using Traits = FunctionTraits<FunctionT>;
-    using ArgumentIteratorT =
-        ArgumentIterator<FunctionT, Traits::N_ARGS>;
-
-    if (types) {
-        types->reserve(Traits::N_ARGS);
-        ArgumentIteratorT::iter(*types, C);
+    static std::string symbol()
+    {
+        std::string s;
+        s += ArgumentIterator<SignatureT, I-1>::symbol();
+        s += TypeToSymbol<ArgumentValueType>::s();
+        return s;
     }
 
-    return LLVMType<typename Traits::ReturnType>::get(C);
-}
+};
+
+template <typename SignatureT>
+struct ArgumentIterator<SignatureT, 0>
+{
+    static void iter(std::vector<llvm::Type*>&, llvm::LLVMContext&) {}
+    static std::string symbol() {
+        using ReturnType = typename FunctionTraits<SignatureT>::ReturnType;
+        return TypeToSymbol<ReturnType>::s();
+    }
+};
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 /// @brief  Populate a vector of llvm types from a function signature declaration.
 ///
 /// @param C  The llvm context
 /// @param types   A vector of types to populate
 ///
-template <typename Signature>
+template <typename SignatureT>
 inline llvm::Type*
-llvmTypesFromSignature(llvm::LLVMContext& C, std::vector<llvm::Type*>* types)
+llvmTypesFromSignature(llvm::LLVMContext& C,
+                std::vector<llvm::Type*>* types = nullptr)
 {
-    using FunctionT = std::function<Signature>;
-    return llvmTypesFromFunction<FunctionT>(C, types);
+    using Traits = FunctionTraits<SignatureT>;
+    using ArgumentIteratorT =
+        ArgumentIterator<SignatureT, Traits::N_ARGS>;
+
+    if (types) {
+        types->reserve(Traits::N_ARGS);
+        ArgumentIteratorT::iter(*types, C);
+    }
+    return LLVMType<typename Traits::ReturnType>::get(C);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////
-
-/// @brief  The base definition for a single instance of a function signature. A
-///         registered function type built with an instance of a FunctionBase can
-///         store multiple function signatures.
+/// @brief  Generate an LLVM FunctionType from a function signature
 ///
-struct FunctionSignatureBase
+/// @param C  The llvm context
+///
+template <typename SignatureT>
+inline llvm::FunctionType*
+llvmFunctionTypeFromSignature(llvm::LLVMContext& C)
 {
-    using Ptr = std::shared_ptr<FunctionSignatureBase>;
-    using VoidFPtr = void(*)();
+    std::vector<llvm::Type*> types;
+    llvm::Type* returnType =
+        llvmTypesFromSignature<SignatureT>(C, &types);
+    return llvm::FunctionType::get(/*Result=*/returnType,
+            /*Params=*/llvm::ArrayRef<llvm::Type*>(types),
+            /*isVarArg=*/false);
+}
 
-    /// @brief  An enum used to describe how closely a container of llvm types
-    ///         matches the stored function signature. This is used to automatically
-    ///         find the closest matching function signature from a set of
-    ///         llvm value argument
+/// @brief  Print a function signature to the provided ostream.
+///
+/// @param  os    The stream to print to
+/// @param  types The function argument types
+/// @param  returnType  The return type of the function
+/// @param  name  The name of the function. If not provided, the return type
+///               neighbours the first parenthesis
+/// @param  names Names of the function parameters. If a name is nullptr, it
+///               skipped
+/// @param  axTypes Whether to try and convert the llvm::Types provided to
+///                 AX types. If false, the llvm types are used.
+void
+printSignature(std::ostream& os,
+               const std::vector<llvm::Type*>& types,
+               const llvm::Type* returnType,
+               const char* name = nullptr,
+               const std::vector<const char*>* names = nullptr,
+               const bool axTypes = false);
+
+/// @brief  Parse a set amount of llvm Values from the stack and "format" them
+///         such that they are in the default expected state. This state defined
+///         scalars to be loaded, arrays to be pointers to the underlying array
+///         and strings to be a pointer to the start of the string.
+///
+/// @param arguments  A vector of llvm arguments to populate
+/// @param values     The value stack from the computer generation
+/// @param count      The number of values to pop from the stack
+/// @param builder    The current llvm IRBuilder
+///
+void
+stackValuesForFunction(std::vector<llvm::Value*>& arguments,
+                   std::stack<llvm::Value*>& values,
+                   const size_t count,
+                   llvm::IRBuilder<>& builder);
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+/// @brief  The base/abstract representation of an AX function. Derived classes
+///         must implement the Function::types call to describe their signature.
+struct Function
+{
+    using Ptr = std::shared_ptr<Function>;
+
+    Function(const size_t size, const std::string& symbol)
+        : mSize(size)
+        , mSymbol(symbol)
+        , mAttributes(nullptr)
+        , mNames()
+        , mDeps() {
+            // symbol must be a valid string
+            assert(!symbol.empty());
+        }
+
+    virtual ~Function() = default;
+
+    /// @brief  Populate a vector of llvm::Types which describe this function
+    ///         signature. This method is used by Function::create,
+    ///         Function::print and Function::match.
+    virtual llvm::Type* types(std::vector<llvm::Type*>&, llvm::LLVMContext&) const = 0;
+
+    /// @brief  Converts and creates this AX function into a llvm Function.
+    /// @details This method uses the result from Function::types() to construct
+    ///          a llvm FunctionType and a subsequent a llvm Function. Any
+    ///          parameter, return or function attributes are also added to the
+    ///          function. If a module is provided, the module if first checked to
+    ///          see if the function already exists. If it does, it is immediately
+    ///          returned. If the function doesn't exist in the module, it is
+    ///          created and also inserted into the end of the modules function
+    ///          list. If no module is provided, the function is left detached
+    ///          and must be added to a valid Module to be callable.
+    /// @note  This does not create the body of the function, which is to be
+    ///        done by dervied classes.
     ///
-    enum class SignatureMatch
+    /// @param C  The LLVM Context
+    /// @param M  An optional llvm Module to use
+    virtual llvm::Function*
+    create(llvm::LLVMContext& C, llvm::Module* M = nullptr) const;
+
+    llvm::Function* create(llvm::Module& M) const {
+        return this->create(M.getContext(), &M);
+    }
+
+    /// @brief  Uses the IRBuilder to create a call to this function with the
+    ///         given arguments, creating the function and inserting it into the
+    ///         IRBuilder's Module if necessary.
+    /// @note   The IRBuilder must have a valid llvm Module attached.
+    ///
+    /// @param args    The llvm Value arguments to call this function with
+    /// @param parent  The parent arguments available from the parent caller
+    /// @param B       The llvm IRBuilder
+    /// @param cast    Whether to allow implicit casting of arguments
+    virtual llvm::Value*
+    call(const std::vector<llvm::Value*>& args,
+         const std::unordered_map<std::string, llvm::Value*>& parent,
+         llvm::IRBuilder<>& B,
+         const bool cast = false) const;
+
+    /// @brief  The result type from calls to Function::match
+    enum SignatureMatch { None = 0, Size, Implicit, Explicit };
+
+    /// @brief  The base implementation for determining how a vector of llvm
+    ///         arguments translates to this functions signature. Returns an
+    ///         enum which represents the available mapping.
+    /// @details This method calls types() to figure out the function signature,
+    ///          then compares each argument type to the type in the input
+    ///          vector. If the types match exactly, an Explicit match is found.
+    ///          If the sizes of the inputs and signature differ, no match is
+    ///          found and None is returned. If however, the sizes match and
+    ///          there exists a valid implicit cast from the input type to the
+    ///          signature type for every input, an Implicit match is returned.
+    ///          Finally, if the sizes match but there is no implicit cast
+    ///          mapping, Size is returned.
+    ///            i8 -> i32        : Implicit
+    ///            i32 -> i32       : Explicit
+    ///            str -> i32       : Size
+    ///            (i32,i32) -> i32 : None
+    /// @note  Due to the way CFunctionSRet is implemented, the LLVM Context
+    ///        must be provided in case we have a zero arg function signature
+    ///        with a SRET.
+    /// @param inputs  The input types
+    /// @param C       The LLVM Context
+    virtual SignatureMatch match(const std::vector<llvm::Type*>& inputs, llvm::LLVMContext& C) const;
+
+    /// @brief  The number of arguments that this function has
+    inline size_t size() const { return mSize; }
+
+    /// @brief  The function symbol name.
+    /// @details  This will be used as its identifier in IR and must be unique.
+    inline const char* symbol() const { return mSymbol.c_str(); }
+
+    /// @brief  Returns the descriptive name of the given argument index
+    /// @details  If the index is greater than the number of arguments, an empty
+    ///           string is returned.
+    ///
+    /// @param idx  The index of the argument
+    inline const char* argName(const size_t idx) const {
+        return idx < mNames.size() ? mNames[idx] : "";
+    }
+
+    /// @brief  Print this function's signature to the provided ostream.
+    /// @details  This is intended to return a descriptive front end user string
+    ///           rather than the function's IR representation. This function is
+    ///           virtual so that derived classes can customize how they present
+    ///           frontend information.
+    /// @sa  printSignature
+    ///
+    /// @param C     The llvm context
+    /// @param os    The ostream to print to
+    /// @param name  The name to insert into the description.
+    /// @param axTypes  Whether to print llvm IR or AX Types.
+    virtual void print(llvm::LLVMContext& C,
+            std::ostream& os,
+            const char* name = nullptr,
+            const bool axTypes = true) const;
+
+    /// Builder methods
+
+    inline bool hasParamAttribute(const size_t i,
+            const llvm::Attribute::AttrKind& kind) const
     {
-        None = 0,
-        Size,
-        Implicit,
-        Explicit
-    };
+        if (!mAttributes) return false;
+        const auto iter = mAttributes->mParamAttrs.find(i);
+        if (iter == mAttributes->mParamAttrs.end()) return false;
+        const auto& vec = iter->second;
+        return std::find(vec.begin(), vec.end(), kind) != vec.end();
+    }
 
-    /// @brief  Pure virtual function which returns the size of the function signature.
-    virtual size_t size() const = 0;
+    inline void setArgumentNames(std::vector<const char*> names) { mNames = names; }
 
-    /// @brief  Pure virtual function which returns the function return type as an llvm type
-    ///         and optionally populates a vector of llvm types representing the definition
-    ///         of the function arguments
-    ///
-    /// @param  C      The llvm context
-    /// @param  types  An optional vector of llvm types to populate
-    ///
-    virtual llvm::Type*
-    toLLVMTypes(llvm::LLVMContext& C, std::vector<llvm::Type*>* types = nullptr) const = 0;
+    const std::vector<const char*>& dependencies() const { return mDeps; }
+    inline void setDependencies(std::vector<const char*> deps) { mDeps = deps; }
 
-    /// @brief  Returns the pointer to the globally accessible function. Note that
-    ///         This can be null if the function is entirely IR based
-    ///
-    inline VoidFPtr functionPointer() const { return mFunction; }
-
-    /// @brief  Returns the function symbol name. For functions requiring external
-    ///         linkage, this is the name of the function declaration.
-    ///
-    inline const std::string& symbolName() const { return mSymbolName; }
-
-    /// @brief  Returns the best possible signature match from a vector of LLVM types
-    ///         representing the function arguments.
-    ///
-    /// @param  types  A vector of llvm types representing the function argument types
-    ///
-    SignatureMatch match(const std::vector<llvm::Type*>& types) const;
-
-    /// @brief  Returns true if the provided size matches the required number of
-    ///         arguments for this function signature.
-    ///
-    /// @param  size  The size of the function signature to check
-    ///
-    bool sizeMatch(const size_t size) const;
-
-    /// @brief  Returns true if the provided vector of llvm types matches this function
-    ///         signature exactly with no additional casting required.
-    ///
-    /// @param  input  A vector of llvm types representing the function argument types
-    ///
-    bool explicitMatch(const std::vector<llvm::Type*>& input) const;
-
-    /// @brief  Returns true if the provided vector of llvm types matches this function
-    ///         signature with additional but supported implicit casting
-    ///
-    /// @param  input  A vector of llvm types representing the function argument types
-    ///
-    bool implicitMatch(const std::vector<llvm::Type*>& input) const;
-
-    /// @brief  Returns true if this function has a return value which is not void.
-    ///         Does not include functions with return values as output arguments.
-    ///
-    /// @param  C  The llvm context
-    ///
-    bool hasReturnValue(llvm::LLVMContext& C) const;
-
-    /// @brief  Returns true if this function has arguments which return a value
-    ///
-    inline bool hasOutputArgument() const { return mLastArgumentReturn; }
-
-    /// @brief  Allocate and return the output argument of this function. This is useful
-    ///         when constructing the correct llvm values to pass in as arguments due to
-    ///         the front facing signatures requiring different output locations.
-    /// @note   Does nothing and returns a nullptr if this function does not have an
-    ///         output argument
-    ///
-    /// @param builder  The current llvm IRBuilder
-    ///
-    llvm::Value* getOutputArgument(llvm::IRBuilder<>& B) const;
-
-    /// @brief  Appends the output argument types to a vector of llvm types.
-    /// @note   This does not include the function return type
-    ///
-    /// @param C      The llvm context
-    ///
-    llvm::Type* getOutputType(llvm::LLVMContext& C) const;
-
-    /// @brief  Builds and registers this function signature and symbol name as an
-    ///         available and callable function within the llvm module. Returns the
-    ///         resulting llvm function
-    ///
-    /// @param M  The llvm module to insert the function into
-    ///
-    llvm::Function* toLLVMFunction(llvm::Module& M) const;
-
-    /// @brief  Prints a description of this functions return type, name and signature
-    ///
-    /// @param C        The llvm context
-    /// @param name     The name of the function to insert after it's return type
-    /// @param os       The string stream to write to
-    /// @param axtypes  Whether to print the types as AX string types or LLVM types.
-    ///                 If AX types, various assumptions are made about the forward
-    ///                 facing type. Pointers are ignored and strings are used for
-    ///                 char*/uint8* access
-    ///
-    void print(llvm::LLVMContext& C,
-        const std::string& name = "",
-        std::ostream& os = std::cout,
-        const bool axtypes = true) const;
-
-protected:
-
-    /// @brief  Base Function Signature constructor, expected to be instantiated by
-    ///         derived classes.
-    ///
-    /// @param function  A void pointer to the available function if it is an external
-    ///                  function
-    /// @param symbol    The function symbol name. This must be the name of the function
-    ///                  signature declaration if the function is external
-    /// @param lastArgIsReturn   Whether the last argument of the function signature is
-    ///                  the return value
-    ///
-    FunctionSignatureBase(VoidFPtr function,
-        const std::string& symbol,
-        const bool lastArgIsReturn = false);
-    virtual ~FunctionSignatureBase() = default;
-
-    /// @brief  static method for converting a function signatures to a vector of
-    ///         llvm types. See llvmTypesFromFunction.
-    ///
-    /// @param C      The llvm context
-    /// @param types  An optional vector of llvm types
-    ///
-    template<typename FunctionT>
-    static llvm::Type*
-    toLLVMTypes(llvm::LLVMContext& C, std::vector<llvm::Type*>* types)
+    inline void setFnAttributes(const std::vector<llvm::Attribute::AttrKind>& in)
     {
-        return llvmTypesFromFunction<FunctionT>(C, types);
+        this->attrs().mFnAttrs = in;
+    }
+    inline void setRetAttributes(const std::vector<llvm::Attribute::AttrKind>& in)
+    {
+        this->attrs().mRetAttrs = in;
+    }
+    inline void setParamAttributes(const size_t i,
+            const std::vector<llvm::Attribute::AttrKind>& in)
+    {
+        this->attrs().mParamAttrs[i] = in;
     }
 
 protected:
-    VoidFPtr mFunction;
-    const std::string mSymbolName;
-    const bool mLastArgumentReturn;
+
+    static void cast(std::vector<llvm::Value*>& args,
+                const std::vector<llvm::Type*>& types,
+                llvm::IRBuilder<>& B);
+
+private:
+
+    struct Attributes {
+        std::vector<llvm::Attribute::AttrKind> mFnAttrs, mRetAttrs;
+        std::map<size_t, std::vector<llvm::Attribute::AttrKind>> mParamAttrs;
+    };
+
+    inline Attributes& attrs() {
+        if (!mAttributes) mAttributes.reset(new Attributes());
+        return *mAttributes;
+    }
+
+    llvm::AttributeList flattenAttrs(llvm::LLVMContext& C) const;
+
+    const size_t mSize;
+    const std::string mSymbol;
+    std::unique_ptr<Attributes> mAttributes;
+    std::vector<const char*> mNames;
+    std::vector<const char*> mDeps;
 };
 
-/// @brief  The base definition for a single function type.
+/// @brief  Templated interface class for SRET functions. This struct provides
+///         the interface for functions that wish to return arrays (vectors or
+///         matrices) by internally remapping the first argument for the user.
+///         As far as LLVM and any bindings are concerned, the function
+///         signature remains unchanged - however the first argument becomes
+///         "invisible" to the user and is instead allocated by LLVM before the
+///         function is executed. Importantly, the argument has no impact on
+///         the user facing AX signature and doesn't affect declaration selection.
+/// @note   This class is not intended to be instantiated directly, but instead
+///         used by derived implementation which hold a valid implementations
+///         of member functions required to create a llvm::Function (such as
+///         Function::types and Function::call). This exists as an interface to
+///         avoid virtual inheritance.
 ///
-struct FunctionBase
+template <typename SignatureT, typename DerivedFunction>
+struct SRetFunction : public DerivedFunction
 {
-    using Ptr = std::shared_ptr<FunctionBase>;
-    using FunctionList = std::vector<FunctionSignatureBase::Ptr>;
-    using FunctionMatch =
-        std::pair<FunctionSignatureBase::Ptr, FunctionSignatureBase::SignatureMatch>;
+    using Ptr = std::shared_ptr<SRetFunction<SignatureT, DerivedFunction>>;
+    using Traits = FunctionTraits<SignatureT>;
 
-    /// @brief  Pure virtual function which returns the function identifier for
-    ///         this function type.
-    ///
-    virtual const std::string identifier() const = 0;
+    // check there actually are arguments
+    static_assert(Traits::N_ARGS > 0,
+        "SRET Function object has been setup with the first argument as the return "
+        "value, however the provided signature is empty.");
 
-    /// @brief  Populate a vector of strings with the identifiers of any functions which
-    ///         this function depends on. This is used by the compiler to ensure global
-    ///         mappings are added for requires methods
-    ///
-    /// @param  identifiers  A vector of function identifiers to populate
-    ///
-    virtual void getDependencies(std::vector<std::string>& identifiers) const;
+    // check no return value exists
+    static_assert(std::is_same<typename Traits::ReturnType, void>::value,
+        "SRET Function object has been setup with the first argument as the return "
+        "value and a non void return type.");
 
-    /// @brief  Populate a string with any documentation for this function
-    ///
-    /// @param  doc A string to populate
-    ///
-    virtual void getDocumentation(std::string& doc) const;
+private:
 
-    /// @brief  Given a vector of llvm types, automatically returns the best possible
-    ///         function signature pointer and match type.
-    /// @note   The vector of provided llvm types does not need to contain the possible
-    ///         output arguments if addOutputArguments is false.
+    using FirstArgument = typename Traits::template Arg<0>::Type;
+    static_assert(std::is_pointer<FirstArgument>::value,
+        "SRET Function object has been setup with the first argument as the return "
+        "value, but this argument it is not a pointer type.");
+    using SRetType = typename std::remove_pointer<FirstArgument>::type;
+
+public:
+
+    /// @brief  Override of match which inserts the SRET type such that the base
+    ///         class methods ignore it.
+    Function::SignatureMatch match(const std::vector<llvm::Type*>& args,
+            llvm::LLVMContext& C) const override
+    {
+        // append return type and right rotate
+        std::vector<llvm::Type*> inputs(args);
+        inputs.emplace_back(LLVMType<SRetType*>::get(C));
+        std::rotate(inputs.rbegin(), inputs.rbegin() + 1, inputs.rend());
+        return DerivedFunction::match(inputs, C);
+    }
+
+    /// @brief  Override of call which allocates the required SRET llvm::Value
+    ///         for this function.
+    llvm::Value*
+    call(const std::vector<llvm::Value*>& args,
+         const std::unordered_map<std::string, llvm::Value*>& globals,
+         llvm::IRBuilder<>& B,
+         const bool cast) const override
+    {
+        // append return value and right rotate
+        std::vector<llvm::Value*> inputs(args);
+        llvm::Type* sret = LLVMType<SRetType>::get(B.getContext());
+        inputs.emplace_back(insertStaticAlloca(B, sret));
+        std::rotate(inputs.rbegin(), inputs.rbegin() + 1, inputs.rend());
+        DerivedFunction::call(inputs, globals, B, cast);
+        return inputs.front();
+    }
+
+    /// @brief  Override of print to avoid printing out the SRET type
+    void print(llvm::LLVMContext& C,
+           std::ostream& os,
+           const char* name = nullptr,
+           const bool axTypes = true) const override
+    {
+        std::vector<llvm::Type*> current;
+        llvm::Type* ret = this->types(current, C);
+        // left rotate
+        std::rotate(current.begin(), current.begin() + 1, current.end());
+        ret = current.back();
+        current.pop_back();
+
+        std::vector<const char*> names;
+        names.reserve(this->size());
+        for (size_t i = 0; i < this->size()-1; ++i) {
+            names.emplace_back(this->argName(i));
+        }
+        printSignature(os, current, ret, name, &names, axTypes);
+    }
+
+protected:
+    /// @brief  Forward all arguments to the derived class
+    template <typename ...Args>
+    SRetFunction(Args&&... ts) : DerivedFunction(ts...) {}
+};
+
+/// @brief  The base class for all C bindings.
+struct CFunctionBase : public Function
+{
+    using Ptr = std::shared_ptr<CFunctionBase>;
+
+    ~CFunctionBase() override = default;
+
+    /// @brief  Returns the global address of this function.
+    /// @note   This is only required for C bindings.
+    virtual uint64_t address() const = 0;
+
+    inline void setConstantFold(bool on) { mConstantFold = on; }
+    inline bool hasConstantFold() const { return mConstantFold; }
+
+    inline virtual llvm::Value* fold(const std::vector<llvm::Value*>&,
+            llvm::LLVMContext&) const {
+        return nullptr;
+    }
+
+protected:
+    CFunctionBase(const size_t size,
+        const std::string& symbol)
+        : Function(size, symbol)
+        , mConstantFold(false) {}
+
+private:
+    bool mConstantFold;
+};
+
+/// @brief  Represents a concrete C function binding.
+///
+/// @note This struct is templated on the signature to allow for evaluation of
+///       the arguments to llvm types from any llvm context.
+///
+template <typename SignatureT>
+struct CFunction : public CFunctionBase
+{
+    using CFunctionT = CFunction<SignatureT>;
+    using Ptr = std::shared_ptr<CFunctionT>;
+    using Traits = FunctionTraits<SignatureT>;
+
+    // Assert that the return argument is not a pointer. Note that this is
+    // relaxed for IR functions where it's allowed if the function is embedded.
+    static_assert(!std::is_pointer<typename Traits::ReturnType>::value,
+        "CFunction object has been setup with a pointer return argument. C bindings "
+        "cannot return memory locations to LLVM - Consider using a CFunctionSRet.");
+
+    CFunction(const std::string& symbol, const SignatureT function)
+        : CFunctionBase(Traits::N_ARGS, symbol)
+        , mFunction(function) {}
+
+    ~CFunction() override = default;
+
+    inline llvm::Type* types(std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const override
+    {
+        return llvmTypesFromSignature<SignatureT>(C, &types);
+    }
+
+    inline uint64_t address() const override final {
+        return reinterpret_cast<uint64_t>(mFunction);
+    }
+
+    llvm::Value*
+    call(const std::vector<llvm::Value*>& args,
+         const std::unordered_map<std::string, llvm::Value*>& globals,
+         llvm::IRBuilder<>& B,
+         const bool cast) const override
+    {
+        llvm::Value* result = this->fold(args, B.getContext());
+        if (result) return result;
+        return Function::call(args, globals, B, cast);
+    }
+
+    llvm::Value* fold(const std::vector<llvm::Value*>& args, llvm::LLVMContext& C) const override final
+    {
+        auto allconst =
+            [](const std::vector<llvm::Value*>& vals) -> bool {
+            for (auto& value : vals) {
+                if (!llvm::isa<llvm::Constant>(value)) return false;
+            }
+            return true;
+        };
+
+        if (!this->hasConstantFold()) return nullptr;
+        if (!allconst(args))  return nullptr;
+        std::vector<llvm::Constant*> constants;
+        constants.reserve(args.size());
+        for (auto& value : args) {
+            constants.emplace_back(llvm::cast<llvm::Constant>(value));
+        }
+
+        // no guarantee that fold() will be able to cast all arguments
+        return ConstantFolder<SignatureT>::fold(constants, *mFunction, C);
+    }
+
+private:
+    const SignatureT* mFunction;
+};
+
+/// @brief  The base/abstract definition for an IR function.
+struct IRFunctionBase : public Function
+{
+    using Ptr = std::shared_ptr<IRFunctionBase>;
+
+    /// @brief  The IR callback function which will write the LLVM IR for this
+    ///         function's body.
+    /// @details  The first argument is the vector of functional arguments. i.e.
+    ///           a representation of the value that the callback has been invoked
+    ///           with.
+    ///           The second argument is the map of symbols available to this
+    ///           function. Note that this is currently only valid/usable if you're
+    ///           inlining IR.
+    ///           The last argument is the IR builder which should be used to
+    ///           generate the function body IR.
+    /// @note     You can return a nullptr from this method which will represent
+    ///           a ret void, a ret void instruction, or an actual value
+    using GeneratorCb = std::function<llvm::Value*
+        (const std::vector<llvm::Value*>&,
+        const std::unordered_map<std::string, llvm::Value*>&,
+        llvm::IRBuilder<>&)>;
+
+    llvm::Type* types(std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const override = 0;
+
+    inline void setEmbedIR(bool on) { mEmbedIR = on; }
+    inline bool hasEmbedIR() const { return mEmbedIR; }
+
+    llvm::Value*
+    call(const std::vector<llvm::Value*>& args,
+         const std::unordered_map<std::string, llvm::Value*>& globals,
+         llvm::IRBuilder<>& B,
+         const bool cast) const override;
+
+protected:
+
+    // @todo This should ideally live in FunctionGroup::execute, but the return
+    //       type is allowed to differ for sret C bindings.
+    inline void
+    verifyResultType(const llvm::Type* result, const llvm::Type* expected) const
+    {
+        if (result == expected) return;
+        std::string source, target;
+        llvmTypeToString(result, source);
+        llvmTypeToString(expected, target);
+        OPENVDB_THROW(LLVMFunctionError, "Function \"" + std::string(this->symbol()) +
+            "\" has been invoked with a mismatching return type. Expected: \"" +
+            source + "\", got \"" + target + "\".");
+    }
+
+    IRFunctionBase(const std::string& symbol,
+        const GeneratorCb& gen,
+        const size_t size)
+        : Function(size, symbol)
+        , mGen(gen)
+        , mEmbedIR(false) {}
+    ~IRFunctionBase() override = default;
+
+    const GeneratorCb mGen;
+    bool mEmbedIR;
+};
+
+/// @brief  Represents a concrete IR function.
+template <typename SignatureT>
+struct IRFunction : public IRFunctionBase
+{
+    using Traits = FunctionTraits<SignatureT>;
+    using Ptr = std::shared_ptr<IRFunction>;
+
+    IRFunction(const std::string& symbol, const GeneratorCb& gen)
+        : IRFunctionBase(symbol, gen, Traits::N_ARGS) {}
+
+    inline llvm::Type* types(std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const override
+    {
+        return llvmTypesFromSignature<SignatureT>(C, &types);
+    }
+};
+
+/// @brief  Represents a concrete C function binding with the first argument as
+///         its return type.
+template <typename SignatureT>
+struct CFunctionSRet : public SRetFunction<SignatureT, CFunction<SignatureT>>
+{
+    using BaseT = SRetFunction<SignatureT, CFunction<SignatureT>>;
+    CFunctionSRet(const std::string& symbol, const SignatureT function)
+        : BaseT(symbol, function) {}
+    ~CFunctionSRet() override = default;
+};
+
+/// @brief  Represents a concrete IR function with the first argument as
+///         its return type.
+template <typename SignatureT>
+struct IRFunctionSRet : public SRetFunction<SignatureT, IRFunction<SignatureT>>
+{
+    using BaseT = SRetFunction<SignatureT, IRFunction<SignatureT>>;
+    IRFunctionSRet(const std::string& symbol,
+        const IRFunctionBase::GeneratorCb& gen)
+        : BaseT(symbol, gen) {}
+    ~IRFunctionSRet() override = default;
+};
+
+/// @brief  todo
+struct FunctionGroup
+{
+    using Ptr = std::shared_ptr<FunctionGroup>;
+    using FunctionList = std::vector<Function::Ptr>;
+
+    FunctionGroup(const char* name,
+            const char* doc,
+            const FunctionList& list)
+        : mName(name)
+        , mDoc(doc)
+        , mFunctionList(list) {}
+    ~FunctionGroup() = default;
+
+    /// @brief  Given a vector of llvm types, automatically returns the best
+    ///         possible function signature pointer and match type.
     ///
-    /// @param types  A vector of llvm types representing the function argument types
+    /// @param types  A vector of types representing the function argument types
     /// @param C      The llvm context
-    /// @param addOutputArguments  Whether to append any output arguments before trying to
-    ///        match the provided llvm types
+    /// @param type   If provided, type is set to the type of match that occurred
     ///
-    FunctionMatch
+    Function::Ptr
     match(const std::vector<llvm::Type*>& types,
           llvm::LLVMContext& C,
-          const bool addOutputArguments = false) const;
+          Function::SignatureMatch* type = nullptr) const;
 
-    /// @brief  Given a vector of llvm values provided by the user, find the best possible
-    ///         function signature, generate and execute the function body. Returns the
-    ///         return value of the function (can be void) and optionally populates a vector
-    ///         of return types.
+    /// @brief  Given a vector of llvm values provided by the user, find the
+    ///         best possible function signature, generate and execute the
+    ///         function body. Returns the return value of the function (can be
+    ///         void).
     ///
-    /// @param functionArgs A vector of llvm types representing the function argument values
-    /// @param globals      The map of global names to llvm::Values
-    /// @param builder      The current llvm IRBuilder
-    /// @param results      If provided, is populated with any function output arguments if any
-    ///                     exist
-    /// @param addOutputArguments  Whether the provided llvm value argument vector should
-    ///        also append any additional function output values that exist in the matched
-    ///        signature
-    ///
-    virtual llvm::Value*
-    execute(const std::vector<llvm::Value*>& functionArgs,
-            const std::unordered_map<std::string, llvm::Value*>& globals,
-            llvm::IRBuilder<>& builder,
-            std::vector<llvm::Value*>* results = nullptr,
-            const bool addOutputArguments = true) const;
-
-    /// @brief  Generates the function body. Returns the function return value or a null
-    ///         pointer if there is no function body (external function)
-    ///
-    /// @param args     A vector of llvm types representing the function argument values
+    /// @param args     A vector of values representing the function arguments
     /// @param globals  The map of global names to llvm::Values
-    /// @param builder  The current llvm IRBuilder
+    /// @param B        The current llvm IRBuilder
     ///
-    virtual llvm::Value*
-    generate(const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
-             llvm::IRBuilder<>& builder) const;
+    llvm::Value*
+    execute(const std::vector<llvm::Value*>& args,
+            const std::unordered_map<std::string, llvm::Value*>& globals,
+            llvm::IRBuilder<>& B) const;
 
     /// @brief  Accessor to the underlying function signature list
     ///
     inline const FunctionList& list() const { return mFunctionList; }
+    const char* name() const { return mName; }
+    const char* doc() const { return mDoc; }
 
-protected:
-
-    /// @brief  Function Base constructor, expected to be instantiated by derived classes
-    ///
-    /// @param  list A vector of function signatures corresponding to this function type
-    ///
-    FunctionBase(const FunctionList& list)
-        : mFunctionList(list) {}
-    virtual ~FunctionBase() = default;
-
+private:
+    const char* mName;
+    const char* mDoc;
     const FunctionList mFunctionList;
 };
 
 
-/// @brief  A single instance of a function with a unique signature and token
-///
-/// @todo Improve struct and template consistency and typedefs of std::function<>
-///
-/// @note This struct is templated on the signature to allow for constant runtime
-///       evaluation of the arguments to llvm types. Ideally they would be stored
-///       on the object on creation but as the registry is static, if an function
-///       persists until program termination an error will occur on destruction of
-///       FunctionSignatures.
-///
-/// @note Due to the way LLVM differentiates between the signs of values (i.e. holds
-///       this information in the values rather than the types) the function framework
-///       treats unsigned and signed integers as the same types if their widths are
-///       identical.
-///
-template<typename SignatureT>
-struct FunctionSignature : public FunctionSignatureBase
+struct FunctionBuilder
 {
-    using FunctionSignatureT = FunctionSignature<SignatureT>;
-    using Signature = std::function<SignatureT>;
-    using Traits = FunctionTraits<Signature>;
-    using Ptr = std::shared_ptr<FunctionSignatureT>;
+    enum DeclPreferrence {
+        C, IR, Any
+    };
 
-    using FunctionPtrT = typename std::add_pointer<SignatureT>::type;
+    struct Settings
+    {
+        using Ptr = std::shared_ptr<Settings>;
 
-    FunctionSignature(FunctionSignatureBase::VoidFPtr ptr,
-        const std::string& symbol,
-        const bool lastArgIsReturn = false)
-        : FunctionSignatureBase(ptr, symbol, lastArgIsReturn)
-        {
-            if (lastArgIsReturn) {
-                // check there actually are arguments
-                if (this->size() == 0) {
-                    OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
-                        "\" has been setup with the last argument as the return value, however the "
-                        "provided signature is empty.");
-                }
-                // check no return value exists
-                if (!std::is_same<typename Traits::ReturnType, void>::value) {
-                    OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
-                        "\" has been setup with the last argument as the return value and a "
-                        "non void return type.");
-                }
-
-                // @note  This resolves compilation issues where N_ARGS is empty, causing out
-                //        of range tuple queries or queries into 0 size arguments.
-                // @todo  Improve this
-
-                using __SignatureT =
-                    typename std::conditional<Traits::N_ARGS == 0,
-                        std::function<void(void*)>,
-                        Signature>::type;
-                static constexpr size_t Index = Traits::N_ARGS == 0 ? 1 : Traits::N_ARGS;
-                using ArgumentIteratorT = ArgumentIterator<__SignatureT, Index>;
-                using LT = typename ArgumentIteratorT::ArgumentValueType;
-
-                // check output is a pointer (mem will be allocated)
-
-                if (!std::is_pointer<LT>::value) {
-                    OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
-                        "\" has been setup with the last argument as the return value but it is not"
-                        "a pointer type.");
-                }
-            }
+        inline bool isDefault() const {
+            if (mNames) return false;
+            if (!mDeps.empty()) return false;
+            if (mConstantFold || mEmbedIR) return false;
+            if (!mFnAttrs.empty()) return false;
+            if (!mRetAttrs.empty()) return false;
+            if (!mParamAttrs.empty()) return false;
+            return true;
         }
 
-    /// @brief  static creation method. Note that this creation method takes a std::function
-    ///         object containing the external function pointer expected to match the signature.
-    ///         This enforces that only compatible signatures can be provided.
-    ///
-    /// @note   Throws if the function pointer could not be inferred from the provided std::function.
-    ///         This is usually due to providing an object to the first argument. For these cases,
-    ///         ensure they are converted to function pointers prior to calling create. For
-    ///         example:
-    ///
-    ///         static auto lambda = [](double a)->double { return a * 5.0; };
-    ///         double(*ptr)(double) = lambda;
-    ///         FunctionSignature<double(double)>::create(ptr, "mult");
-    ///
-    /// @param  function The std::function object representing this functions signature.
-    /// @param  symbol   The function symbol name if it is external. If this is a C style function
-    ///                  (a free function declared with extern "C"), using the name of the function
-    ///                  will always ensure linkage is found, regardless of the llvm linkage type.
-    /// @param lastArgIsReturn   Whether the last argument of the function signature is the return value
-    ///
-    static Ptr create(Signature function, const std::string& symbol, const bool lastArgIsReturn = false)
-    {
-        FunctionSignatureBase::VoidFPtr functionVoidPtr = nullptr;
+        std::shared_ptr<std::vector<const char*>> mNames = nullptr;
+        std::vector<const char*> mDeps = {};
+        bool mConstantFold = false;
+        bool mEmbedIR = false;
+        std::vector<llvm::Attribute::AttrKind> mFnAttrs = {};
+        std::vector<llvm::Attribute::AttrKind> mRetAttrs = {};
+        std::map<size_t, std::vector<llvm::Attribute::AttrKind>> mParamAttrs = {};
+    };
 
-        if (function) {
-            FunctionPtrT* ptr = function.template target<FunctionPtrT>();
-            if (!ptr) {
-                OPENVDB_THROW(LLVMFunctionError, "Function object with symbol name \"" + symbol +
-                    "\" does not match expected signature during creation.");
-            }
-            functionVoidPtr = reinterpret_cast<FunctionSignatureBase::VoidFPtr>(*ptr);
+    FunctionBuilder(const char* name)
+        : mName(name)
+        , mCurrentSettings(new Settings()) {}
+
+
+    template <typename Signature, bool SRet = false>
+    inline FunctionBuilder& addSignature(const IRFunctionBase::GeneratorCb& cb, const char* symbol = nullptr)
+    {
+        using IRFType = typename std::conditional
+            <!SRet, IRFunction<Signature>, IRFunctionSRet<Signature>>::type;
+        using IRPtr = typename IRFType::Ptr;
+
+        Settings::Ptr settings = mCurrentSettings;
+        if (!mCurrentSettings->isDefault()) {
+            settings.reset(new Settings());
         }
 
-        return Ptr(new FunctionSignatureT(functionVoidPtr, symbol, lastArgIsReturn));
+        std::string s;
+        if (symbol) s = std::string(symbol);
+        else s = this->genSymbol<Signature>();
+
+        auto ir = IRPtr(new IRFType(s, cb));
+        mIRFunctions.emplace_back(ir);
+        mSettings[ir.get()] = settings;
+        mCurrentSettings = settings;
+        return *this;
     }
 
-    /// @brief  Automatically returns the number of arguments of this function using
-    ///         function traits.
-    ///
-    inline size_t size() const override final { return Traits::N_ARGS; }
-
-    /// @brief  method for converting a function signatures to a vector of
-    ///         llvm types. See llvmTypesFromFunction.
-    ///
-    /// @param C      The llvm context
-    /// @param types  An optional vector of llvm types
-    ///
-    inline llvm::Type*
-    toLLVMTypes(llvm::LLVMContext& C, std::vector<llvm::Type*>* types = nullptr) const override final
+    template <typename Signature, bool SRet = false>
+    inline FunctionBuilder& addSignature(const Signature* ptr, const char* symbol = nullptr)
     {
-        return FunctionSignatureBase::toLLVMTypes<Signature>(C, types);
+        using CFType = typename std::conditional
+            <!SRet, CFunction<Signature>, CFunctionSRet<Signature>>::type;
+        using CPtr = typename CFType::Ptr;
+
+        Settings::Ptr settings = mCurrentSettings;
+        if (!mCurrentSettings->isDefault()) {
+            settings.reset(new Settings());
+        }
+
+        std::string s;
+        if (symbol) s = std::string(symbol);
+        else s = this->genSymbol<Signature>();
+
+        auto c = CPtr(new CFType(s, ptr));
+        mCFunctions.emplace_back(c);
+        mSettings[c.get()] = settings;
+        mCurrentSettings = settings;
+        return *this;
     }
+
+    template <typename Signature, bool SRet = false>
+    inline FunctionBuilder&
+    addSignature(const IRFunctionBase::GeneratorCb& cb, const Signature* ptr, const char* symbol = nullptr)
+    {
+        this->addSignature<Signature, SRet>(cb, symbol);
+        this->addSignature<Signature, SRet>(ptr, symbol);
+        return *this;
+    }
+
+    inline FunctionBuilder& addDependency(const char* name) {
+        mCurrentSettings->mDeps.emplace_back(name); return *this;
+    }
+
+    inline FunctionBuilder& setEmbedIR(bool on) { mCurrentSettings->mEmbedIR = on; return *this; }
+    inline FunctionBuilder& setConstantFold(bool on) { mCurrentSettings->mConstantFold = on; return *this; }
+    inline FunctionBuilder& setArgumentNames(const std::vector<const char*>& names) {
+        mCurrentSettings->mNames.reset(new std::vector<const char*>(names));
+        return *this;
+    }
+
+    /// @details  Parameter and Function Attributes. When designing a C binding,
+    ///           llvm will be unable to assign parameter markings to the return
+    ///           type, function body or parameter attributes due to there not
+    ///           being any visibility on the function itself during codegen.
+    ///           The best way to ensure performant C bindings is to ensure
+    ///           that the function is marked with the required llvm parameters.
+    ///           Some of the heavy hitters (which can have the most impact)
+    ///           are below:
+    ///
+    ///           Functions:
+    ///             - norecurse
+    ///                 This function attribute indicates that the function does
+    ///                 not call itself either directly or indirectly down any
+    ///                 possible call path.
+    ///
+    ///             - willreturn
+    ///                 This function attribute indicates that a call of this
+    ///                 function will either exhibit undefined behavior or comes
+    ///                 back and continues execution at a point in the existing
+    ///                 call stack that includes the current invocation.
+    ///
+    ///             - nounwind
+    ///                 This function attribute indicates that the function never
+    ///                 raises an exception.
+    ///
+    ///             - readnone
+    ///                 On a function, this attribute indicates that the function
+    ///                 computes its result (or decides to unwind an exception) based
+    ///                 strictly on its arguments, without dereferencing any pointer
+    ///                 arguments or otherwise accessing any mutable state (e.g. memory,
+    ///                 control registers, etc) visible to caller functions.
+    ///
+    ///             - readonly
+    ///                 On a function, this attribute indicates that the function
+    ///                 does not write through any pointer arguments (including byval
+    ///                 arguments) or otherwise modify any state (e.g. memory, control
+    ///                 registers, etc) visible to caller functions.
+    ///                 control registers, etc) visible to caller functions.
+    ///
+    ///             - writeonly
+    ///                 On a function, this attribute indicates that the function may
+    ///                 write to but does not read from memory.
+    ///
+    ///           Parameters:
+    ///             - noalias
+    ///                 This indicates that objects accessed via pointer values based
+    ///                 on the argument or return value are not also accessed, during
+    ///                 the execution of the function, via pointer values not based on
+    ///                 the argument or return value.
+    ///
+    ///             - nonnull
+    ///                 This indicates that the parameter or return pointer is not null.
+    ///
+    ///             - readonly
+    ///                 Indicates that the function does not write through this pointer
+    ///                 argument, even though it may write to the memory that the pointer
+    ///                 points to.
+    ///
+    ///             - writeonly
+    ///                 Indicates that the function may write to but does not read through
+    ///                 this pointer argument (even though it may read from the memory
+    ///                 that the pointer points to).
+    ///
+    inline FunctionBuilder&
+    addParameterAttribute(const size_t idx, const llvm::Attribute::AttrKind attr) {
+        mCurrentSettings->mParamAttrs[idx].emplace_back(attr);
+        return *this;
+    }
+
+    inline FunctionBuilder&
+    addReturnAttribute(const llvm::Attribute::AttrKind attr)  {
+        mCurrentSettings->mRetAttrs.emplace_back(attr);
+        return *this;
+    }
+
+    inline FunctionBuilder&
+    addFunctionAttribute(const llvm::Attribute::AttrKind attr)  {
+        mCurrentSettings->mFnAttrs.emplace_back(attr);
+        return *this;
+    }
+
+    inline FunctionBuilder& setDocumentation(const char* doc) { mDoc = doc; return *this; }
+    inline FunctionBuilder& setPreferredImpl(DeclPreferrence pref) { mDeclPref = pref; return *this; }
+
+    inline FunctionGroup::Ptr get() const
+    {
+        for (auto& decl : mCFunctions) {
+            const auto& s = mSettings.at(decl.get());
+            decl->setDependencies(s->mDeps);
+            decl->setConstantFold(s->mConstantFold);
+            if (!s->mFnAttrs.empty())  decl->setFnAttributes(s->mFnAttrs);
+            if (!s->mRetAttrs.empty()) decl->setRetAttributes(s->mRetAttrs);
+            if (!s->mParamAttrs.empty()) {
+                for (auto& idxAttrs : s->mParamAttrs) {
+                    if (idxAttrs.first > decl->size()) continue;
+                    decl->setParamAttributes(idxAttrs.first, idxAttrs.second);
+                }
+            }
+            if (s->mNames) decl->setArgumentNames(*s->mNames);
+        }
+
+        for (auto& decl : mIRFunctions) {
+            const auto& s = mSettings.at(decl.get());
+            decl->setDependencies(s->mDeps);
+            decl->setEmbedIR(s->mEmbedIR);
+            if (!s->mFnAttrs.empty())  decl->setFnAttributes(s->mFnAttrs);
+            if (!s->mRetAttrs.empty()) decl->setRetAttributes(s->mRetAttrs);
+            if (!s->mParamAttrs.empty()) {
+                for (auto& idxAttrs : s->mParamAttrs) {
+                    if (idxAttrs.first > decl->size()) continue;
+                    decl->setParamAttributes(idxAttrs.first, idxAttrs.second);
+                }
+            }
+            if (s->mNames) decl->setArgumentNames(*s->mNames);
+        }
+
+        std::vector<Function::Ptr> functions;
+
+        if (mDeclPref == DeclPreferrence::IR) {
+            functions.insert(functions.end(), mIRFunctions.begin(), mIRFunctions.end());
+        }
+        if (mDeclPref == DeclPreferrence::C) {
+            functions.insert(functions.end(), mCFunctions.begin(), mCFunctions.end());
+        }
+        if (functions.empty()) {
+            functions.insert(functions.end(), mIRFunctions.begin(), mIRFunctions.end());
+            functions.insert(functions.end(), mCFunctions.begin(), mCFunctions.end());
+        }
+
+        FunctionGroup::Ptr group(new FunctionGroup(mName, mDoc, functions));
+        return group;
+    }
+
+private:
+
+    template <typename Signature>
+    std::string genSymbol() const {
+        /// @note  important to prefix all symbols with "ax." so that
+        ///        they will never conflict with internal llvm symbol
+        ///        names (such as standard libary methods e.g, cos, cosh)
+        return "ax." + std::string(this->mName) +
+            ArgumentIterator<Signature>::symbol();
+    }
+
+    const char* mName = "";
+    const char* mDoc = "";
+    DeclPreferrence mDeclPref = IR;
+    std::vector<CFunctionBase::Ptr> mCFunctions = {};
+    std::vector<IRFunctionBase::Ptr> mIRFunctions = {};
+    std::map<const Function*, Settings::Ptr> mSettings = {};
+    Settings::Ptr mCurrentSettings = nullptr;
 };
 
 }
@@ -573,18 +1083,8 @@ struct FunctionSignature : public FunctionSignatureBase
 }
 }
 
-/// @brief  Wrapper for safe external function signature registration
-///
-#define DECLARE_FUNCTION_SIGNATURE(FunctionPtr) \
-    openvdb::ax::codegen::FunctionSignature<decltype(FunctionPtr)>\
-        ::create(&FunctionPtr, std::string(#FunctionPtr), false)
-
-#define DECLARE_FUNCTION_SIGNATURE_OUTPUT(FunctionPtr) \
-    openvdb::ax::codegen::FunctionSignature<decltype(FunctionPtr)>\
-        ::create(&FunctionPtr, std::string(#FunctionPtr), true)
-
 #endif // OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

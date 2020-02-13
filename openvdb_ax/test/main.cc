@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -28,6 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+#include <openvdb/points/PointDataGrid.h>
 #include <openvdb_ax/compiler/Compiler.h>
 
 #include <openvdb/openvdb.h>
@@ -265,6 +266,8 @@ run(int argc, char* argv[])
 
 } // anonymous namespace
 
+template <typename ValueT>
+using ConverterT = typename openvdb::BoolGrid::ValueConverter<ValueT>::Type;
 
 int
 main(int argc, char *argv[])
@@ -273,9 +276,30 @@ main(int argc, char *argv[])
     openvdb::ax::initialize();
     openvdb::logging::initialize(argc, argv);
 
-    return run(argc, argv);
+    // Also intialize Vec4 point attributes and grids
+
+    if (!openvdb::points::TypedAttributeArray<openvdb::math::Vec4<int32_t>>::isRegistered())
+        openvdb::points::TypedAttributeArray<openvdb::math::Vec4<int32_t>>::registerType();
+    if (!openvdb::points::TypedAttributeArray<openvdb::math::Vec4<float>>::isRegistered())
+        openvdb::points::TypedAttributeArray<openvdb::math::Vec4<float>>::registerType();
+    if (!openvdb::points::TypedAttributeArray<openvdb::math::Vec4<double>>::isRegistered())
+        openvdb::points::TypedAttributeArray<openvdb::math::Vec4<double>>::registerType();
+
+    if (!ConverterT<openvdb::math::Vec4<int32_t>>::isRegistered())
+        ConverterT<openvdb::math::Vec4<int32_t>>::registerGrid();
+    if (!ConverterT<openvdb::math::Vec4<float>>::isRegistered())
+        ConverterT<openvdb::math::Vec4<float>>::registerGrid();
+    if (!ConverterT<openvdb::math::Vec4<double>>::isRegistered())
+        ConverterT<openvdb::math::Vec4<double>>::registerGrid();
+
+    auto value = run(argc, argv);
+
+    openvdb::ax::uninitialize();
+    openvdb::uninitialize();
+
+    return value;
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

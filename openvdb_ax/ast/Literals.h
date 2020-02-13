@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -36,12 +36,24 @@
 #include <limits>
 #include <string>
 #include <type_traits>
+#include <memory>
+#include <cassert>
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
+
+/// @brief  The backend representation of strings in AX. This is also how
+///         strings are passed from the AX code generation to functions.
+struct AXString
+{
+    // usually size_t. Used to match the implementation of std:string
+    using SizeType = std::allocator<char>::size_type;
+    const char* ptr = nullptr;
+    SizeType size = 0;
+};
 
 /// @brief  Literal language limits and overflow behaviour
 
@@ -103,6 +115,6 @@ struct LiteralLimits<T,
 
 #endif // OPENVDB_AX_AST_LITERALS_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

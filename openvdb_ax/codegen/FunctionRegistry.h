@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -66,7 +66,7 @@ class FunctionRegistry
 {
 public:
 
-    using ConstructorT = FunctionBase::Ptr(*)(const FunctionOptions&);
+    using ConstructorT = FunctionGroup::Ptr(*)(const FunctionOptions&);
     using Ptr = std::shared_ptr<FunctionRegistry>;
     using UniquePtr = std::unique_ptr<FunctionRegistry>;
 
@@ -76,7 +76,6 @@ public:
     ///
     struct RegisteredFunction
     {
-
         /// @brief Constructor
         /// @param creator The function definition used to create this function
         /// @param internal Whether the function should be only internally accessible
@@ -91,7 +90,7 @@ public:
 
         /// @brief Return a pointer to this function definition
         ///
-        inline FunctionBase::Ptr function() const { return mFunction; }
+        inline FunctionGroup::Ptr function() const { return mFunction; }
 
         /// @brief Check whether this function should be only internally accesible
         ///
@@ -99,7 +98,7 @@ public:
 
     private:
         const ConstructorT mConstructor;
-        FunctionBase::Ptr mFunction;
+        FunctionGroup::Ptr mFunction;
         const bool mInternal;
     };
 
@@ -135,7 +134,7 @@ public:
     /// @param  op          FunctionOptions to pass the function constructor
     /// @param  allowInternalAccess    Whether to look in the 'internal' functions
     ///
-    FunctionBase::Ptr getOrInsert(const std::string& identifier,
+    FunctionGroup::Ptr getOrInsert(const std::string& identifier,
                       const FunctionOptions& op,
                       const bool allowInternalAccess);
 
@@ -146,13 +145,14 @@ public:
     /// @param  identifier  The function identifier
     /// @param  allowInternalAccess    Whether to look in the 'internal' functions
     ///
-    FunctionBase::Ptr get(const std::string& identifier,
+    FunctionGroup::Ptr get(const std::string& identifier,
                           const bool allowInternalAccess) const;
 
-    /// @brief  Force creations of all function objects for all registered functions
-    /// @param  op The current function options
+    /// @brief  Force the (re)creations of all function objects for all registered functions
+    /// @param  op  The current function options
+    /// @param  verify  Checks functions are created and have valid identifiers/symbols
     ///
-    void createAll(const FunctionOptions& op);
+    void createAll(const FunctionOptions& op, const bool verify = false);
 
     /// @brief  Return a const reference to the current registry map
     ///
@@ -177,6 +177,6 @@ private:
 
 #endif // OPENVDB_AX_CODEGEN_FUNCTION_REGISTRY_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

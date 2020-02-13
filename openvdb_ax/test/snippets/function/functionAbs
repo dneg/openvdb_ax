@@ -1,3 +1,0 @@
-int@test1 = abs(-3);
-int@test2 = abs(3);
-int@test3 = abs(0);

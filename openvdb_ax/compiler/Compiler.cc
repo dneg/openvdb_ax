@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -41,21 +41,32 @@
 
 #include <openvdb/Exceptions.h>
 
+#include <llvm/ADT/Optional.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/InitializePasses.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Mangler.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
+#include <llvm/MC/SubtargetFeature.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Support/Host.h>
 #include <llvm/Support/ManagedStatic.h> // llvm_shutdown
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/SourceMgr.h> // SMDiagnostic
+#include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Config/llvm-config.h>
+#include <llvm/Target/TargetMachine.h>
+#include <llvm/Target/TargetOptions.h>
 
 // @note  As of adding support for LLVM 5.0 we not longer explicitly
 // perform standrd compiler passes (-std-compile-opts) based on the changes
@@ -71,14 +82,9 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/Mangler.h>
-
 #include <tbb/mutex.h>
 
 #include <unordered_map>
-
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -190,6 +196,44 @@ void uninitialize()
 namespace
 {
 
+/// @brief  Initialize a target machine for the host platform. Returns a nullptr
+///         if a target could not be created.
+/// @note   This logic is based off the Kaleidoscope tutorial below with extensions
+///         for CPU and CPU featrue set targetting
+///         https://llvm.org/docs/tutorial/MyFirstLanguageFrontend/LangImpl08.html
+inline std::unique_ptr<llvm::TargetMachine> initializeTargetMachine()
+{
+    const std::string TargetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string Error;
+    const llvm::Target* Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
+    if (!Target) {
+        OPENVDB_LOG_DEBUG_RUNTIME("Unable to retrieve target machine information. "
+            "No target specific optimization will be performed: " << Error);
+        return nullptr;
+    }
+
+    // default cpu with no additional features = "generic"
+    const std::string CPU = llvm::sys::getHostCPUName();
+
+    llvm::SubtargetFeatures Features;
+    llvm::StringMap<bool> HostFeatures;
+    if (llvm::sys::getHostCPUFeatures(HostFeatures))
+      for (auto &F : HostFeatures)
+        Features.AddFeature(F.first(), F.second);
+
+    // default options
+    llvm::TargetOptions opt;
+    const llvm::Optional<llvm::Reloc::Model> RM =
+        llvm::Optional<llvm::Reloc::Model>();
+
+    std::unique_ptr<llvm::TargetMachine> TargetMachine(
+        Target->createTargetMachine(TargetTriple, CPU, Features.getString(), opt, RM));
+
+    return TargetMachine;
+}
+
+#ifndef USE_NEW_PASS_MANAGER
+
 void addStandardLinkPasses(llvm::legacy::PassManagerBase& passes)
 {
     llvm::PassManagerBuilder builder;
@@ -253,30 +297,31 @@ void addOptimizationPasses(llvm::legacy::PassManagerBase& passes,
     builder.populateModulePassManager(passes);
 }
 
-
 void LLVMoptimise(llvm::Module* module,
                   const unsigned optLevel,
                   const unsigned sizeLevel,
-                  const bool verify = false)
+                  const bool verify,
+                  llvm::TargetMachine* TM)
 {
     // Pass manager setup and IR optimisations - Do target independent optimisations
     // only - i.e. the following do not require an llvm TargetMachine analysis pass
 
     llvm::legacy::PassManager passes;
-    const llvm::Triple moduleTriple(module->getTargetTriple());
-    llvm::TargetLibraryInfoImpl tlii(moduleTriple);
-    passes.add(new llvm::TargetLibraryInfoWrapperPass(tlii));
+    llvm::TargetLibraryInfoImpl TLII(llvm::Triple(module->getTargetTriple()));
+    passes.add(new llvm::TargetLibraryInfoWrapperPass(TLII));
 
     // Add internal analysis passes from the target machine.
-    passes.add(llvm::createTargetTransformInfoWrapperPass(llvm::TargetIRAnalysis()));
+    if (TM) passes.add(llvm::createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+    else    passes.add(llvm::createTargetTransformInfoWrapperPass(llvm::TargetIRAnalysis()));
 
     llvm::legacy::FunctionPassManager functionPasses(module);
-    functionPasses.add(llvm::createTargetTransformInfoWrapperPass(llvm::TargetIRAnalysis()));
+    if (TM) functionPasses.add(llvm::createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+    else    functionPasses.add(llvm::createTargetTransformInfoWrapperPass(llvm::TargetIRAnalysis()));
 
     if (verify) functionPasses.add(llvm::createVerifierPass());
 
     addStandardLinkPasses(passes);
-    addOptimizationPasses(passes, functionPasses, nullptr, optLevel, sizeLevel);
+    addOptimizationPasses(passes, functionPasses, TM, optLevel, sizeLevel);
 
     functionPasses.doInitialization();
     for (llvm::Function& function : *module) {
@@ -286,6 +331,127 @@ void LLVMoptimise(llvm::Module* module,
 
     if (verify) passes.add(llvm::createVerifierPass());
     passes.run(*module);
+}
+
+void LLVMoptimise(llvm::Module* module,
+                  const llvm::PassBuilder::OptimizationLevel optLevel,
+                  const bool verify,
+                  llvm::TargetMachine* TM)
+{
+    switch (optLevel) {
+        case llvm::PassBuilder::OptimizationLevel::O0 : {
+            LLVMoptimise(module, 0, 0, verify, TM);
+            break;
+        }
+        case llvm::PassBuilder::OptimizationLevel::O1 : {
+            LLVMoptimise(module, 1, 0, verify, TM);
+            break;
+        }
+        case llvm::PassBuilder::OptimizationLevel::O2 : {
+            LLVMoptimise(module, 2, 0, verify, TM);
+            break;
+        }
+        case llvm::PassBuilder::OptimizationLevel::Os : {
+            LLVMoptimise(module, 2, 1, verify, TM);
+            break;
+        }
+        case llvm::PassBuilder::OptimizationLevel::Oz : {
+            LLVMoptimise(module, 2, 2, verify, TM);
+            break;
+        }
+        case llvm::PassBuilder::OptimizationLevel::O3 : {
+            LLVMoptimise(module, 3, 0, verify, TM);
+            break;
+        }
+        default : {}
+    }}
+
+#else
+
+void LLVMoptimise(llvm::Module* module,
+                  const llvm::PassBuilder::OptimizationLevel optLevel,
+                  const bool verify,
+                  llvm::TargetMachine* TM)
+{
+    // use the PassBuilder for optimisation pass management
+    // see llvm's llvm/Passes/PassBuilder.h, tools/opt/NewPMDriver.cpp
+    // and clang's CodeGen/BackEndUtil.cpp for more info/examples
+    llvm::PassBuilder PB(TM);
+
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager cGSCCAM;
+    llvm::ModuleAnalysisManager MAM;
+
+    // register all of the analysis passes available by default
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(cGSCCAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+
+    // the analysis managers above are interdependent so
+    // register dependent managers with each other via proxies
+    PB.crossRegisterProxies(LAM, FAM, cGSCCAM, MAM);
+
+    // the PassBuilder does not produce -O0 pipelines, so do that ourselves
+    if (optLevel == llvm::PassBuilder::OptimizationLevel::O0) {
+        // matching clang -O0, only add inliner pass
+        // ref: clang CodeGen/BackEndUtil.cpp EmitAssemblyWithNewPassManager
+        llvm::ModulePassManager MPM;
+        MPM.addPass(llvm::AlwaysInlinerPass());
+        if (verify) MPM.addPass(llvm::VerifierPass());
+        MPM.run(*module, MAM);
+    }
+    else {
+        // create a clang-like optimisation pipeline for -O1, 2,  s, z, 3
+        llvm::ModulePassManager MPM =
+            PB.buildPerModuleDefaultPipeline(optLevel);
+        if (verify) MPM.addPass(llvm::VerifierPass());
+        MPM.run(*module, MAM);
+    }
+}
+#endif
+
+void optimiseAndVerify(llvm::Module* module,
+        const bool verify,
+        const CompilerOptions::OptLevel optLevel,
+        llvm::TargetMachine* TM)
+{
+    if (verify) {
+        llvm::raw_os_ostream out(std::cout);
+        if (llvm::verifyModule(*module, &out)) {
+            OPENVDB_THROW(LLVMIRError, "LLVM IR is not valid.");
+        }
+    }
+
+    switch (optLevel) {
+        case CompilerOptions::OptLevel::O0 : {
+            LLVMoptimise(module, llvm::PassBuilder::OptimizationLevel::O0, verify, TM);
+            break;
+        }
+        case CompilerOptions::OptLevel::O1 : {
+            LLVMoptimise(module, llvm::PassBuilder::OptimizationLevel::O1, verify, TM);
+            break;
+        }
+        case CompilerOptions::OptLevel::O2 : {
+            LLVMoptimise(module, llvm::PassBuilder::OptimizationLevel::O2, verify, TM);
+            break;
+        }
+        case CompilerOptions::OptLevel::Os : {
+            LLVMoptimise(module, llvm::PassBuilder::OptimizationLevel::Os, verify, TM);
+            break;
+        }
+        case CompilerOptions::OptLevel::Oz : {
+            LLVMoptimise(module, llvm::PassBuilder::OptimizationLevel::Oz, verify, TM);
+            break;
+        }
+        case CompilerOptions::OptLevel::O3 : {
+            LLVMoptimise(module, llvm::PassBuilder::OptimizationLevel::O3, verify, TM);
+            break;
+        }
+        case CompilerOptions::OptLevel::NONE :
+        default             : {}
+    }
 }
 
 void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
@@ -325,73 +491,46 @@ void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
     /// @note  Depending on how functions are inserted into LLVM (Linkage Type) in
     ///        the future, InstallLazyFunctionCreator may be required
     for (const auto& iter : registry.map()) {
-        const codegen::FunctionBase::Ptr function = iter.second.function();
+        const codegen::FunctionGroup::Ptr function = iter.second.function();
         if (!function) continue;
 
-        const codegen::FunctionBase::FunctionList& list = function->list();
-        for (const codegen::FunctionSignatureBase::Ptr& signature : list) {
-
-            // If a function pointer exists, the function has external linkage
-            codegen::FunctionSignatureBase::VoidFPtr functionPtr = signature->functionPointer();
-            if (!functionPtr) continue;
+        const codegen::FunctionGroup::FunctionList& list = function->list();
+        for (const codegen::Function::Ptr& decl : list) {
 
             // llvmFunction may not exists if compiled without mLazyFunctions
-            const llvm::Function* llvmFunction = module.getFunction(signature->symbolName());
-            if (!llvmFunction) continue;
+            const llvm::Function* llvmFunction = module.getFunction(decl->symbol());
 
+            // if the function has an entry block, it's not a C binding - this is a
+            // quick check to improve performance (so we don't call virtual methods
+            // for every function)
+            if (!llvmFunction) continue;
+            if (llvmFunction->size() > 0) continue;
+
+            const codegen::CFunctionBase* binding =
+                dynamic_cast<const codegen::CFunctionBase*>(decl.get());
+            if (!binding) {
+                OPENVDB_LOG_WARN("Function with symbol \"" << decl->symbol() << "\" has "
+                    "no function body and is not a C binding.");
+                continue;
+            }
+
+            const uint64_t address = binding->address();
+            if (address == 0) {
+                OPENVDB_THROW(LLVMFunctionError, "No available mapping for C Binding "
+                    "with symbol \"" << decl->symbol() << "\"");
+            }
             const std::string mangled =
                 getMangledName(llvm::cast<llvm::GlobalValue>(llvmFunction), engine);
 
-            // error if updateGlobalMapping returned a previously mapped address, as we've
-            // overwritten something
-
-            const uint64_t address = reinterpret_cast<uint64_t>(functionPtr);
+            // error if updateGlobalMapping returned a previously mapped address, as
+            // we've overwritten something
             const uint64_t oldAddress = engine.updateGlobalMapping(mangled, address);
-
             if (oldAddress != 0 && oldAddress != address) {
-                OPENVDB_THROW(LLVMFunctionError, "Function registry mapping error - multiple functions "
-                    "are using the same symbol \"" + signature->symbolName() + "\".");
+                OPENVDB_THROW(LLVMFunctionError, "Function registry mapping error - "
+                    "multiple functions are using the same symbol \"" << decl->symbol()
+                    << "\".");
             }
         }
-    }
-}
-
-void optimiseAndVerify(llvm::Module* module, const bool verify, const CompilerOptions::OptLevel optLevel)
-{
-    if (verify) {
-        llvm::raw_os_ostream out(std::cout);
-        if (llvm::verifyModule(*module, &out)) {
-            OPENVDB_THROW(LLVMIRError, "LLVM IR is not valid.");
-        }
-    }
-
-    switch (optLevel) {
-        case CompilerOptions::OptLevel::O0 : {
-            LLVMoptimise(module, 0, 0, verify);
-            break;
-        }
-        case CompilerOptions::OptLevel::O1 : {
-            LLVMoptimise(module, 1, 0, verify);
-            break;
-        }
-        case CompilerOptions::OptLevel::O2 : {
-            LLVMoptimise(module, 2, 0, verify);
-            break;
-        }
-        case CompilerOptions::OptLevel::Os : {
-            LLVMoptimise(module, 2, 1, verify);
-            break;
-        }
-        case CompilerOptions::OptLevel::Oz : {
-            LLVMoptimise(module, 2, 2, verify);
-            break;
-        }
-        case CompilerOptions::OptLevel::O3 : {
-            LLVMoptimise(module, 3, 0, verify);
-            break;
-        }
-        case CompilerOptions::OptLevel::NONE :
-        default             : {}
     }
 }
 
@@ -431,13 +570,6 @@ void verifyTypedAccesses(const ast::Tree& tree)
             else if (iter->second != node.typestr()) {
                 OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous $ parameters. "
                     "\"" + node.name() + "\" has been accessed with different types.");
-            }
-
-            // Error on string lookups as we don't support these
-            // @todo ... support these
-            if (node.typestr() == openvdb::typeNameAsString<std::string>()) {
-                OPENVDB_THROW(AXCompilerError, "Failed to compile string $ parameter "
-                    "\"" + node.name() + "\". string lookups are not currently supported.");
             }
             return true;
         };
@@ -481,20 +613,51 @@ registerAccesses(const codegen::SymbolTable& globals, const AttributeRegistry& r
     }
 }
 
-template <typename T>
+template <typename T, typename MetadataType = TypedMetadata<T>>
 inline llvm::Constant*
 initializeMetadataPtr(CustomData& data,
     const std::string& name,
     llvm::LLVMContext& C)
 {
-    TypedMetadata<T>* meta = data.getOrInsertData<TypedMetadata<T>>(name);
-    if (meta) return codegen::LLVMType<uintptr_t>::get(C, meta->value());
+    MetadataType* meta = data.getOrInsertData<MetadataType>(name);
+    if (meta) return codegen::LLVMType<T>::get(C, &(meta->value()));
     return nullptr;
 }
 
 inline void
-registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& data, llvm::LLVMContext& C)
+registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& dataPtr, llvm::LLVMContext& C)
 {
+    auto initializerFromToken =
+        [&](const ast::tokens::CoreType type, const std::string& name, CustomData& data) -> llvm::Constant* {
+        switch (type) {
+            case ast::tokens::BOOL    : return initializeMetadataPtr<bool>(data, name, C);
+            case ast::tokens::SHORT   : return initializeMetadataPtr<int16_t>(data, name, C);
+            case ast::tokens::INT     : return initializeMetadataPtr<int32_t>(data, name, C);
+            case ast::tokens::LONG    : return initializeMetadataPtr<int64_t>(data, name, C);
+            case ast::tokens::FLOAT   : return initializeMetadataPtr<float>(data, name, C);
+            case ast::tokens::DOUBLE  : return initializeMetadataPtr<double>(data, name, C);
+            case ast::tokens::VEC2I   : return initializeMetadataPtr<math::Vec2<int32_t>>(data, name, C);
+            case ast::tokens::VEC2F   : return initializeMetadataPtr<math::Vec2<float>>(data, name, C);
+            case ast::tokens::VEC2D   : return initializeMetadataPtr<math::Vec2<double>>(data, name, C);
+            case ast::tokens::VEC3I   : return initializeMetadataPtr<math::Vec3<int32_t>>(data, name, C);
+            case ast::tokens::VEC3F   : return initializeMetadataPtr<math::Vec3<float>>(data, name, C);
+            case ast::tokens::VEC3D   : return initializeMetadataPtr<math::Vec3<double>>(data, name, C);
+            case ast::tokens::VEC4I   : return initializeMetadataPtr<math::Vec4<int32_t>>(data, name, C);
+            case ast::tokens::VEC4F   : return initializeMetadataPtr<math::Vec4<float>>(data, name, C);
+            case ast::tokens::VEC4D   : return initializeMetadataPtr<math::Vec4<double>>(data, name, C);
+            case ast::tokens::MAT3F   : return initializeMetadataPtr<math::Mat3<float>>(data, name, C);
+            case ast::tokens::MAT3D   : return initializeMetadataPtr<math::Mat3<double>>(data, name, C);
+            case ast::tokens::MAT4F   : return initializeMetadataPtr<math::Mat4<float>>(data, name, C);
+            case ast::tokens::MAT4D   : return initializeMetadataPtr<math::Mat4<double>>(data, name, C);
+            case ast::tokens::STRING  : return initializeMetadataPtr<ax::AXString, ax::AXStringMetadata>(data, name, C);
+            case ast::tokens::UNKNOWN :
+            default      : {
+                // grammar guarantees this is unreachable as long as all types are supported
+                OPENVDB_THROW(LLVMTypeError, "Attribute Type unsupported or not recognised");
+            }
+        }
+    };
+
     std::string name, typestr;
     for (const auto& global : globals.map()) {
 
@@ -506,7 +669,7 @@ registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& da
 
         // if we have any external variables, the custom data must be initialized to at least hold
         // zero values (initialized by the default metadata types)
-        if (!data) data.reset(new CustomData);
+        if (!dataPtr) dataPtr.reset(new CustomData);
 
         // should always be a GlobalVariable.
         assert(llvm::isa<llvm::GlobalVariable>(global.second));
@@ -514,39 +677,8 @@ registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& da
         llvm::GlobalVariable* variable = llvm::cast<llvm::GlobalVariable>(global.second);
         assert(variable->getValueType() == codegen::LLVMType<uintptr_t>::get(C));
 
-        auto initializerFromToken =
-            [&](const ast::tokens::CoreType type) -> llvm::Constant* {
-            switch (type) {
-                case ast::tokens::BOOL    : return initializeMetadataPtr<bool>(*data, name, C);
-                case ast::tokens::CHAR    : return initializeMetadataPtr<char>(*data, name, C);
-                case ast::tokens::SHORT   : return initializeMetadataPtr<int16_t>(*data, name, C);
-                case ast::tokens::INT     : return initializeMetadataPtr<int32_t>(*data, name, C);
-                case ast::tokens::LONG    : return initializeMetadataPtr<int64_t>(*data, name, C);
-                case ast::tokens::FLOAT   : return initializeMetadataPtr<float>(*data, name, C);
-                case ast::tokens::DOUBLE  : return initializeMetadataPtr<double>(*data, name, C);
-                case ast::tokens::VEC2I   : return initializeMetadataPtr<math::Vec2<int32_t>>(*data, name, C);
-                case ast::tokens::VEC2F   : return initializeMetadataPtr<math::Vec2<float>>(*data, name, C);
-                case ast::tokens::VEC2D   : return initializeMetadataPtr<math::Vec2<double>>(*data, name, C);
-                case ast::tokens::VEC3I   : return initializeMetadataPtr<math::Vec3<int32_t>>(*data, name, C);
-                case ast::tokens::VEC3F   : return initializeMetadataPtr<math::Vec3<float>>(*data, name, C);
-                case ast::tokens::VEC3D   : return initializeMetadataPtr<math::Vec3<double>>(*data, name, C);
-                case ast::tokens::VEC4I   : return initializeMetadataPtr<math::Vec4<int32_t>>(*data, name, C);
-                case ast::tokens::VEC4F   : return initializeMetadataPtr<math::Vec4<float>>(*data, name, C);
-                case ast::tokens::VEC4D   : return initializeMetadataPtr<math::Vec4<double>>(*data, name, C);
-                case ast::tokens::MAT3F   : return initializeMetadataPtr<math::Mat3<float>>(*data, name, C);
-                case ast::tokens::MAT3D   : return initializeMetadataPtr<math::Mat3<double>>(*data, name, C);
-                case ast::tokens::MAT4F   : return initializeMetadataPtr<math::Mat4<float>>(*data, name, C);
-                case ast::tokens::MAT4D   : return initializeMetadataPtr<math::Mat4<double>>(*data, name, C);
-                //case ast::tokens::STRING  : @todo
-                case ast::tokens::UNKNOWN :
-                default      : {
-                    // grammar guarantees this is unreachable as long as all types are supported
-                    OPENVDB_THROW(LLVMTypeError, "Attribute Type unsupported or not recognised");
-                }
-            }
-        };
+        llvm::Constant* initializer = initializerFromToken(typetoken, name, *dataPtr);
 
-        llvm::Constant* initializer = initializerFromToken(typetoken);
         if (!initializer) {
             OPENVDB_THROW(AXCompilerError, "Custom data \"" + name + "\" already exists with a "
                 "different type.");
@@ -627,6 +759,9 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     // initialize the module and generate LLVM IR
 
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
+    std::unique_ptr<llvm::TargetMachine> TM = initializeTargetMachine();
+    module->setDataLayout(TM->createDataLayout());
+    module->setTargetTriple(TM->getTargetTriple().normalize());
 
     codegen::PointComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,
@@ -644,7 +779,15 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     // optimise
 
     llvm::Module* modulePtr = module.get();
-    optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
+    optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel, TM.get());
+
+    // @todo re-constant fold!! although constant folding will work with constant
+    //       expressions prior to optimisation, expressions like "int a = 1; cosh(a);"
+    //       will still keep a call to cosh. This is because the current AX folding
+    //       only checks for an immediate constant expression and for C bindings,
+    //       like cosh, llvm its unable to optimise the call out (as it isn't aware
+    //       of the function body). What llvm can do, however, is change this example
+    //       into "cosh(1)" which we can then handle.
 
     // create the llvm execution engine which will build our function pointers
 
@@ -701,6 +844,9 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
     // initialize the module and generate LLVM IR
 
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
+    std::unique_ptr<llvm::TargetMachine> TM = initializeTargetMachine();
+    module->setDataLayout(TM->createDataLayout());
+    module->setTargetTriple(TM->getTargetTriple().normalize());
 
     codegen::VolumeComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,
@@ -716,7 +862,7 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
     registerExternalGlobals(codeGenerator.globals(), validCustomData, *mContext);
 
     llvm::Module* modulePtr = module.get();
-    optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel);
+    optimiseAndVerify(modulePtr, mCompilerOptions.mVerify, mCompilerOptions.mOptLevel, TM.get());
 
     std::string error;
     std::shared_ptr<llvm::ExecutionEngine>
@@ -759,6 +905,6 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

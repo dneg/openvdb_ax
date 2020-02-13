@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -60,9 +60,9 @@ stackValuesForFunction(std::vector<llvm::Value*>& arguments,
                    llvm::IRBuilder<>& builder)
 {
     // initialize arguments. scalars are always passed by value, arrays
-    // always by pointer, strings by a pointer to the first char
+    // and strings always by pointer
     llvm::Type* strType =
-        LLVMType<std::string>::get(builder.getContext());
+        LLVMType<AXString>::get(builder.getContext());
 
     arguments.resize(count);
     for (auto r = arguments.rbegin(); r != arguments.rend(); ++r) {
@@ -75,22 +75,14 @@ stackValuesForFunction(std::vector<llvm::Value*>& arguments,
                 arg = builder.CreateLoad(arg);
             }
             else if (type->isArrayTy()) {/*pass by pointer*/}
-            else if (type == strType) {
-                // get the string pointer
-                arg = builder.CreateStructGEP(strType, arg, 0); // char**
-                arg = builder.CreateLoad(arg); // char*
-            }
+            else if (type == strType) {/*pass by pointer*/}
         }
         else {
             // arrays should never be loaded
             assert(!type->isArrayTy());
+            assert(type != strType);
             if (type->isIntegerTy() || type->isFloatingPointTy()) {
                 /*pass by value*/
-            }
-            else if (type == LLVMType<std::string>::get(builder.getContext())) {
-                llvm::Constant* zero =
-                    llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(builder.getContext(), 0));
-                arg = llvm::cast<llvm::Constant>(arg)->getAggregateElement(zero); // char*
             }
         }
         *r = arg;
@@ -109,222 +101,221 @@ printType(const llvm::Type* type, llvm::raw_os_ostream& stream, const bool axTyp
 inline void
 printTypes(llvm::raw_os_ostream& stream,
            const std::vector<llvm::Type*>& types,
+           const std::vector<const char*>* names = nullptr,
            const std::string sep = "; ",
            const bool axTypes = false)
 {
     if (types.empty()) return;
     auto typeIter = types.cbegin();
+    std::vector<const char*>::const_iterator nameIter;
+    if (names) nameIter = names->cbegin();
+
     for (; typeIter != types.cend() - 1; ++typeIter) {
         printType(*typeIter, stream, axTypes);
+        if (names && nameIter != names->cend()) {
+            if (*nameIter && (*nameIter)[0] != '\0') {
+                stream << ' ' << *nameIter;
+            }
+            ++nameIter;
+        }
         stream << sep;
     }
+
     printType(*typeIter, stream, axTypes);
+    if (names && nameIter != names->cend()) {
+        if (*nameIter && (*nameIter)[0] != '\0') {
+            stream << ' ' << *nameIter;
+        }
+    }
 }
 
 void
-printSignature(const llvm::Type* returnType,
+printSignature(std::ostream& os,
                const std::vector<llvm::Type*>& signature,
-               const std::string& functionName,
-               std::ostream& os,
-               const bool axTypes = false)
+               const llvm::Type* returnType,
+               const char* name,
+               const std::vector<const char*>* names,
+               const bool axTypes)
 {
     llvm::raw_os_ostream stream(os);
 
-    if (returnType) printType(returnType, stream, axTypes);
-    if (!functionName.empty()) {
-        stream << " " << functionName;
+    printType(returnType, stream, axTypes);
+    if (name && name[0] != '\0') {
+        stream << " " << name;
     }
     stream << '(';
-    printTypes(stream, signature, "; ", axTypes);
+    printTypes(stream, signature, names, "; ", axTypes);
     stream << ')';
 }
 
-/// @brief  Returns true if an explicit match exists between two llvm type vectors
-///
-/// @param input      The first vector of llvm types
-/// @param signature  The second vector of llvm types
-///
-bool explicitMatchTypes(const std::vector<llvm::Type*>& input,
-                        const std::vector<llvm::Type*>& signature)
-{
-    assert(input.size() == signature.size());
-    return signature == input;
-}
-
-/// @brief  Returns true if an implicit match exists between two llvm type vectors
-///
-/// @param input      The first vector of llvm types
-/// @param signature  The second vector of llvm types
-///
-bool implicitMatchTypes(const std::vector<llvm::Type*>& input,
-                        const std::vector<llvm::Type*>& signature)
-{
-    assert(input.size() == signature.size());
-
-    for (size_t i = 0; i < signature.size(); ++i) {
-        llvm::Type* type1 = signature[i];
-        llvm::Type* type2 = input[i];
-
-        if (type1 == type2) {
-            continue;
-        }
-        else if (isScalarType(type1) && isScalarType(type2)) {
-            continue;
-        }
-        else if (type1->isPointerTy() && type2->isPointerTy()) {
-            // check contained ptr type
-            llvm::Type* contained1 = type1->getContainedType(0);
-            llvm::Type* contained2 = type2->getContainedType(0);
-            if (contained1 == contained2) continue;
-
-            // if the pointers are different, see if they are arrays and check
-            // types and size - only one layer of array casting indirection is supported
-            // as arrays are expected to be in a pointer when passed in as arguments
-            if (!contained1->isArrayTy()) return false;
-            if (!contained2->isArrayTy()) return false;
-            if (contained1->getArrayNumElements() != contained2->getArrayNumElements()) {
-                return false;
-            }
-        }
-        else {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 
 ///////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
-
-FunctionSignatureBase::FunctionSignatureBase(VoidFPtr function,
-                      const std::string& symbol,
-                      const bool lastArgIsReturn)
-    : mFunction(function)
-    , mSymbolName(symbol)
-    , mLastArgumentReturn(lastArgIsReturn) {}
-
-FunctionSignatureBase::SignatureMatch
-FunctionSignatureBase::match(const std::vector<llvm::Type*>& types) const
+llvm::Function*
+Function::create(llvm::LLVMContext& C, llvm::Module* M) const
 {
-    if (!this->sizeMatch(types.size())) return SignatureMatch::None;
-    if (types.empty()) return SignatureMatch::Explicit;
-
-    llvm::LLVMContext& C = types.front()->getContext();
-
-    std::vector<llvm::Type*> current;
-    this->toLLVMTypes(C, &current);
-
-    if (explicitMatchTypes(types, current)) {
-        return SignatureMatch::Explicit;
+    if (M)  {
+        if (llvm::Function* function = M->getFunction(this->symbol())) {
+            return function;
+        }
     }
 
-    if (implicitMatchTypes(types, current)) {
-        return SignatureMatch::Implicit;
-    }
-    return SignatureMatch::Size;
-}
+    std::vector<llvm::Type*> parms;
+    parms.reserve(this->size());
+    llvm::Type* ret = this->types(parms, C);
 
-bool
-FunctionSignatureBase::sizeMatch(const size_t size) const
-{
-    return (size == this->size());
-}
+    llvm::FunctionType* type =
+        llvm::FunctionType::get(ret, parms,
+            false); // varargs
 
-bool
-FunctionSignatureBase::explicitMatch(const std::vector<llvm::Type*>& input) const
-{
-    if (!this->sizeMatch(input.size())) return false;
-    if (input.empty()) return true;
+    llvm::Function* function =
+        llvm::Function::Create(type,
+            llvm::Function::ExternalLinkage,
+            this->symbol(),
+            M);
 
-    llvm::LLVMContext& C = input.front()->getContext();
-
-    std::vector<llvm::Type*> current;
-    this->toLLVMTypes(C, &current);
-    return explicitMatchTypes(input, current);
-}
-
-bool
-FunctionSignatureBase::implicitMatch(const std::vector<llvm::Type*>& input) const
-{
-    if (!this->sizeMatch(input.size())) return false;
-    if (input.empty()) return true;
-
-    llvm::LLVMContext& C = input.front()->getContext();
-
-    std::vector<llvm::Type*> current;
-    this->toLLVMTypes(C, &current);
-    return implicitMatchTypes(input, current);
-}
-
-bool
-FunctionSignatureBase::hasReturnValue(llvm::LLVMContext& C) const
-{
-    return this->toLLVMTypes(C) != LLVMType<void>::get(C);
+    function->setAttributes(this->flattenAttrs(C));
+    return function;
 }
 
 llvm::Value*
-FunctionSignatureBase::getOutputArgument(llvm::IRBuilder<>& builder) const
+Function::call(const std::vector<llvm::Value*>& args,
+     const std::unordered_map<std::string, llvm::Value*>&,
+     llvm::IRBuilder<>& B,
+     const bool cast) const
 {
-    llvm::Type* type = this->getOutputType(builder.getContext());
-    if (!type) return nullptr;
-    // Outputs must be pointers - guaranteed by the FunctionSignature classes
-    assert(type->isPointerTy());
-    type = type->getContainedType(0);
-    return builder.CreateAlloca(type);
+    llvm::Module* M =
+        B.GetInsertBlock()->getParent()->getParent();
+    assert(M);
+    llvm::Function* function = this->create(B.getContext(), M);
+    std::vector<llvm::Value*> inputs(args);
+    if (cast) {
+        std::vector<llvm::Type*> types;
+        this->types(types, B.getContext());
+        this->cast(inputs, types, B);
+    }
+    return B.CreateCall(function, inputs);
 }
 
-llvm::Type*
-FunctionSignatureBase::getOutputType(llvm::LLVMContext& C) const
+Function::SignatureMatch
+Function::match(const std::vector<llvm::Type*>& inputs, llvm::LLVMContext& C) const
 {
-    if (!mLastArgumentReturn) return nullptr;
-    std::vector<llvm::Type*> current;
-    this->toLLVMTypes(C, &current);
-    return current.back();
-}
+    // these checks mean we can design the match function signature to not
+    // require the llvm context and instead pull it out of the type vector
+    // which is guaranteed to not be empty
+    if (inputs.size() != this->size()) return None;
+    if (inputs.empty() && this->size() == 0) return Explicit;
 
-llvm::Function*
-FunctionSignatureBase::toLLVMFunction(llvm::Module& M) const
-{
-    std::vector<llvm::Type*> current;
-    llvm::Type* returnT = this->toLLVMTypes(M.getContext(), &current);
+    assert(!inputs.empty());
+    //llvm::LLVMContext& C = inputs.front()->getContext();
 
-    llvm::FunctionType* functionType =
-        llvm::FunctionType::get(/*Result=*/returnT,
-            /*Params=*/llvm::ArrayRef<llvm::Type*>(current),
-            /*isVarArg=*/false);
+    std::vector<llvm::Type*> signature;
+    this->types(signature, C);
+    if (inputs == signature) return Explicit;
 
-    const std::string& name = this->symbolName();
-    llvm::Function* llvmFunction = M.getFunction(llvm::StringRef(name));
+    llvm::Type* strType = LLVMType<AXString>::get(C);
 
-    if (!llvmFunction) {
+    // try implicit - signature should not be empty here
+    for (size_t i = 0; i < signature.size(); ++i) {
+        llvm::Type* from = inputs[i];
+        llvm::Type* to = signature[i];
+        // if exactly matching, continue
+        if (from == to) continue;
 
-        // Create the function with external linkage
-        // @todo - expose the linkage type as an option on the signature
+        // if arg is a ptr and is not marked as readonly, fail - memory will be modified
+        if (to->isPointerTy() && !this->hasParamAttribute(i,
+                llvm::Attribute::AttrKind::ReadOnly)) return Size;
 
-        llvmFunction =
-            llvm::Function::Create(functionType,
-                llvm::Function::ExternalLinkage, name, &M);
+        // compare contained types if both are pointers
+        if (from->isPointerTy() && to->isPointerTy()) {
+            from = from->getContainedType(0);
+            to = to->getContainedType(0);
+        }
+
+        // allow for string->char*. Note that this is only allowed from inputs->signature
+        if (from == strType && to == LLVMType<char>::get(C)) continue;
+        if (!isValidCast(from, to)) return Size;
     }
-    else if (functionType != llvmFunction->getFunctionType()) {
-        OPENVDB_THROW(LLVMFunctionError, "Unable to create a LLVM Function with "
-            "symbol \"" + name + "\" as it already exists with a different signature.");
-    }
 
-    return llvmFunction;
+    return Implicit;
 }
 
 void
-FunctionSignatureBase::print(llvm::LLVMContext& C,
-    const std::string& name,
+Function::print(llvm::LLVMContext& C,
     std::ostream& os,
+    const char* name,
     const bool axTypes) const
 {
     std::vector<llvm::Type*> current;
-    llvm::Type* returnT = this->toLLVMTypes(C, &current);
-    printSignature(returnT, current, name, os, axTypes);
+    llvm::Type* ret = this->types(current, C);
+
+    std::vector<const char*> names;
+    names.reserve(this->size());
+    for (size_t i = 0; i < this->size(); ++i) {
+        names.emplace_back(this->argName(i));
+    }
+    printSignature(os, current, ret, name, &names, axTypes);
+}
+
+void
+Function::cast(std::vector<llvm::Value*>& args,
+            const std::vector<llvm::Type*>& types,
+            llvm::IRBuilder<>& B)
+{
+    llvm::LLVMContext& C = B.getContext();
+    assert(args.size() >= types.size());
+    for (size_t i = 0; i < args.size(); ++i) {
+        llvm::Value*& value = args[i];
+        llvm::Type* type = value->getType();
+        if (type->isIntegerTy() || type->isFloatingPointTy()) {
+            value = arithmeticConversion(value, types[i], B);
+        }
+        else if (type->getContainedType(0)->isArrayTy()) {
+            llvm::Type* arrayType = getBaseContainedType(types[i]);
+            value = arrayCast(value, arrayType->getArrayElementType(), B);
+        }
+        else {
+            if (types[i] == LLVMType<char*>::get(C)) {
+                llvm::Type* strType = LLVMType<AXString>::get(C);
+                if (type->getContainedType(0) == strType) {
+                    value = B.CreateStructGEP(strType, value, 0); // char**
+                    value = B.CreateLoad(value); // char*
+                }
+            }
+        }
+    }
+}
+
+llvm::AttributeList
+Function::flattenAttrs(llvm::LLVMContext& C) const
+{
+    if (!mAttributes) return llvm::AttributeList();
+
+    auto buildSetFromKinds = [&C](llvm::AttrBuilder& ab,
+        const std::vector<llvm::Attribute::AttrKind>& kinds)
+            -> llvm::AttributeSet {
+        for (auto& attr : kinds) {
+            ab.addAttribute(attr);
+        }
+        const llvm::AttributeSet set = llvm::AttributeSet::get(C, ab);
+        ab.clear();
+        return set;
+    };
+
+    llvm::AttrBuilder ab;
+    const llvm::AttributeSet fn = buildSetFromKinds(ab, mAttributes->mFnAttrs);
+    const llvm::AttributeSet ret = buildSetFromKinds(ab, mAttributes->mRetAttrs);
+
+    std::vector<llvm::AttributeSet> parms(this->size());
+
+    for (auto& idxAttr : mAttributes->mParamAttrs) {
+        const size_t idx = idxAttr.first;
+        if (idx >= this->size()) continue;
+        parms[idx] = buildSetFromKinds(ab, idxAttr.second);
+    }
+
+    return llvm::AttributeList::get(C, fn, ret, parms);
 }
 
 
@@ -332,188 +323,161 @@ FunctionSignatureBase::print(llvm::LLVMContext& C,
 ///////////////////////////////////////////////////////////////////////////
 
 
-void FunctionBase::getDependencies(std::vector<std::string>&) const {}
-
-void FunctionBase::getDocumentation(std::string&) const {}
-
-FunctionBase::FunctionMatch
-FunctionBase::match(const std::vector<llvm::Type*>& types,
-      llvm::LLVMContext& C,
-      const bool addOutputArgument) const
+llvm::Value* IRFunctionBase::call(const std::vector<llvm::Value*>& args,
+     const std::unordered_map<std::string, llvm::Value*>& globals,
+     llvm::IRBuilder<>& B,
+     const bool cast) const
 {
-    FunctionSignatureBase::SignatureMatch match =
-        FunctionSignatureBase::SignatureMatch::None;
-    FunctionSignatureBase::Ptr targetFunction;
-
-    // Match against the best function signature. If addOutputArgument is true
-    // loop through the function list twice - the first time prioritise functions
-    // with output arguments and return if an explicit or implicit function call
-    // is found. Otherwise (and if addOutputArgument is false) find the best
-    // match given the input types
-
-    if (addOutputArgument) {
-        for (const auto& function : mFunctionList) {
-
-            if (!function->hasOutputArgument()) continue;
-
-            std::vector<llvm::Type*> typesWithReturn(types);
-            typesWithReturn.emplace_back(function->getOutputType(C));
-
-            const FunctionSignatureBase::SignatureMatch matchType =
-                function->match(typesWithReturn);
-
-            // for any explicit match, immediately return, otherwise choose the highest
-            // match type. Note that the first implicit match is used if the highest
-            // match type is implicit
-
-            if (matchType == FunctionSignatureBase::SignatureMatch::Explicit) {
-                return FunctionBase::FunctionMatch(function, matchType);
-            }
-            else if (matchType > match) {
-                targetFunction = function;
-                match = matchType;
-            }
-        }
-
-        // return if implicit match (explicit will have already returned)
-
-        if (match == FunctionSignatureBase::SignatureMatch::Implicit) {
-            return FunctionBase::FunctionMatch(targetFunction, match);
-        }
+    std::vector<llvm::Value*> inputs(args);
+    if (cast) {
+        std::vector<llvm::Type*> types;
+        this->types(types, B.getContext());
+        this->cast(inputs, types, B);
     }
+
+    if (this->hasEmbedIR()) {
+        auto result = mGen(inputs, globals, B);
+        if (result) {
+            std::vector<llvm::Type*> unused;
+            this->verifyResultType(result->getType(),
+                this->types(unused, B.getContext()));
+        }
+        return result;
+    }
+
+    // Get the function from the module - if it already exists, we assume its
+    // already had its body generated
+    llvm::Module* M =
+        B.GetInsertBlock()->getParent()->getParent();
+    llvm::Function* function = M->getFunction(this->symbol());
+    if (function) return B.CreateCall(function, inputs);
+
+    function = this->create(B.getContext(), M);
+    assert(function);
+
+    llvm::Value* result = B.CreateCall(function, inputs);
+    std::vector<llvm::Type*> unused;
+    this->verifyResultType(result->getType(),
+        this->types(unused, B.getContext()));
+
+    // function didn't exist, generate the body
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(B.getContext(),
+        this->symbol(), // twine
+        function); // parent
+
+    std::vector<llvm::Value*> fnargs;
+    fnargs.reserve(this->size());
+    for (auto arg = function->arg_begin(), arg_end = function->arg_end();
+         arg != arg_end; ++arg) {
+        fnargs.emplace_back(llvm::cast<llvm::Value>(arg));
+    }
+
+    auto IP = B.saveIP();
+    B.SetInsertPoint(entry);
+
+    llvm::Value* lastInstruction = mGen(fnargs, globals, B);
+
+    // Allow the user to return a nullptr, an actual value or a return
+    // instruction from the generator callback. This facilitates the same
+    // generator being used for inline IR
+
+    // if nullptr, insert a ret void inst, otherwise if it's not a return
+    // instruction, either return the value if its supported or insert a
+    // ret void
+    if (!lastInstruction) B.CreateRetVoid();
+    else if (!llvm::isa<llvm::ReturnInst>(lastInstruction)) {
+        if (lastInstruction->getType()->isVoidTy()) B.CreateRetVoid();
+        else B.CreateRet(lastInstruction);
+    }
+
+    B.restoreIP(IP);
+    return result;
+}
+
+
+///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+
+
+Function::Ptr
+FunctionGroup::match(const std::vector<llvm::Type*>& types,
+      llvm::LLVMContext& C,
+      Function::SignatureMatch* type) const
+{
+    Function::Ptr targetFunction;
+    if (type) *type = Function::SignatureMatch::None;
 
     for (const auto& function : mFunctionList) {
 
-        // get the match type
+        const Function::SignatureMatch matchtype = function->match(types, C);
+        if (type) *type = std::max(matchtype, *type);
 
-        const FunctionSignatureBase::SignatureMatch matchType = function->match(types);
-
-        // for any explicit match, immediately return, otherwise choose the highest
-        // match type. Note that the first implicit match is used if the highest
-        // match type is implicit
-
-        if (matchType == FunctionSignatureBase::SignatureMatch::Explicit) {
-            return FunctionBase::FunctionMatch(function, matchType);
+        if (matchtype == Function::SignatureMatch::None)      continue;
+        else if (matchtype == Function::SignatureMatch::Size) continue;
+        else if (matchtype == Function::SignatureMatch::Explicit) {
+            return function;
         }
-        else if (matchType > match) {
-            targetFunction = function;
-            match = matchType;
+        else if (matchtype == Function::SignatureMatch::Implicit) {
+            if (!targetFunction) targetFunction = function;
         }
     }
 
-    return FunctionBase::FunctionMatch(targetFunction, match);
+    return targetFunction;
 }
 
 llvm::Value*
-FunctionBase::execute(const std::vector<llvm::Value*>& args,
+FunctionGroup::execute(const std::vector<llvm::Value*>& args,
             const std::unordered_map<std::string, llvm::Value*>& globals,
-            llvm::IRBuilder<>& B,
-            std::vector<llvm::Value*>* results,
-            const bool addOutputArgument) const
+            llvm::IRBuilder<>& B) const
 {
     std::vector<llvm::Type*> types;
     valuesToTypes(args, types);
 
     llvm::LLVMContext& C = B.getContext();
 
-    const FunctionBase::FunctionMatch functionMatch =
-        match(types, C, addOutputArgument);
+    Function::SignatureMatch match;
+    const Function::Ptr target = this->match(types, C, &match);
 
-    const FunctionSignatureBase::Ptr targetFunction = functionMatch.first;
-    const FunctionSignatureBase::SignatureMatch& match = functionMatch.second;
-
-    std::vector<llvm::Value*> input(args);
-
-    if (match == FunctionSignatureBase::SignatureMatch::Implicit) {
-
-        std::vector<llvm::Type*> targetTypes;
-        targetFunction->toLLVMTypes(C, &targetTypes);
-
-        for (size_t i = 0; i < input.size(); ++i) {
-            if (isScalarType(input[i]->getType())) {
-                input[i] = arithmeticConversion(input[i], targetTypes[i], B);
-            }
-            else if (isArrayType(input[i]->getType()->getContainedType(0))) {
-                llvm::Type* arrayType = getBaseContainedType(targetTypes[i]);
-                input[i] = arrayCast(input[i], arrayType->getArrayElementType(), B);
-            }
-        }
-    }
-
-    if (match == FunctionSignatureBase::SignatureMatch::Implicit ||
-        match == FunctionSignatureBase::SignatureMatch::Explicit) {
-        assert(targetFunction);
-
-        if (addOutputArgument && targetFunction->hasOutputArgument()) {
-            input.emplace_back(targetFunction->getOutputArgument(B));
-        }
-
-        llvm::Value* result = nullptr;
-        if (targetFunction->functionPointer()) {
-            llvm::Module* M = B.GetInsertBlock()->getParent()->getParent();
-            result = B.CreateCall(targetFunction->toLLVMFunction(*M), input);
+    if (!target) {
+        std::ostringstream os;
+        if (match == Function::SignatureMatch::None) {
+            os << "Wrong number of arguments. \"" << mName << "\""
+               << " was called with: (";
+            llvm::raw_os_ostream stream(os);
+            printTypes(stream, types);
+            stream << ")";
         }
         else {
-            result = this->generate(input, globals, B);
+            // match == Function::SignatureMatch::Size
+            os << "No matching function for ";
+            printSignature(os, types, LLVMType<void>::get(C), mName, nullptr, true);
+            os << ".";
         }
 
-        // only error if result is a nullptr if the return it not void
-        llvm::Type* returnType = targetFunction->toLLVMTypes(C);
-        if (!returnType->isVoidTy() && !result) {
-            OPENVDB_THROW(LLVMFunctionError, "Function \"" + this->identifier() +
-                "\" has been invoked with no valid llvm Value return.");
+        os << " Candidates are: ";
+        for (const auto& function : mFunctionList) {
+            os << std::endl;
+            function->print(C, os, mName);
+            os << ", ";
         }
-
-        if (results) {
-            for (size_t i = args.size(); i < input.size(); ++i) {
-                results->emplace_back(input[i]);
-            }
-        }
-
-        // @todo  To implicit cast wrong return types?
-        if (result && result->getType() != returnType) {
-            std::string type, expected;
-            llvmTypeToString(result->getType(), type);
-            llvmTypeToString(returnType, expected);
-
-            OPENVDB_THROW(LLVMFunctionError, "Function \"" + this->identifier() +
-                "\" has been invoked with a mismatching return type. Expected: \"" +
-                expected + "\", got \"" + type + "\".");
-        }
-
-        return result;
+        OPENVDB_THROW(LLVMFunctionError, os.str());
     }
 
-    std::ostringstream os;
-    if (match == FunctionSignatureBase::SignatureMatch::None) {
-        os << "Wrong number of arguments. \"" << this->identifier() << "\""
-           << " was called with: (";
-        llvm::raw_os_ostream stream(os);
-        printTypes(stream, types);
-        stream << ")";
+    llvm::Value* result = nullptr;
+    if (match == Function::SignatureMatch::Implicit) {
+        result = target->call(args, globals, B, /*cast=*/true);
     }
     else {
-        // match == FunctionSignatureBase::SignatureMatch::Size
-        os << "No matching function for ";
-        printSignature(LLVMType<void>::get(C), types, this->identifier(), os, true);
-        os << ".";
+        // match == Function::SignatureMatch::Explicit
+        result = target->call(args, globals, B, /*cast=*/false);
     }
 
-    os << " Candidates are: ";
-    for (const auto& function : mFunctionList) {
-        os << std::endl;
-        function->print(C, this->identifier(), os);
-        os << ", ";
+    if (!result) {
+        OPENVDB_THROW(LLVMFunctionError, "Function \"" << mName <<
+            "\" has been invoked with no valid llvm Value return.");
     }
 
-    OPENVDB_THROW(LLVMFunctionError, os.str());
-}
-
-llvm::Value*
-FunctionBase::generate(const std::vector<llvm::Value*>&,
-         const std::unordered_map<std::string, llvm::Value*>&,
-         llvm::IRBuilder<>&) const {
-    return nullptr;
+    return result;
 }
 
 }
@@ -521,6 +485,6 @@ FunctionBase::generate(const std::vector<llvm::Value*>&,
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

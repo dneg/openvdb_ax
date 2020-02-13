@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2015-2019 DNEG
+Copyright (c) 2015-2020 DNEG
 
 All rights reserved. This software is distributed under the
 Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -270,6 +270,6 @@ COMMENT     "//".*
 
 %%
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
