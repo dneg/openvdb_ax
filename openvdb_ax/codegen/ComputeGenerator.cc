@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -100,19 +100,13 @@ ComputeGenerator::ComputeGenerator(llvm::Module& module,
 
 bool ComputeGenerator::generate(const ast::Tree& tree)
 {
-    // Initialise a default function body which returns void and accepts
-    // a custom data pointer as an argument
+    llvm::FunctionType* type =
+        llvmFunctionTypeFromSignature<ComputeKernel::Signature>(mContext);
 
-    using FunctionSignatureT = FunctionSignature<ComputeKernel::Signature>;
-
-    // Use the function signature type to generate the llvm function
-
-    const FunctionSignatureT::Ptr computeKernel =
-        FunctionSignatureT::create(nullptr, ComputeKernel::getDefaultName());
-
-    // Set the base code generator function to the compute voxel function
-
-    mFunction = computeKernel->toLLVMFunction(mModule);
+    mFunction = llvm::Function::Create(type,
+        llvm::Function::ExternalLinkage,
+        ComputeKernel::getDefaultName(),
+        &mModule);
 
     // Set up arguments for initial entry
 
@@ -127,7 +121,7 @@ bool ComputeGenerator::generate(const ast::Tree& tree)
         }
     }
 
-    llvm::BasicBlock* entry =  llvm::BasicBlock::Create(mContext,
+    llvm::BasicBlock* entry = llvm::BasicBlock::Create(mContext,
         "entry_" + ComputeKernel::getDefaultName(), mFunction);
     mBuilder.SetInsertPoint(entry);
 
@@ -343,8 +337,8 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
     // (scalar=scalar, vector=vector, scalar=vector, vector=scalar etc)
 
     OperandTypes operandType;
-    if (lhsType == LLVMType<std::string>::get(mContext) &&
-        rhsType == LLVMType<std::string>::get(mContext)) {
+    if (lhsType == LLVMType<AXString>::get(mContext) &&
+        rhsType == LLVMType<AXString>::get(mContext)) {
         operandType = STRING_OP_STRING;
     }
     else if (lhsType->isArrayTy() && rhsType->isArrayTy()) {
@@ -381,11 +375,11 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     + ast::tokens::operatorNameFromToken(op) + "\"");
             }
 
-            llvm::Type* strType = LLVMType<std::string>::get(mContext);
+            llvm::Type* strType = LLVMType<AXString>::get(mContext);
 
             auto& B = mBuilder;
-            auto structToString = [&B, strType]
-                (llvm::Value*& str, const bool includeTerminator) -> llvm::Value* {
+            auto structToString = [&B, strType](llvm::Value*& str) -> llvm::Value*
+            {
                 llvm::Value* size = nullptr;
                 if (llvm::isa<llvm::Constant>(str)) {
                     llvm::Constant* zero =
@@ -393,36 +387,43 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     llvm::Constant* constant = llvm::cast<llvm::Constant>(str)->getAggregateElement(zero); // char*
                     str = constant;
                     constant = constant->stripPointerCasts();
-                    const size_t count = constant->getType()->getPointerElementType()->getArrayNumElements();
-                    size = LLVMType<int64_t>::get(B.getContext(), count);
+
+                    // array size should include the null terminator
+                    llvm::Type* arrayType = constant->getType()->getPointerElementType();
+                    assert(arrayType->getArrayNumElements() > 0);
+
+                    const size_t count = arrayType->getArrayNumElements() - 1;
+                    assert(count < static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
+
+                    size = LLVMType<AXString::SizeType>::get
+                        (B.getContext(), static_cast<AXString::SizeType>(count));
                 }
                 else {
                     llvm::Value* rstrptr = B.CreateStructGEP(strType, str, 0); // char**
                     rstrptr = B.CreateLoad(rstrptr);
-                    size = B.CreateStructGEP(strType, str, 1); // int64_t*
+                    size = B.CreateStructGEP(strType, str, 1); // AXString::SizeType*
                     size = B.CreateLoad(size);
                     str = rstrptr;
                 }
 
-                if (!includeTerminator) {
-                    llvm::Value* one = LLVMType<int64_t>::get(B.getContext(), 1);
-                    size = binaryOperator(size, one, ast::tokens::MINUS, B);
-                }
                 return size;
             };
 
             // lhs and rhs get set to the char* arrays in structToString
-            llvm::Value* lhsSize = structToString(lhs, false); // don't include last char
-            llvm::Value* rhsSize = structToString(rhs, true);
+            llvm::Value* lhsSize = structToString(lhs);
+            llvm::Value* rhsSize = structToString(rhs);
+            // rhs with null terminator
+            llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
+            llvm::Value* rhsTermSize = binaryOperator(rhsSize, one, ast::tokens::PLUS, mBuilder);
+            // total and total with term
             llvm::Value* total = binaryOperator(lhsSize, rhsSize, ast::tokens::PLUS, mBuilder);
-
-            // allocate the new struct and string array
-            result = mBuilder.CreateAlloca(strType);
-            llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), total);
+            llvm::Value* totalTerm = binaryOperator(lhsSize, rhsTermSize, ast::tokens::PLUS, mBuilder);
 
             // get ptrs to the new structs values
+            result = insertStaticAlloca(mBuilder, strType);
+            llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), totalTerm);
             llvm::Value* strptr = mBuilder.CreateStructGEP(strType, result, 0); // char**
-            llvm::Value* sizeptr = mBuilder.CreateStructGEP(strType, result, 1); // int64_t*
+            llvm::Value* sizeptr = mBuilder.CreateStructGEP(strType, result, 1); // AXString::SizeType*
 
             // get rhs offset
             llvm::Value* stringRhsOffset = mBuilder.CreateGEP(string, lhsSize);
@@ -430,10 +431,10 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
             // memcpy
 #if LLVM_VERSION_MAJOR > 6
             mBuilder.CreateMemCpy(string, /*dest-align*/0, lhs, /*src-align*/0, lhsSize);
-            mBuilder.CreateMemCpy(stringRhsOffset, /*dest-align*/0, rhs, /*src-align*/0, rhsSize);
+            mBuilder.CreateMemCpy(stringRhsOffset, /*dest-align*/0, rhs, /*src-align*/0, rhsTermSize);
 #else
             mBuilder.CreateMemCpy(string, lhs, lhsSize, /*align*/0);
-            mBuilder.CreateMemCpy(stringRhsOffset, rhs, rhsSize, /*align*/0);
+            mBuilder.CreateMemCpy(stringRhsOffset, rhs, rhsTermSize, /*align*/0);
 #endif
             mBuilder.CreateStore(string, strptr);
             mBuilder.CreateStore(total, sizeptr);
@@ -486,7 +487,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                 if (op == ast::tokens::MULTIPLY) {
                     if (lhsSize > 4 && rhsSize > 4) {
                         // matrix matrix multiplication all handled through mmmult
-                        const FunctionBase::Ptr function = this->getFunction("mmmult", mOptions, /*internal*/true);
+                        const FunctionGroup::Ptr function = this->getFunction("mmmult", mOptions, /*internal*/true);
                         result = function->execute({lhs, rhs}, mLLVMArguments.map(), mBuilder);
                         assert(result);
                         mValues.push(result);
@@ -494,7 +495,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     }
                     else if (lhsSize > 4 && rhsSize <= 4) {
                         // matrix vector multiplication all handled through pretransform
-                        const FunctionBase::Ptr function = this->getFunction("pretransform", mOptions);
+                        const FunctionGroup::Ptr function = this->getFunction("pretransform", mOptions);
                         result = function->execute({lhs, rhs}, mLLVMArguments.map(), mBuilder);
                         assert(result);
                         mValues.push(result);
@@ -502,7 +503,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     }
                     else if (lhsSize <= 4 && rhsSize > 4) {
                         // vector matrix multiplication all handled through transform
-                        const FunctionBase::Ptr function = this->getFunction("transform", mOptions);
+                        const FunctionGroup::Ptr function = this->getFunction("transform", mOptions);
                         result = function->execute({lhs, rhs}, mLLVMArguments.map(), mBuilder);
                         assert(result);
                         mValues.push(result);
@@ -558,7 +559,10 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
             else {
                 llvm::Type* arrayType =
                     llvm::ArrayType::get(elements.front()->getType(), elements.size());
-                result = mBuilder.CreateAlloca(arrayType);
+
+                // Create the allocation at the start of the function block
+                result = insertStaticAlloca(mBuilder, arrayType);
+
                 for (size_t i = 0; i < elements.size(); ++i) {
                     llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
                     mBuilder.CreateStore(elements[i], target);
@@ -623,7 +627,7 @@ bool ComputeGenerator::visit(const ast::UnaryOperator* node)
     }
     else if (type->isArrayTy()) {
         const size_t elements = type->getArrayNumElements();
-        result = mBuilder.CreateAlloca(type);
+        result = insertStaticAlloca(mBuilder, type);
         type = type->getArrayElementType();
 
         if (token == ast::tokens::MINUS) {
@@ -708,8 +712,8 @@ bool ComputeGenerator::visit(const ast::AssignExpression*)
     // (scalar=scalar, vector=vector, scalar=vector, vector=scalar etc)
 
     AssignmentType assignmentType = UNSUPPORTED;
-    if (lhsType == LLVMType<std::string>::get(mContext) &&
-        rhsType == LLVMType<std::string>::get(mContext)) {
+    if (lhsType == LLVMType<AXString>::get(mContext) &&
+        rhsType == LLVMType<AXString>::get(mContext)) {
         assignmentType = STRING_EQ_STRING;
     }
     else if (lhsType->isArrayTy() && rhsType->isArrayTy()) {
@@ -734,35 +738,42 @@ bool ComputeGenerator::visit(const ast::AssignExpression*)
         case STRING_EQ_STRING : {
 
             // get the size of the rhs string
-            llvm::Type* strType = LLVMType<std::string>::get(mContext);
+            llvm::Type* strType = LLVMType<AXString>::get(mContext);
             llvm::Value* rstrptr = nullptr;
             llvm::Value* size = nullptr;
 
             if (llvm::isa<llvm::Constant>(rhs)) {
                 llvm::Constant* zero =
-                    llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(mBuilder.getContext(), 0));
+                    llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(mContext, 0));
                 llvm::Constant* constant = llvm::cast<llvm::Constant>(rhs)->getAggregateElement(zero); // char*
                 rstrptr = constant;
                 constant = constant->stripPointerCasts();
                 const size_t count = constant->getType()->getPointerElementType()->getArrayNumElements();
-                size = LLVMType<int64_t>::get(mBuilder.getContext(), count);
+                assert(count < static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
+
+                size = LLVMType<AXString::SizeType>::get
+                    (mContext, static_cast<AXString::SizeType>(count));
             }
             else {
                 rstrptr = mBuilder.CreateStructGEP(strType, rhs, 0); // char**
                 rstrptr = mBuilder.CreateLoad(rstrptr);
-                size = mBuilder.CreateStructGEP(strType, rhs, 1); // int64_t*
+                size = mBuilder.CreateStructGEP(strType, rhs, 1); // AXString::SizeType*
                 size = mBuilder.CreateLoad(size);
             }
 
+            // total with term
+            llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
+            llvm::Value* totalTerm = binaryOperator(size, one, ast::tokens::PLUS, mBuilder);
+
             // re-allocate the string array
-            llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), size);
+            llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), totalTerm);
             llvm::Value* lstrptr = mBuilder.CreateStructGEP(strType, lhs, 0); // char**
-            llvm::Value* lsize = mBuilder.CreateStructGEP(strType, lhs, 1); // int64_t*
+            llvm::Value* lsize = mBuilder.CreateStructGEP(strType, lhs, 1); // AXString::SizeType*
 
 #if LLVM_VERSION_MAJOR > 6
-            mBuilder.CreateMemCpy(string, /*dest-align*/0, rstrptr, /*src-align*/0, size);
+            mBuilder.CreateMemCpy(string, /*dest-align*/0, rstrptr, /*src-align*/0, totalTerm);
 #else
-            mBuilder.CreateMemCpy(string, rstrptr, size, /*align*/0);
+            mBuilder.CreateMemCpy(string, rstrptr, totalTerm, /*align*/0);
 #endif
             mBuilder.CreateStore(string, lstrptr);
             mBuilder.CreateStore(size, lsize);
@@ -857,22 +868,15 @@ bool ComputeGenerator::visit(const ast::Crement* node)
 
 bool ComputeGenerator::visit(const ast::FunctionCall* node)
 {
-    const FunctionBase::Ptr function = this->getFunction(node->name(), mOptions);
+    const FunctionGroup::Ptr function = this->getFunction(node->name(), mOptions);
     const size_t args = node->numArgs();
 
     std::vector<llvm::Value*> arguments;
     stackValuesForFunction(arguments, mValues, args, mBuilder);
 
-    std::vector<llvm::Value*> results;
-    llvm::Value* result = function->execute(arguments, mLLVMArguments.map(), mBuilder, &results);
-
-    if (result && !result->getType()->isVoidTy()) {
-        mValues.push(result);
-    }
-
-    for (auto& v : results) {
-        mValues.push(v);
-    }
+    llvm::Value* result = function->execute(arguments, mLLVMArguments.map(), mBuilder);
+    assert(result);
+    mValues.push(result);
     return true;
 }
 
@@ -907,9 +911,21 @@ bool ComputeGenerator::visit(const ast::DeclareLocal* node)
 {
     // create storage for the local value.
     llvm::Type* type = llvmTypeFromToken(node->type(), mContext);
-    llvm::Value* value = mBuilder.CreateAlloca(type);
-    mValues.push(value);
+    llvm::Value* value = insertStaticAlloca(mBuilder, type);
 
+    // for strings, make sure we correctly initialize to the empty string.
+    // strings are the only variable type that are currently default allocated
+    // otherwise you can run into issues with binary operands
+    if (node->type() == ast::tokens::STRING) {
+        llvm::Value* loc = mBuilder.CreateGlobalStringPtr(""); // char*
+        llvm::Constant* constLoc = llvm::cast<llvm::Constant>(loc);
+        llvm::Constant* size = LLVMType<AXString::SizeType>::get
+            (mContext, static_cast<AXString::SizeType>(0));
+        llvm::Value* constStr = LLVMType<AXString>::get(mContext, constLoc, size);
+        mBuilder.CreateStore(constStr, value);
+    }
+
+    mValues.push(value);
     SymbolTable* current = mSymbolTables.getOrInsert(mScopeIndex);
     if (!current->insert(node->name(), value)) {
         OPENVDB_THROW(LLVMDeclarationError, "Local variable \"" + node->name() +
@@ -1007,7 +1023,7 @@ bool ComputeGenerator::visit(const ast::ArrayUnpack* node)
             + os.str() + "]");
     }
 
-    llvm::Value* zero = LLVMType<int32_t>::get(mBuilder.getContext(), 0);
+    llvm::Value* zero = LLVMType<int32_t>::get(mContext, 0);
     if (!component1) {
         value = mBuilder.CreateGEP(value, {zero, component0});
     }
@@ -1017,7 +1033,7 @@ bool ComputeGenerator::visit(const ast::ArrayUnpack* node)
         assert(size == 9 || size == 16);
         const int32_t dim = size == 9 ? 3 : 4;
         llvm::Value* offset =
-            LLVMType<int32_t>::get(mBuilder.getContext(), static_cast<int32_t>(dim));
+            LLVMType<int32_t>::get(mContext, static_cast<int32_t>(dim));
         component0 = binaryOperator(component0, offset, ast::tokens::MULTIPLY, mBuilder);
         component0 = binaryOperator(component0, component1, ast::tokens::PLUS, mBuilder);
         value = mBuilder.CreateGEP(value, {zero, component0});
@@ -1088,21 +1104,32 @@ bool ComputeGenerator::visit(const ast::Value<double>* node)
 
 bool ComputeGenerator::visit(const ast::Value<std::string>* node)
 {
+    assert(node->value().size() <
+        static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
+
     llvm::Value* loc = mBuilder.CreateGlobalStringPtr(node->value()); // char*
     llvm::Constant* constLoc = llvm::cast<llvm::Constant>(loc);
-    llvm::Constant* size = LLVMType<int64_t>::get(mContext, node->value().size() + 1);
-    llvm::Value* constStr = LLVMType<std::string>::get(mContext, constLoc, size);
-    mValues.push(constStr);
+
+    llvm::Constant* size = LLVMType<AXString::SizeType>::get
+        (mContext, static_cast<AXString::SizeType>(node->value().size()));
+    llvm::Value* constStr = LLVMType<AXString>::get(mContext, constLoc, size);
+
+    // Always allocate an AXString here for easier passing to functions
+    // @todo shouldn't need an AXString for char* literals
+    llvm::Value* alloc = insertStaticAlloca(mBuilder, LLVMType<AXString>::get(mContext));
+    mBuilder.CreateStore(constStr, alloc);
+    mValues.push(alloc);
     return true;
 }
 
-FunctionBase::Ptr ComputeGenerator::getFunction(const std::string &identifier,
+FunctionGroup::Ptr ComputeGenerator::getFunction(const std::string &identifier,
                                                 const FunctionOptions &op,
                                                 const bool allowInternal)
 {
-    FunctionBase::Ptr function = mFunctionRegistry.getOrInsert(identifier, op, allowInternal);
+    FunctionGroup::Ptr function = mFunctionRegistry.getOrInsert(identifier, op, allowInternal);
     if (!function) {
-        OPENVDB_THROW(LLVMFunctionError, "Unable to locate function \"" + identifier + "\".");
+        OPENVDB_THROW(LLVMFunctionError,
+            "Unable to locate function \"" + identifier + "\".");
     }
     return function;
 }
@@ -1161,7 +1188,7 @@ ComputeGenerator::visit(const ast::Value<ValueType>* node)
 
 bool ComputeGenerator::visit(const ast::ExternalVariable* node)
 {
-    const std::string globalName = getGlobalExternalAccess(node->name(), node->typestr());
+    const std::string globalName = node->tokenname();
     llvm::Value* ptrToAddress = this->globals().get(globalName);
 
     if (!ptrToAddress) {
@@ -1203,6 +1230,6 @@ bool ComputeGenerator::visit(const ast::Attribute*)
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

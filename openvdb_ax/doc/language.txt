@@ -37,9 +37,19 @@ int    | 32-bit signed integer value.        | `int@`, `i@`        | `int`      
 long   | 64-bit signed integer value.        | `long@`             | `long`                |
 float  | 32-bit floating point value.        | `float@`, `f@`, `@` | `float`               |
 double | 64-bit floating point value.        | `double@`           | `double`              |
+vec2i  | 2-element vector of integer values. | `vec2i@`            | `vec2i`               |
+vec2f  | 2-element vector of float values.   | `vec2f@`,           | `vec2f`               |
+vec2d  | 2-element vector of double values.  | `vec2d@`            | `vec2d`               |
 vec3i  | 3-element vector of integer values. | `vec3i@`            | `vec3i`               |
 vec3f  | 3-element vector of float values.   | `vec3f@`, `v@`,     | `vec3f`               |
 vec3d  | 3-element vector of double values.  | `vec3d@`            | `vec3d`               |
+vec4i  | 4-element vector of integer values. | `vec4i@`            | `vec4i`               |
+vec4f  | 4-element vector of float values.   | `vec4f@`,           | `vec4f`               |
+vec4d  | 4-element vector of double values.  | `vec4d@`            | `vec4d`               |
+mat3f  | 3x3 matrix of float values.         | `mat3f@`,           | `mat3f`               |
+mat3d  | 3x3 matrix of double values.        | `mat3d@`,           | `mat3d`               |
+mat4f  | 4x4 matrix of float values.         | `mat4f@`,           | `mat4f`               |
+mat4d  | 4x4 matrix of double values.        | `mat4d@`,           | `mat4d`               |
 string | A string of characters.             | `string@`, `s@`     | `string`              |
 
 AX supports the following data types for OpenVDB grids:

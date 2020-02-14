@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 DNEG
+# Copyright (c) 2015-2020 DNEG
 #
 # All rights reserved. This software is distributed under the
 # Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -31,7 +31,9 @@
 #]=======================================================================]
 
 cmake_minimum_required(VERSION 3.3)
-project(OpenVDBAXUnitTests)
+project(OpenVDBAXUnitTests LANGUAGES CXX)
+
+option(OPENVDB_AX_TEST_PROFILE "Switch on profiling for some of the unit tests." OFF)
 
 ##########################################################################
 
@@ -52,6 +54,7 @@ find_package(CppUnit REQUIRED)
 set(TEST_SOURCE_FILES
   ast/TestScanners.cc
   backend/TestFunctionBase.cc
+  backend/TestFunctionRegistry.cc
   backend/TestFunctionSignature.cc
   backend/TestSymbolTable.cc
   compiler/TestPointExecutable.cc
@@ -79,15 +82,14 @@ set(TEST_SOURCE_FILES
   integration/TestCast.cc
   integration/TestConditional.cc
   integration/TestDeclare.cc
-  integration/TestEditGroups.cc
   integration/TestEmpty.cc
-  integration/TestFunction.cc
-  integration/TestGroups.cc
   integration/TestHarness.cc
   integration/TestKeyword.cc
   integration/TestLoop.cc
+  integration/TestStandardFunctions.cc
   integration/TestString.cc
   integration/TestUnary.cc
+  integration/TestVDBFunctions.cc
   integration/TestWorldSpaceAccessors.cc
   main.cc
   )
@@ -103,5 +105,9 @@ target_link_libraries(vdb_ax_test
 target_include_directories(vdb_ax_test
   PRIVATE ../ .
 )
+
+if(OPENVDB_AX_TEST_PROFILE)
+  target_compile_definitions(vdb_ax_test PRIVATE "-DPROFILE")
+endif()
 
 add_test(NAME vdb_ax_unit_test COMMAND vdb_ax_test -v WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/../)

@@ -9,12 +9,12 @@ volumes and points using the expression language: AX.
 and currently supported by DNEG's:
 - Nick Avramoussis
 - Richard Jones
-- Francisco Gochez
-- Matthew Warner
 
 Please contact us on openvdbax@dneg.com if you have any questions.
 
 Other notable contributors include:
+- Francisco Gochez
+- Matthew Warner
 - Dan Bailey
 - Todd Keeler
 - James Bird

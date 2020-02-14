@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -95,6 +95,9 @@ public:
     /// @param grid Grid to apply code to
     /// @param group Optional name of a group for filtering.  If this is not NULL,
     ///        the code will only be applied to points in this group
+    /// @param createMissing If true, any attribute which has been used but does
+    ///        not exist will be created. Otherwise, a missing attribute runtime
+    ///        error will be thrown.
     void execute(points::PointDataGrid& grid,
                  const std::string* const group = nullptr,
                  const bool createMissing = true) const;
@@ -117,6 +120,6 @@ private:
 
 #endif // OPENVDB_AX_COMPILER_POINT_EXECUTABLE_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

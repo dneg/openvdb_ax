@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -52,11 +52,12 @@ void wrapExecution(openvdb::points::PointDataGrid& grid,
                    const std::string& codeFileName,
                    const std::string * const group,
                    std::vector<std::string>* warnings,
-                   const openvdb::ax::CustomData::Ptr& data)
+                   const openvdb::ax::CustomData::Ptr& data,
+                   const openvdb::ax::CompilerOptions& opts)
 {
     using namespace openvdb::ax;
 
-    Compiler compiler;
+    Compiler compiler(opts);
     const std::string code = loadText(codeFileName);
     ast::Tree::Ptr syntaxTree = ast::parse(code.c_str());
     PointExecutable::Ptr executable = compiler.compile<PointExecutable>(*syntaxTree, data, warnings);
@@ -66,11 +67,12 @@ void wrapExecution(openvdb::points::PointDataGrid& grid,
 void wrapExecution(openvdb::GridPtrVec& grids,
                    const std::string& codeFileName,
                    std::vector<std::string>* warnings,
-                   const openvdb::ax::CustomData::Ptr& data)
+                   const openvdb::ax::CustomData::Ptr& data,
+                   const openvdb::ax::CompilerOptions& opts)
 {
     using namespace openvdb::ax;
 
-    Compiler compiler;
+    Compiler compiler(opts);
     const std::string code = loadText(codeFileName);
     ast::Tree::Ptr syntaxTree = ast::parse(code.c_str());
     VolumeExecutable::Ptr executable = compiler.compile<VolumeExecutable>(*syntaxTree, data, warnings);
@@ -82,8 +84,8 @@ void AXTestHarness::addInputGroups(const std::vector<std::string> &names,
 {
     for (size_t i = 0; i < names.size(); i++) {
         for (auto& grid : mInputPointGrids) {
-            openvdb::points::appendGroup(grid.second->tree(), names[i]);
-            openvdb::points::setGroup(grid.second->tree(), names[i], defaults[i]);
+            openvdb::points::appendGroup(grid->tree(), names[i]);
+            openvdb::points::setGroup(grid->tree(), names[i], defaults[i]);
         }
     }
 }
@@ -93,8 +95,8 @@ void AXTestHarness::addExpectedGroups(const std::vector<std::string> &names,
 {
     for (size_t i = 0; i < names.size(); i++) {
         for (auto& grid : mOutputPointGrids) {
-            openvdb::points::appendGroup(grid.second->tree(), names[i]);
-            openvdb::points::setGroup(grid.second->tree(), names[i], defaults[i]);
+            openvdb::points::appendGroup(grid->tree(), names[i]);
+            openvdb::points::setGroup(grid->tree(), names[i], defaults[i]);
         }
     }
 }
@@ -102,19 +104,18 @@ void AXTestHarness::addExpectedGroups(const std::vector<std::string> &names,
 void AXTestHarness::executeCode(const std::string& codeFile,
                                 const std::string * const group,
                                 std::vector<std::string>* warnings,
-                                const openvdb::ax::CustomData::Ptr& data)
+                                const openvdb::ax::CustomData::Ptr& data,
+                                const openvdb::ax::CompilerOptions& opts)
 {
     if (mUsePoints) {
         for (auto& grid : mInputPointGrids) {
-            wrapExecution(*(grid.second), codeFile, group, warnings, data);
+            wrapExecution(*grid, codeFile, group, warnings, data, opts);
         }
     }
 
     if (mUseVolumes)
     {
-        for (auto& grids : mInputVolumeGrids) {
-            wrapExecution(grids.second, codeFile, warnings, data);
-        }
+        wrapExecution(mInputVolumeGrids, codeFile, warnings, data, opts);
     }
 }
 
@@ -127,20 +128,24 @@ bool AXTestHarness::checkAgainstExpected(std::ostream& sstream)
         std::stringstream resultStream;
         unittest_util::ComparisonResult result(resultStream);
 
-        const bool pointSuccess = unittest_util::compareGrids(result, *mOutputPointGrids["four_point"],
-            *mInputPointGrids["four_point"], settings, nullptr);
-        if (!pointSuccess)   sstream << resultStream.str() << std::endl;
-        success &= pointSuccess;
+        const size_t count = mInputPointGrids.size();
+        for (size_t i = 0; i < count; ++i) {
+            const auto& input = mInputPointGrids[i];
+            const auto& expected = mOutputPointGrids[i];
+            const bool pass =
+                unittest_util::compareGrids(result, *expected, *input, settings, nullptr);
+            if (!pass) sstream << resultStream.str() << std::endl;
+            success &= pass;
+        }
     }
 
     if (mUseVolumes) {
-        for (size_t i = 0; i < mInputVolumeGrids["one_voxel"].size(); i++) {
+        for (size_t i = 0; i < mInputVolumeGrids.size(); i++) {
             std::stringstream resultStream;
             unittest_util::ComparisonResult result(resultStream);
-
             const bool volumeSuccess =
-                unittest_util::compareUntypedGrids(result, *mOutputVolumeGrids["one_voxel"][i],
-                    *mInputVolumeGrids["one_voxel"][i], settings, nullptr);
+                unittest_util::compareUntypedGrids(result, *mOutputVolumeGrids[i],
+                    *mInputVolumeGrids[i], settings, nullptr);
             success &= volumeSuccess;
             if (!volumeSuccess)  sstream << resultStream.str() << std::endl;
         }
@@ -159,10 +164,41 @@ void AXTestHarness::testPoints(const bool enable)
     mUsePoints = enable;
 }
 
+void AXTestHarness::reset(const openvdb::Index64 ppv, const openvdb::CoordBBox& bounds)
+{
+    using openvdb::points::PointDataGrid;
+    using openvdb::points::NullCodec;
+
+    mInputPointGrids.clear();
+    mOutputPointGrids.clear();
+    mInputVolumeGrids.clear();
+    mOutputVolumeGrids.clear();
+
+    openvdb::math::Transform::Ptr transform =
+        openvdb::math::Transform::createLinearTransform(1.0);
+    openvdb::MaskGrid::Ptr mask = openvdb::MaskGrid::create();
+    mask->setTransform(transform);
+    mask->sparseFill(bounds, true, true);
+    openvdb::points::PointDataGrid::Ptr points =
+        openvdb::points::denseUniformPointScatter(*mask, static_cast<float>(ppv));
+    mask.reset();
+
+    mInputPointGrids.emplace_back(points);
+    mOutputPointGrids.emplace_back(points->deepCopy());
+    mOutputPointGrids.back()->setName("custom_expected");
+
+    mVolumeBounds = bounds;
+}
+
 void AXTestHarness::reset()
 {
     using openvdb::points::PointDataGrid;
     using openvdb::points::NullCodec;
+
+    mInputPointGrids.clear();
+    mOutputPointGrids.clear();
+    mInputVolumeGrids.clear();
+    mOutputVolumeGrids.clear();
 
     std::vector<openvdb::Vec3d> coordinates =
         {openvdb::Vec3d(0.0, 0.0, 0.0),
@@ -170,30 +206,80 @@ void AXTestHarness::reset()
          openvdb::Vec3d(0.0, 1.0, 0.0),
          openvdb::Vec3d(1.0, 1.0, 0.0)};
 
-    openvdb::math::Transform::Ptr transform1 = openvdb::math::Transform::createLinearTransform(1.0);
+    openvdb::math::Transform::Ptr transform1 =
+        openvdb::math::Transform::createLinearTransform(1.0);
+
     openvdb::points::PointDataGrid::Ptr onePointGrid =
-        openvdb::points::createPointDataGrid<NullCodec, PointDataGrid>(std::vector<openvdb::Vec3d>{coordinates[0]},
-            *transform1);
+        openvdb::points::createPointDataGrid<NullCodec, PointDataGrid>
+            (std::vector<openvdb::Vec3d>{coordinates[0]}, *transform1);
 
-    onePointGrid->setName("one_point");
-    mInputPointGrids["one_point"] = onePointGrid;
+    onePointGrid->setName("1_point");
+    mInputPointGrids.emplace_back(onePointGrid);
+    mOutputPointGrids.emplace_back(onePointGrid->deepCopy());
+    mOutputPointGrids.back()->setName("1_point_expected");
 
-    mOutputPointGrids["one_point"] = onePointGrid->deepCopy();
-    mOutputPointGrids["one_point"]->setName("one_point_expected");
+    openvdb::math::Transform::Ptr transform2 =
+        openvdb::math::Transform::createLinearTransform(0.1);
 
-    openvdb::math::Transform::Ptr transform2 = openvdb::math::Transform::createLinearTransform(0.1);
     openvdb::points::PointDataGrid::Ptr fourPointGrid =
-        openvdb::points::createPointDataGrid<NullCodec, PointDataGrid>(coordinates, *transform2);
+        openvdb::points::createPointDataGrid<NullCodec, PointDataGrid>
+            (coordinates, *transform2);
 
-    fourPointGrid->setName("four_points");
-    mInputPointGrids["four_point"] = fourPointGrid;
+    fourPointGrid->setName("4_points");
+    mInputPointGrids.emplace_back(fourPointGrid);
+    mOutputPointGrids.emplace_back(fourPointGrid->deepCopy());
+    mOutputPointGrids.back()->setName("4_points_expected");
 
-    mOutputPointGrids["four_point"] = fourPointGrid->deepCopy();
-    mOutputPointGrids["four_point"]->setName("four_points_expected");
-
-    mInputVolumeGrids["one_voxel"].clear();
-    mOutputVolumeGrids["one_voxel"].clear();
+    mVolumeBounds = openvdb::CoordBBox({0,0,0}, {0,0,0});
 }
+
+template <typename ValueT>
+using ConverterT = typename openvdb::BoolGrid::ValueConverter<ValueT>::Type;
+
+void AXTestHarness::resetInputsToZero()
+{
+    for (auto& grid : mInputPointGrids) {
+        openvdb::tree::LeafManager<openvdb::points::PointDataTree> manager(grid->tree());
+        manager.foreach([](openvdb::points::PointDataTree::LeafNodeType& leaf, size_t) {
+            const size_t attrs = leaf.attributeSet().size();
+            const size_t pidx = leaf.attributeSet().descriptor().find("P");
+            for (size_t idx = 0; idx < attrs; ++idx) {
+                if (idx == pidx) continue;
+                leaf.attributeArray(idx).collapse();
+            }
+        });
+    }
+
+    using AllowedGridTypes =
+        openvdb::TypeList<
+            openvdb::BoolGrid,
+            openvdb::DoubleGrid,
+            openvdb::FloatGrid,
+            openvdb::Int32Grid,
+            openvdb::Int64Grid,
+            openvdb::MaskGrid,
+            openvdb::StringGrid,
+            openvdb::Vec3IGrid,
+            openvdb::Vec3dGrid,
+            openvdb::Vec3fGrid,
+            ConverterT<openvdb::math::Vec4<int32_t>>,
+            ConverterT<openvdb::math::Vec4<float>>,
+            ConverterT<openvdb::math::Vec4<double>>>;
+
+    for (auto& grid : mInputVolumeGrids) {
+        const bool success = grid->apply<AllowedGridTypes>([](auto& typed) {
+            using GridType = typename std::decay<decltype(typed)>::type;
+            openvdb::tree::LeafManager<typename GridType::TreeType> manager(typed.tree());
+            manager.foreach([](typename GridType::TreeType::LeafNodeType& leaf, size_t) {
+                leaf.fill(typename GridType::ValueType(0));
+            });
+        });
+        if (!success) {
+            throw std::runtime_error("Unable to reset input grid of an unsupported type");
+        }
+    }
+}
+
 
 void AXTestCase::setUp()
 {
@@ -203,6 +289,6 @@ void AXTestCase::setUp()
 }
 
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

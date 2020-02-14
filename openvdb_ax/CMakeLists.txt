@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 DNEG
+# Copyright (c) 2015-2020 DNEG
 #
 # All rights reserved. This software is distributed under the
 # Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -32,16 +32,20 @@
 
 # @note  Version 3.4 is required for re-generation of AX Grammar
 cmake_minimum_required(VERSION 3.3)
-project(OpenVDBAX)
+project(OpenVDBAXCore LANGUAGES CXX)
 
 option(OPENVDB_AX_SHARED "Build dynamically linked version of the ax library." ON)
 option(OPENVDB_AX_STATIC "Build statically linked version of the ax library." ON)
+option(USE_NEW_PASS_MANAGER [=[
+Enable the new Optimization Pass Manager. This is a developer option.]=] OFF)
 
 if(NOT OPENVDB_AX_SHARED AND NOT OPENVDB_AX_STATIC)
   message(FATAL_ERROR "Both static and shared ax OpenVDB libraries have been disabled. "
     "At least one must be enabled when building the ax library."
   )
 endif()
+
+mark_as_advanced(USE_NEW_PASS_MANAGER)
 
 #########################################################################
 
@@ -59,7 +63,7 @@ file(MAKE_DIRECTORY ${OPENVDB_AX_GRAMMAR_DIR})
 if(OPENVDB_BUILD_AX_GRAMMAR)
   cmake_minimum_required(VERSION 3.4)
   find_package(FLEX REQUIRED)
-  find_package(BISON REQUIRED)
+  find_package(BISON 3.0 REQUIRED)
 
   SET(FLEX_COMPILE_FLAGS "")
   SET(BISON_COMPILE_FLAGS "")
@@ -171,6 +175,7 @@ set(OPENVDB_AX_AST_INCLUDE_FILES
 
 set(OPENVDB_AX_CODEGEN_INCLUDE_FILES
   codegen/ComputeGenerator.h
+  codegen/ConstantFolding.h
   codegen/FunctionRegistry.h
   codegen/Functions.h
   codegen/FunctionTypes.h
@@ -253,6 +258,9 @@ if(OPENVDB_AX_STATIC)
   target_link_libraries(openvdb_ax_static
     PUBLIC ${OPENVDB_AX_CORE_DEPENDENT_LIBS}
     )
+  if(USE_NEW_PASS_MANAGER)
+    target_compile_definitions(openvdb_ax_static PRIVATE -DUSE_NEW_PASS_MANAGER)
+  endif()
 endif()
 
 if(OPENVDB_AX_SHARED)
@@ -271,8 +279,8 @@ if(OPENVDB_AX_SHARED)
     openvdb_ax_shared
     PROPERTIES
       OUTPUT_NAME openvdb_ax
-      SOVERSION 0.1
-      VERSION 0.1.1
+      SOVERSION 0.2
+      VERSION 0.2.0
     )
 
   if(OPENVDB_ENABLE_RPATH)
@@ -295,6 +303,9 @@ if(OPENVDB_AX_SHARED)
   target_link_libraries(openvdb_ax_shared
     PUBLIC ${OPENVDB_AX_CORE_DEPENDENT_LIBS}
     )
+  if(USE_NEW_PASS_MANAGER)
+    target_compile_definitions(openvdb_ax_shared PRIVATE -DUSE_NEW_PASS_MANAGER)
+  endif()
 endif()
 
 install(FILES Exceptions.h version.h DESTINATION include/openvdb_ax/)

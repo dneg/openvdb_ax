@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -31,10 +31,10 @@
 #include <openvdb_ax/compiler/Compiler.h>
 #include <openvdb_ax/compiler/PointExecutable.h>
 
-#include <openvdb/points/AttributeSet.h>
-#include <openvdb/points/AttributeArray.h>
 #include <openvdb/points/PointDataGrid.h>
 #include <openvdb/points/PointConversion.h>
+#include <openvdb/points/PointAttribute.h>
+#include <openvdb/points/PointGroup.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -47,10 +47,12 @@ public:
     CPPUNIT_TEST_SUITE(TestPointExecutable);
     CPPUNIT_TEST(testConstructionDestruction);
     CPPUNIT_TEST(testCreateMissingAttributes);
+    CPPUNIT_TEST(testGroupExecution);
     CPPUNIT_TEST_SUITE_END();
 
     void testConstructionDestruction();
     void testCreateMissingAttributes();
+    void testGroupExecution();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestPointExecutable);
@@ -142,6 +144,68 @@ TestPointExecutable::testCreateMissingAttributes()
         aHandle = openvdb::points::AttributeHandle<float>::create(leafIter->constAttributeArray(aIdx));
     CPPUNIT_ASSERT(aHandle->get(0) == 0.0f);
 }
-// Copyright (c) 2015-2019 DNEG
+
+void
+TestPointExecutable::testGroupExecution()
+{
+    openvdb::math::Transform::Ptr defaultTransform =
+        openvdb::math::Transform::createLinearTransform(0.1);
+
+    // 4 points in 4 leaf nodes
+    const std::vector<openvdb::Vec3d> positions = {
+        {0,0,0},
+        {1,1,1},
+        {2,2,2},
+        {3,3,3},
+    };
+
+    openvdb::points::PointDataGrid::Ptr grid =
+        openvdb::points::createPointDataGrid
+            <openvdb::points::NullCodec, openvdb::points::PointDataGrid>
+                (positions, *defaultTransform);
+
+    // check the values of "a"
+    auto checkValues = [&](const int expected)
+    {
+        auto leafIter = grid->tree().cbeginLeaf();
+        CPPUNIT_ASSERT(leafIter);
+
+        const auto& descriptor = leafIter->attributeSet().descriptor();
+        const size_t aIdx = descriptor.find("a");
+        CPPUNIT_ASSERT(aIdx != openvdb::points::AttributeSet::INVALID_POS);
+
+        for (; leafIter; ++leafIter) {
+            openvdb::points::AttributeHandle<int> handle(leafIter->constAttributeArray(aIdx));
+            CPPUNIT_ASSERT(handle.size() == 1);
+            CPPUNIT_ASSERT_EQUAL(expected, handle.get(0));
+        }
+    };
+
+    openvdb::points::appendAttribute<int>(grid->tree(), "a", 0);
+
+    openvdb::ax::Compiler::UniquePtr compiler = openvdb::ax::Compiler::create();
+    openvdb::ax::PointExecutable::Ptr executable =
+        compiler->compile<openvdb::ax::PointExecutable>("i@a=1;");
+
+    const std::string group = "test";
+
+    // non existent group
+    CPPUNIT_ASSERT_THROW(executable->execute(*grid, &group), openvdb::LookupError);
+    checkValues(0);
+
+    openvdb::points::appendGroup(grid->tree(), group);
+
+    // false group
+    executable->execute(*grid, &group);
+    checkValues(0);
+
+    openvdb::points::setGroup(grid->tree(), group, true);
+
+    // true group
+    executable->execute(*grid, &group);
+    checkValues(1);
+}
+
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

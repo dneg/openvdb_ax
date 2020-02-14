@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 DNEG
+# Copyright (c) 2015-2020 DNEG
 #
 # All rights reserved. This software is distributed under the
 # Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -31,7 +31,7 @@
 #]=======================================================================]
 
 cmake_minimum_required(VERSION 3.3)
-project(OpenVDB_AX)
+project(OpenVDBAX LANGUAGES CXX)
 
 include(CMakeDependentOption)
 
@@ -49,49 +49,20 @@ its default system search routine if it cannot find a dependency with the provid
 paths provided through the Xxx_ROOT, supported XXX_INCLUDEDIR/XXX_LIBRARYDIR variables or the SYSTEM_LIBRARY_PATHS
 list will be searched.]=] OFF)
 
+set(_OPENVDB_SIMD_OPTIONS None SSE42 AVX)
+if(NOT OPENVDB_SIMD)
+  set(OPENVDB_SIMD None CACHE STRING
+    "Choose whether to enable SIMD compiler flags or not, options are: None SSE42 AVX.
+    Although not required, it is strongly recommended to enable SIMD. AVX implies SSE42.
+    None is the default." FORCE
+  )
+elseif(NOT ${OPENVDB_SIMD} IN_LIST _OPENVDB_SIMD_OPTIONS)
+  message(WARNING "Unrecognized or unsupported value for OPENVDB_SIMD, "
+    "using None instead.")
+  set(OPENVDB_SIMD None CACHE STRING FORCE)
+endif()
+
 ###### Deprecated options
-
-option(OPENVDB_AX_BUILD_AX "Build the OpenVDB AX compiler" OFF)
-option(OPENVDB_AX_BUILD_PYTHON_BINDINGS "Build the OpenVDB AX Python bindings" OFF)
-option(OPENVDB_AX_BUILD_GRAMMAR "Rebuild the OpenVDB AX grammar. CMake 3.4 with flex and bison." OFF)
-option(OPENVDB_AX_BUILD_UNITTESTS "Build the OpenVDB AX unit tests" OFF)
-option(OPENVDB_AX_BUILD_DOCS "Build the OpenVDB AX documentation" OFF)
-option(OPENVDB_AX_BUILD_HOUDINI_SOP "Build the OpenVDB AX Houdini SOP" OFF)
-option(OPENVDB_AX_ENABLE_RPATH "Build with RPATH information" OFF)
-option(OPENVDB_AX_CXX_STRICT "Enable or disable pre-defined compiler warnings" OFF)
-
-if(OPENVDB_AX_BUILD_AX)
-  message(DEPRECATION "OPENVDB_AX_BUILD_AX option is deprecated")
-  set(OPENVDB_BUILD_AX ON)
-endif()
-if(OPENVDB_AX_BUILD_PYTHON_BINDINGS)
-  message(DEPRECATION "OPENVDB_AX_BUILD_PYTHON_BINDINGS option is deprecated")
-  set(OPENVDB_BUILD_AX_PYTHON_MODULE ON)
-endif()
-if(OPENVDB_AX_BUILD_GRAMMAR)
-  message(DEPRECATION "OPENVDB_AX_BUILD_GRAMMAR option is deprecated")
-  set(OPENVDB_BUILD_AX_GRAMMAR ON)
-endif()
-if(OPENVDB_AX_BUILD_UNITTESTS)
-  message(DEPRECATION "OPENVDB_AX_BUILD_UNITTESTS option is deprecated")
-  set(OPENVDB_BUILD_AX_UNITTESTS ON)
-endif()
-if(OPENVDB_AX_BUILD_DOCS)
-  message(DEPRECATION "OPENVDB_AX_BUILD_DOCS option is deprecated")
-  set(OPENVDB_BUILD_AX_DOCS ON)
-endif()
-if(OPENVDB_AX_BUILD_HOUDINI_SOP)
-  message(DEPRECATION "OPENVDB_AX_BUILD_HOUDINI_SOP option is deprecated")
-  set(OPENVDB_BUILD_AX_HOUDINI_PLUGIN ON)
-endif()
-if(OPENVDB_AX_ENABLE_RPATH)
-  message(DEPRECATION "OPENVDB_AX_ENABLE_RPATH option is deprecated")
-  set(OPENVDB_ENABLE_RPATH ON)
-endif()
-if(OPENVDB_AX_CXX_STRICT)
-  message(DEPRECATION "OPENVDB_AX_CXX_STRICT option is deprecated")
-  set(OPENVDB_CXX_STRICT ON)
-endif()
 
 if(DEFINED USE_SYSTEM_LIBRARY_PATHS)
   message(DEPRECATION "The USE_SYSTEM_LIBRARY_PATHS option is deprecated and will be removed. "
@@ -111,7 +82,14 @@ cmake_dependent_option(OPENVDB_BUILD_AX_GRAMMAR "Rebuild the OpenVDB AX grammar.
 
 # General CMake and CXX settings
 
-set(CMAKE_CXX_STANDARD 11)
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14 CACHE STRING
+    "The C++ standard whose features are requested to build this target." FORCE)
+elseif(CMAKE_CXX_STANDARD LESS 14)
+  message(FATAL_ERROR "Provided C++ Standard is less than the supported minimum."
+    "Required is at least \"14\" (found ${CMAKE_CXX_STANDARD})")
+endif()
+
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -190,7 +168,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   if(OPENVDB_CXX_STRICT)
     message(STATUS "Configuring Clang CXX warnings")
     set(HAS_AVAILABLE_WARNINGS TRUE)
-    add_definitions(
+    add_compile_options(
       -Werror
       -Wall
       -Wextra
@@ -202,7 +180,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   if(OPENVDB_CXX_STRICT)
     message(STATUS "Configuring GCC CXX warnings")
     set(HAS_AVAILABLE_WARNINGS TRUE)
-    add_definitions(
+    add_compile_options(
       -Werror
       -Wall
       -Wextra
@@ -216,13 +194,24 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   # Increase the number of sections that an object file can contain
-  add_definitions("/bigobj")
+  add_compile_options("/bigobj")
 endif()
 
 if(OPENVDB_CXX_STRICT AND NOT HAS_AVAILABLE_WARNINGS)
   message(WARNING "No available CXX warnings for compiler ${CMAKE_CXX_COMPILER_ID}")
 endif()
 unset(HAS_AVAILABLE_WARNINGS)
+
+# Configure SIMD. AVX implies SSE 4.2.
+
+if(OPENVDB_SIMD STREQUAL "AVX")
+  add_compile_options(-mavx -msse4.2)
+  add_definitions(-DOPENVDB_USE_AVX)
+  add_definitions(-DOPENVDB_USE_SSE42)
+elseif(OPENVDB_SIMD STREQUAL "SSE42")
+  add_compile_options(-msse4.2)
+  add_definitions(-DOPENVDB_USE_SSE42)
+endif()
 
 ##########################################################################
 

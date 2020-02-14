@@ -895,7 +895,7 @@ int yy_flex_debug = 0;
 #define YY_RESTORE_YY_MORE_OFFSET
 char *yytext;
 /*
-Copyright (c) 2015-2019 DNEG
+Copyright (c) 2015-2020 DNEG
 
 All rights reserved. This software is distributed under the
 Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -2680,7 +2680,7 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
 

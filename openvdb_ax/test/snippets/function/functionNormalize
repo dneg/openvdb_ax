@@ -1,4 +1,0 @@
-
-vec3f test = {1.f, 2.f, 3.f};
-
-v@vec_float_test = normalize(test);

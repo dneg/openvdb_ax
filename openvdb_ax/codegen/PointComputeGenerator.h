@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -80,8 +80,7 @@ struct PointKernel
              void**,
              void*);
 
-    using FunctionT = std::function<Signature>;
-    using FunctionTraitsT = codegen::FunctionTraits<FunctionT>;
+    using FunctionTraitsT = codegen::FunctionTraits<Signature>;
     static const size_t N_ARGS = FunctionTraitsT::N_ARGS;
 
     /// The argument key names available during code generation
@@ -140,6 +139,6 @@ private:
 
 #endif // OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -41,15 +41,16 @@ public:
     CPPUNIT_TEST(testLoopForLoop);
     CPPUNIT_TEST(testLoopWhileLoop);
     CPPUNIT_TEST(testLoopDoWhileLoop);
+    CPPUNIT_TEST(testLoopOverflow);
     CPPUNIT_TEST_SUITE_END();
 
     void testLoopForLoop();
     void testLoopWhileLoop();
     void testLoopDoWhileLoop();
+    void testLoopOverflow();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestLoop);
-
 
 void
 TestLoop::testLoopForLoop()
@@ -73,7 +74,6 @@ TestLoop::testLoopForLoop()
     AXTESTS_STANDARD_ASSERT();
 }
 
-
 void
 TestLoop::testLoopWhileLoop()
 {
@@ -86,7 +86,6 @@ TestLoop::testLoopWhileLoop()
     AXTESTS_STANDARD_ASSERT();
 }
 
-
 void
 TestLoop::testLoopDoWhileLoop()
 {
@@ -98,6 +97,19 @@ TestLoop::testLoopDoWhileLoop()
 
     AXTESTS_STANDARD_ASSERT();
 }
-// Copyright (c) 2015-2019 DNEG
+
+void
+TestLoop::testLoopOverflow()
+{
+    // Disable all optimizations to force the loop to not remove the interior
+    // allocation. The loop should generate its allocas in the function prologue
+    // to avoid stack overflow
+    openvdb::ax::CompilerOptions opts;
+    opts.mOptLevel = openvdb::ax::CompilerOptions::OptLevel::NONE;
+    mHarness.executeCode("test/snippets/loop/loopOverflow",
+        nullptr, nullptr, nullptr, opts);
+}
+
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

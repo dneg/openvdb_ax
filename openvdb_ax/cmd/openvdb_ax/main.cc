@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -40,11 +40,8 @@
 
 #include <openvdb/openvdb.h>
 #include <openvdb/util/logging.h>
+#include <openvdb/util/CpuTimer.h>
 #include <openvdb/points/PointDelete.h>
-
-#ifdef DWA_OPENVDB
-#include <usagetrack.h>
-#endif
 
 #include <fstream>
 #include <iostream>
@@ -54,11 +51,39 @@
 
 const char* gProgName = "";
 
+void usage [[noreturn]] (int exitStatus = EXIT_FAILURE)
+{
+    std::cerr <<
+    "Usage: " << gProgName << " [input.vdb [output.vdb] | analyze] [-s \"string\" | -f file.txt] [OPTIONS]\n" <<
+    "Which: executes a string or file containing a code snippet on an input.vdb file\n\n" <<
+    "Options:\n" <<
+    "    -s snippet       execute code snippet on the input.vdb file\n" <<
+    "    -f file.txt      execute text file containing a code snippet on the input.vdb file\n" <<
+    "    -v               verbose (print timing and diagnostics)\n" <<
+    "    --opt level      set an optimization level on the generated IR [NONE, O0, O1, O2, Os, Oz, O3]\n" <<
+    "    analyze          parse the provided code and enter analysis mode\n" <<
+    "      --ast-print       descriptive print the abstract syntax tree generated\n" <<
+    "      --re-print        re-interpret print of the provided code after ast traversal\n" <<
+    "      --reg-print       print the attribute registry (name, types, access, dependencies)\n" <<
+    "      --try-compile [points|volumes] \n" <<
+    "                        attempt to compile the provided code for points or volumes, or both if no\n" <<
+    "                        additional option is provided, reporting any failures or success.\n" <<
+    "    functions        enter function mode to query available function information\n" <<
+    "      --list [name]     list all available functions, their documentation and their signatures.\n" <<
+    "                        optionally only list functions which whose name includes a provided string.\n" <<
+    "      --list-names      list all available functions names only\n" <<
+    "Warning:\n" <<
+    "     Providing the same file-path to both input.vdb and output.vdb arguments will overwrite\n" <<
+    "     the file. If no output file is provided, the input.vdb will be processed but will remain\n" <<
+    "     unchanged on disk (this is useful for testing the success status of code).\n";
+    exit(exitStatus);
+}
+
 struct ProgOptions
 {
-    enum Mode {
-        Execute, Analyze, Functions
-    };
+    enum Mode { Execute, Analyze, Functions };
+    enum Compilation { All, Points, Volumes };
+
     Mode mMode = Execute;
 
     // Execute options
@@ -66,13 +91,15 @@ struct ProgOptions
     std::string mInputVDBFile = "";
     std::string mOutputVDBFile = "";
     bool mVerbose = false;
-    std::string mOptLevel = "O3";
+    openvdb::ax::CompilerOptions::OptLevel mOptLevel =
+        openvdb::ax::CompilerOptions::OptLevel::O3;
 
     // Analyze options
-    bool mParse = false;
     bool mPrintAST = false;
     bool mReprint = false;
     bool mAttribRegPrint = false;
+    bool mInitCompile = false;
+    Compilation mCompileFor = All;
 
     // Function Options
     bool mFunctionList = false;
@@ -80,31 +107,51 @@ struct ProgOptions
     std::string mFunctionSearch = "";
 };
 
-void
-usage [[noreturn]] (int exitStatus = EXIT_FAILURE)
+inline std::string modeString(const ProgOptions::Mode mode)
 {
-    std::cerr <<
-"Usage: " << gProgName << " [input.vdb [output.vdb] | analyze] [-s \"string\" | -f file.txt] [OPTIONS]\n" <<
-"Which: executes a string or file containing a code snippet on an input.vdb file\n\n" <<
-"Options:\n" <<
-"    -s snippet       execute code snippet on the input.vdb file\n" <<
-"    -f file.txt      execute text file containing a code snippet on the input.vdb file\n" <<
-"    -v               verbose (print timing and diagnostics)\n" <<
-"    --opt level      set an optimization level on the generated IR [NONE, O0, O1, O2, Os, Oz, O3]\n" <<
-"    analyze          enter analysis mode for the provided code\n" <<
-"      --parse           attempt to parse the input snippet only\n" <<
-"      --ast-print       descriptive print the abstract syntax tree generated, implies --parse\n" <<
-"      --re-print        re-interpret print of the provided code after ast traversal, implies --parse\n" <<
-"      --reg-print       print the attribute registry (name, types, access, dependencies), implies --parse\n" <<
-"    functions        enter function mode to query available function information\n" <<
-"      --list [name]     list all available functions, their documentation and their signatures.\n" <<
-"                        optionally only list functions which whose name includes a provided string.\n" <<
-"      --list-names      list all available functions names only\n" <<
-"Warning:\n" <<
-"     Providing the same file-path to both input.vdb and output.vdb arguments will overwrite\n" <<
-"     the file. If no output file is provided, the input.vdb will be processed but will remain\n" <<
-"     unchanged on disk (this is useful for testing the success status of code).\n";
-    exit(exitStatus);
+    switch (mode) {
+        case ProgOptions::Execute   : return "execute";
+        case ProgOptions::Analyze   : return "analyze";
+        case ProgOptions::Functions : return "functions";
+        default : return "";
+    }
+}
+
+ProgOptions::Compilation
+tryCompileStringToCompilation(const std::string& str)
+{
+    if (str == "points")   return ProgOptions::Points;
+    if (str == "volumes")  return ProgOptions::Volumes;
+    OPENVDB_LOG_FATAL("invalid option given for --try-compile level");
+    usage();
+}
+
+openvdb::ax::CompilerOptions::OptLevel
+optStringToLevel(const std::string& str)
+{
+    if (str == "NONE") return openvdb::ax::CompilerOptions::OptLevel::NONE;
+    if (str == "O0")   return openvdb::ax::CompilerOptions::OptLevel::O0;
+    if (str == "O1")   return openvdb::ax::CompilerOptions::OptLevel::O1;
+    if (str == "O2")   return openvdb::ax::CompilerOptions::OptLevel::O2;
+    if (str == "Os")   return openvdb::ax::CompilerOptions::OptLevel::Os;
+    if (str == "Oz")   return openvdb::ax::CompilerOptions::OptLevel::Oz;
+    if (str == "O3")   return openvdb::ax::CompilerOptions::OptLevel::O3;
+    OPENVDB_LOG_FATAL("invalid option given for --opt level");
+    usage();
+}
+
+inline std::string
+optLevelToString(const openvdb::ax::CompilerOptions::OptLevel level)
+{
+    switch (level) {
+        case  openvdb::ax::CompilerOptions::OptLevel::NONE : return "NONE";
+        case  openvdb::ax::CompilerOptions::OptLevel::O1 : return "O1";
+        case  openvdb::ax::CompilerOptions::OptLevel::O2 : return "O2";
+        case  openvdb::ax::CompilerOptions::OptLevel::Os : return "Os";
+        case  openvdb::ax::CompilerOptions::OptLevel::Oz : return "Oz";
+        case  openvdb::ax::CompilerOptions::OptLevel::O3 : return "O3";
+        default : return "";
+    }
 }
 
 void loadSnippetFile(const std::string& fileName, std::string& textString)
@@ -157,9 +204,12 @@ struct ScopedInitialize
     }
 
     inline void initializeCompiler() const { openvdb::ax::initialize(); }
+    inline bool isInitialized() const { return openvdb::ax::isInitialized(); }
 };
 
-void printFunctions(const bool namesOnly, const std::string& search, std::ostream& os)
+void printFunctions(const bool namesOnly,
+                const std::string& search,
+                std::ostream& os)
 {
     static const size_t maxHelpTextWidth = 100;
 
@@ -172,7 +222,7 @@ void printFunctions(const bool namesOnly, const std::string& search, std::ostrea
     // only include non internal functions and apply any search
     // criteria
 
-    std::map<std::string, openvdb::ax::codegen::FunctionBase::Ptr> functionMap;
+    std::map<std::string, openvdb::ax::codegen::FunctionGroup::Ptr> functionMap;
     for (const auto& iter : registry->map()) {
         if (iter.second.isInternal()) continue;
         if (!search.empty() && iter.first.find(search) == std::string::npos) {
@@ -208,13 +258,15 @@ void printFunctions(const bool namesOnly, const std::string& search, std::ostrea
         llvm::LLVMContext C;
 
         for (const auto& iter : functionMap) {
-            const openvdb::ax::codegen::FunctionBase::Ptr function = iter.second;
-            std::string docs;
-            function->getDocumentation(docs);
-            if (docs.empty()) docs = "<No documentation exists for this function>";
+            const openvdb::ax::codegen::FunctionGroup::Ptr function = iter.second;
+            const char* cdocs = function->doc();
+            if (!cdocs || cdocs[0] == '\0') {
+                cdocs = "<No documentation exists for this function>";
+            }
 
             // do some basic formatting on the help text
 
+            std::string docs(cdocs);
             size_t pos = maxHelpTextWidth;
             while (pos < docs.size()) {
                 while (docs[pos] != ' ' && pos != 0) --pos;
@@ -227,28 +279,14 @@ void printFunctions(const bool namesOnly, const std::string& search, std::ostrea
             os << "| - " << docs << '\n' << '|' << '\n';
 
             const auto& list = function->list();
-            for (const openvdb::ax::codegen::FunctionSignatureBase::Ptr& signature : list) {
+            for (const openvdb::ax::codegen::Function::Ptr& decl : list) {
                 os << "|  - ";
-                signature->print(C, iter.first, os);
+                decl->print(C, os);
                 os << '\n';
             }
             os << '\n';
         }
     }
-}
-
-openvdb::ax::CompilerOptions::OptLevel
-optStringToLevel(const std::string& str)
-{
-    if (str == "NONE") return openvdb::ax::CompilerOptions::OptLevel::NONE;
-    if (str == "O0")   return openvdb::ax::CompilerOptions::OptLevel::O0;
-    if (str == "O1")   return openvdb::ax::CompilerOptions::OptLevel::O1;
-    if (str == "O2")   return openvdb::ax::CompilerOptions::OptLevel::O2;
-    if (str == "Os")   return openvdb::ax::CompilerOptions::OptLevel::Os;
-    if (str == "Oz")   return openvdb::ax::CompilerOptions::OptLevel::Oz;
-    if (str == "O3")   return openvdb::ax::CompilerOptions::OptLevel::O3;
-    OPENVDB_LOG_FATAL("invalid option given for --opt level");
-    usage();
 }
 
 int
@@ -262,46 +300,64 @@ main(int argc, char *argv[])
 
     if (argc == 1) usage();
 
-    ScopedInitialize initializer(argc, argv);
     OptParse parser(argc, argv);
-    ProgOptions options;
+    ProgOptions opts;
 
+    openvdb::util::CpuTimer timer;
+    auto getTime = [&timer]() -> std::string {
+        const double msec = timer.milliseconds();
+        std::ostringstream os;
+        openvdb::util::printTime(os, msec, "", "", 1, 1, 0);
+        return os.str();
+    };
+
+    auto& os = std::cout;
+#define axlog(message) \
+    { if (opts.mVerbose) os << message; }
+#define axtimer() timer.restart()
+#define axtime() getTime()
+
+    bool multiSnippet = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg[0] == '-') {
             if (parser.check(i, "-s")) {
                 ++i;
-                options.mInputCode.reset(new std::string(argv[i]));
+                multiSnippet |= static_cast<bool>(opts.mInputCode);
+                opts.mInputCode.reset(new std::string(argv[i]));
             } else if (parser.check(i, "-f")) {
                 ++i;
-                options.mInputCode.reset(new std::string());
-                loadSnippetFile(argv[i], *options.mInputCode);
+                multiSnippet |= static_cast<bool>(opts.mInputCode);
+                opts.mInputCode.reset(new std::string());
+                loadSnippetFile(argv[i], *opts.mInputCode);
             } else if (parser.check(i, "-v", 0)) {
-                options.mVerbose = true;
-            } else if (parser.check(i, "--parse", 0)) {
-                options.mParse = true;
+                opts.mVerbose = true;
             } else if (parser.check(i, "--list", 0)) {
-                options.mFunctionList = true;
-                options.mFunctionNamesOnly = false;
+                opts.mFunctionList = true;
+                opts.mInitCompile = true; // need to intialize llvm
+                opts.mFunctionNamesOnly = false;
                 if (i + 1 >= argc) continue;
                 if (argv[i+1][0] == '-') continue;
                 ++i;
-                options.mFunctionSearch = std::string(argv[i]);
+                opts.mFunctionSearch = std::string(argv[i]);
             } else if (parser.check(i, "--list-names", 0)) {
-                options.mFunctionList = true;
-                options.mFunctionNamesOnly = true;
+                opts.mFunctionList = true;
+                opts.mFunctionNamesOnly = true;
             } else if (parser.check(i, "--ast-print", 0)) {
-                options.mPrintAST = true;
-                options.mParse = true;
+                opts.mPrintAST = true;
             } else if (parser.check(i, "--re-print", 0)) {
-                options.mReprint = true;
-                options.mParse = true;
+                opts.mReprint = true;
             } else if (parser.check(i, "--reg-print", 0)) {
-                options.mAttribRegPrint = true;
-                options.mParse = true;
+                opts.mAttribRegPrint = true;
+            } else if (parser.check(i, "--try-compile", 0)) {
+                opts.mInitCompile = true;
+                if (i + 1 >= argc) continue;
+                if (argv[i+1][0] == '-') continue;
+                ++i;
+                opts.mCompileFor = tryCompileStringToCompilation(argv[i]);
             } else if (parser.check(i, "--opt")) {
                 ++i;
-                options.mOptLevel = argv[i];
+                opts.mOptLevel = optStringToLevel(argv[i]);
             } else if (arg == "-h" || arg == "-help" || arg == "--help") {
                 usage(EXIT_SUCCESS);
             } else {
@@ -311,29 +367,30 @@ main(int argc, char *argv[])
         } else if (!arg.empty()) {
             // if mode has already been set, no more positional arguments are expected
             // (except for execute which takes in and out)
-            if (options.mMode != ProgOptions::Mode::Execute) {
+            if (opts.mMode != ProgOptions::Mode::Execute) {
                 OPENVDB_LOG_FATAL("unrecognized positional argument: \"" << arg << "\"");
                 usage();
             }
 
-            if (arg == "analyze")        options.mMode = ProgOptions::Analyze;
-            else if (arg == "functions") options.mMode = ProgOptions::Functions;
+            if (arg == "analyze")        opts.mMode = ProgOptions::Analyze;
+            else if (arg == "functions") opts.mMode = ProgOptions::Functions;
 
-            if (options.mMode == ProgOptions::Mode::Execute) {
+            if (opts.mMode == ProgOptions::Mode::Execute) {
+                opts.mInitCompile = true;
                 // execute positional argument setup
-                if (options.mInputVDBFile.empty()) {
-                    options.mInputVDBFile = arg;
+                if (opts.mInputVDBFile.empty()) {
+                    opts.mInputVDBFile = arg;
                 }
-                else if (options.mOutputVDBFile.empty()) {
-                    options.mOutputVDBFile = arg;
+                else if (opts.mOutputVDBFile.empty()) {
+                    opts.mOutputVDBFile = arg;
                 }
                 else {
                     OPENVDB_LOG_FATAL("unrecognized positional argument: \"" << arg << "\"");
                     usage();
                 }
             }
-            else if (!options.mInputVDBFile.empty() ||
-                !options.mOutputVDBFile.empty())
+            else if (!opts.mInputVDBFile.empty() ||
+                !opts.mOutputVDBFile.empty())
             {
                 OPENVDB_LOG_FATAL("unrecognized positional argument: \"" << arg << "\"");
                 usage();
@@ -343,112 +400,247 @@ main(int argc, char *argv[])
         }
     }
 
-    if (options.mMode == ProgOptions::Functions) {
-        if (options.mFunctionList) {
-            if (!options.mFunctionNamesOnly) {
-                // llvm only needs to be initialized if the signatures are being queried
-                initializer.initializeCompiler();
+    if (opts.mVerbose) {
+        axlog("OpenVDB AX " << openvdb::ax::getLibraryVersionString() << '\n');
+        axlog("----------------\n");
+        axlog("Inputs\n");
+        axlog("  mode    : " << modeString(opts.mMode));
+        if (opts.mMode == ProgOptions::Analyze) {
+            axlog(" (");
+            if (opts.mPrintAST) axlog("|ast out");
+            if (opts.mReprint)  axlog("|reprint out");
+            if (opts.mAttribRegPrint) axlog("|registry out");
+            if (opts.mInitCompile)  axlog("|compilation");
+            axlog("|)");
+        }
+        axlog('\n');
+
+        if (opts.mMode == ProgOptions::Execute) {
+            axlog("  vdb in  : \"" << opts.mInputVDBFile  << "\"\n");
+            axlog("  vdb out : \"" << opts.mOutputVDBFile << "\"\n");
+        }
+        if (opts.mMode == ProgOptions::Execute ||
+            opts.mMode == ProgOptions::Analyze) {
+            axlog("  ax code : ");
+            if (opts.mInputCode && !opts.mInputCode->empty()) {
+                const bool containsnl =
+                    opts.mInputCode->find('\n') != std::string::npos;
+                if (containsnl) axlog("\n    ");
+
+                // indent output
+                const char* c = opts.mInputCode->c_str();
+                while (*c != '\0') {
+                    axlog(*c);
+                    if (*c == '\n') axlog("    ");
+                    ++c;
+                }
             }
-            printFunctions(options.mFunctionNamesOnly,
-                options.mFunctionSearch,
+            else {
+                axlog("\"\"");
+            }
+            axlog('\n');
+            axlog('\n');
+        }
+        axlog(std::flush);
+    }
+
+    if (opts.mMode != ProgOptions::Functions) {
+        if (!opts.mInputCode) {
+            OPENVDB_LOG_FATAL("expected at least one AX file or a code snippet");
+            usage();
+        }
+        if (multiSnippet) {
+            OPENVDB_LOG_WARN("multiple code snippets provided, only using last input.");
+        }
+    }
+
+    if (opts.mMode == ProgOptions::Execute) {
+        if (opts.mInputVDBFile.empty()) {
+            OPENVDB_LOG_FATAL("expected at least one VDB file or analysis mode");
+            usage();
+        }
+        if (opts.mOutputVDBFile.empty()) {
+            OPENVDB_LOG_WARN("no output VDB File specified - nothing will be written to disk");
+        }
+    }
+
+    axtimer();
+    axlog("[INFO] Initializing OpenVDB" << std::flush);
+    ScopedInitialize initializer(argc, argv);
+    axlog(": " << axtime() << '\n');
+
+    // read vdb file data for
+
+    openvdb::GridPtrVecPtr grids;
+    openvdb::MetaMap::Ptr meta;
+
+    if (opts.mMode == ProgOptions::Execute) {
+        openvdb::io::File file(opts.mInputVDBFile);
+        try {
+            axtimer();
+            axlog("[INFO] Reading VDB data"
+                << (openvdb::io::Archive::isDelayedLoadingEnabled() ?
+                    " (delay-load)" : "") << std::flush);
+            file.open();
+            grids = file.getGrids();
+            meta = file.getMetadata();
+            file.close();
+            axlog(": " << axtime() << '\n');
+        } catch (openvdb::Exception& e) {
+            OPENVDB_LOG_ERROR(e.what() << " (" << opts.mInputVDBFile << ")");
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (opts.mInitCompile) {
+        axtimer();
+        axlog("[INFO] Initializing AX/LLVM" << std::flush);
+        initializer.initializeCompiler();
+        axlog(": " << axtime() << '\n');
+    }
+
+    if (opts.mMode == ProgOptions::Functions) {
+        if (opts.mFunctionList) {
+            axlog("Querying available functions\n" << std::flush);
+            assert(opts.mFunctionNamesOnly || initializer.isInitialized());
+            printFunctions(opts.mFunctionNamesOnly,
+                opts.mFunctionSearch,
                 std::cout);
         }
         return EXIT_SUCCESS;
     }
 
-    if (!options.mInputCode) {
-        OPENVDB_LOG_FATAL("expected at least one AX file or a code snippet");
-        usage();
-    }
+    // parse
 
-    if (options.mMode == ProgOptions::Analyze) {
-        if (!options.mParse) return EXIT_SUCCESS;
-        const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
-            openvdb::ax::ast::parse(options.mInputCode->c_str());
+    axtimer();
+    axlog("[INFO] Parsing input code" << std::flush);
+    const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
+        openvdb::ax::ast::parse(opts.mInputCode->c_str());
+        axlog(": " << axtime() << '\n');
 
-        if (options.mPrintAST) openvdb::ax::ast::print(*syntaxTree, true, std::cout);
-        if (options.mReprint)  openvdb::ax::ast::reprint(*syntaxTree, std::cout);
-        if (options.mAttribRegPrint) {
+    if (opts.mMode == ProgOptions::Analyze) {
+        axlog("[INFO] Running analysis options\n" << std::flush);
+        if (opts.mPrintAST) {
+            axlog("[INFO] | Printing AST\n" << std::flush);
+            openvdb::ax::ast::print(*syntaxTree, true, std::cout);
+        }
+        if (opts.mReprint) {
+            axlog("[INFO] | Reprinting code\n" << std::flush);
+            openvdb::ax::ast::reprint(*syntaxTree, std::cout);
+        }
+        if (opts.mAttribRegPrint) {
+            axlog("[INFO] | Printing Attribute Registry\n" << std::flush);
             const openvdb::ax::AttributeRegistry::ConstPtr reg =
                 openvdb::ax::AttributeRegistry::create(*syntaxTree);
             reg->print(std::cout);
+            std::cout << std::flush;
         }
-        return EXIT_SUCCESS;
-    }
 
-    if (options.mInputVDBFile.empty()) {
-        OPENVDB_LOG_FATAL("expected at least one OpenVDB file or analysis mode");
-        usage();
-    }
-    if (options.mOutputVDBFile.empty()) {
-        OPENVDB_LOG_WARN("no output VDB File specified - nothing will be written to disk");
-    }
-
-    const openvdb::ax::CompilerOptions::OptLevel level =
-        optStringToLevel(options.mOptLevel);
-
-    openvdb::GridPtrVecPtr grids;
-    openvdb::MetaMap::Ptr meta;
-    openvdb::io::File file(options.mInputVDBFile);
-
-    try {
-        file.open();
-        grids = file.getGrids();
-        meta = file.getMetadata();
-        file.close();
-    } catch (openvdb::Exception& e) {
-        OPENVDB_LOG_ERROR(e.what() << " (" << options.mInputVDBFile << ")");
-        return EXIT_FAILURE;
-    }
-
-    assert(meta);
-    assert(grids);
-
-    // begin compiler
-
-    if (options.mVerbose) {
-        std::cout << "Initializing Compiler..." << std::endl;
-        std::cout << "  Opt Level [" << options.mOptLevel << "]" << std::endl;
-    }
-
-    initializer.initializeCompiler();
-
-    openvdb::ax::CompilerOptions opts;
-    opts.mOptLevel = level;
-    openvdb::ax::Compiler::Ptr compiler = openvdb::ax::Compiler::create(opts);
-
-    // parse
-
-    const openvdb::ax::ast::Tree::ConstPtr syntaxTree =
-        openvdb::ax::ast::parse(options.mInputCode->c_str());
-
-    // Execute on PointDataGrids
-
-    bool executeOnPoints = false;
-    for (auto grid : *grids) {
-        if (grid->isType<openvdb::points::PointDataGrid>()) {
-            executeOnPoints = true;
-            break;
+        if (!opts.mInitCompile) {
+            return EXIT_SUCCESS;
         }
     }
 
-    if (executeOnPoints) {
+    assert(opts.mInitCompile);
 
-        using openvdb::ax::PointExecutable;
+    axtimer();
+    axlog("[INFO] Creating Compiler\n");
+    axlog("[INFO] | Optimization Level [" << optLevelToString(opts.mOptLevel) << "]\n" << std::flush);
+    openvdb::ax::CompilerOptions compOpts;
+    compOpts.mOptLevel = opts.mOptLevel;
 
-        openvdb::ax::CustomData::Ptr customData = openvdb::ax::CustomData::create();
-        PointExecutable::Ptr pointExecutable;
+    openvdb::ax::Compiler::Ptr compiler =
+        openvdb::ax::Compiler::create(compOpts);
+    openvdb::ax::CustomData::Ptr customData =
+        openvdb::ax::CustomData::create();
+    axlog("[INFO] | " << axtime() << '\n' << std::flush);
 
-        if (options.mVerbose) std::cout << "OpenVDB PointDataGrids Found" << std::endl;
+    // Check what we need to compile for if performing execution
+
+    if (opts.mMode == ProgOptions::Execute) {
+        assert(meta);
+        assert(grids);
+        bool points = false;
+        bool volumes = false;
+        for (auto grid : *grids) {
+            points |= grid->isType<openvdb::points::PointDataGrid>();
+            volumes |= !points;
+            if (points && volumes) break;
+        }
+        if (points && volumes) opts.mCompileFor = ProgOptions::Compilation::All;
+        else if (points)       opts.mCompileFor = ProgOptions::Compilation::Points;
+        else if (volumes)      opts.mCompileFor = ProgOptions::Compilation::Volumes;
+    }
+
+    if (opts.mMode == ProgOptions::Analyze) {
+
+        bool psuccess = true;
+
+        if (opts.mCompileFor == ProgOptions::Compilation::All ||
+            opts.mCompileFor == ProgOptions::Compilation::Points) {
+            axtimer();
+            axlog("[INFO] Compiling for VDB Points\n" << std::flush);
+            std::vector<std::string> warnings;
+            try { compiler->compile<openvdb::ax::PointExecutable>(*syntaxTree, customData, &warnings); }
+            catch (std::exception& e) {
+                psuccess = false;
+                axlog("[INFO] Compilation error!\n");
+                OPENVDB_LOG_ERROR(e.what());
+            }
+            if (psuccess) {
+                axlog("[INFO] | Compilation successful");
+                if (!warnings.empty()) axlog(" with warnings");
+                axlog('\n' << std::flush)
+            }
+            axlog("[INFO] | " << axtime() << '\n' << std::flush);
+            for (const std::string& warning : warnings) {
+                OPENVDB_LOG_WARN(warning);
+            }
+        }
+
+        bool vsuccess = true;
+
+        if (opts.mCompileFor == ProgOptions::Compilation::All ||
+            opts.mCompileFor == ProgOptions::Compilation::Volumes) {
+            axtimer();
+            axlog("[INFO] Compiling for VDB Volumes\n" << std::flush);
+            std::vector<std::string> warnings;
+            try { compiler->compile<openvdb::ax::VolumeExecutable>(*syntaxTree, customData, &warnings); }
+            catch (std::exception& e) {
+                vsuccess = false;
+                axlog("[INFO] Compilation error!\n");
+                OPENVDB_LOG_ERROR(e.what());
+            }
+            if (vsuccess) {
+                axlog("[INFO] | Compilation successful");
+                if (!warnings.empty()) axlog(" with warnings");
+                axlog('\n');
+            }
+            axlog("[INFO] | " << axtime() << '\n' << std::flush);
+            for (const std::string& warning : warnings) {
+                OPENVDB_LOG_WARN(warning);
+            }
+        }
+
+        return ((vsuccess && psuccess) ? EXIT_SUCCESS : EXIT_FAILURE);
+    }
+
+    // Execute points
+
+    if (opts.mCompileFor == ProgOptions::Compilation::All ||
+        opts.mCompileFor == ProgOptions::Compilation::Points) {
+
+        axlog("[INFO] VDB PointDataGrids Found\n" << std::flush);
+
         std::vector<std::string> warnings;
+        openvdb::ax::PointExecutable::Ptr pointExecutable;
 
+        axtimer();
         try {
-            if (options.mVerbose) std::cout << "  Compiling for PointDataGrids...";
-            pointExecutable = compiler->compile<PointExecutable>(*syntaxTree, customData, &warnings);
+            axlog("[INFO] Compiling for VDB Points\n" << std::flush);
+            pointExecutable = compiler->compile<openvdb::ax::PointExecutable>(*syntaxTree, customData, &warnings);
         } catch (std::exception& e) {
-            OPENVDB_LOG_FATAL("Compilation error!");
-            OPENVDB_LOG_FATAL("Errors:");
-            OPENVDB_LOG_FATAL(e.what());
+            OPENVDB_LOG_FATAL("Compilation error!\nErrors:\n" << e.what());
             return EXIT_FAILURE;
         }
 
@@ -456,60 +648,58 @@ main(int argc, char *argv[])
             OPENVDB_LOG_WARN(warning);
         }
 
-        if (options.mVerbose) std::cout << "done." << std::endl;
+        axlog("[INFO] | Compilation success.\n");
+        axlog("[INFO] | " << axtime() << '\n' << std::flush);
+
+        size_t total = 0, count = 1;
+        if (opts.mVerbose) {
+            for (auto grid : *grids) {
+                if (!grid->isType<openvdb::points::PointDataGrid>()) continue;
+                ++total;
+            }
+        }
 
         for (auto grid : *grids) {
             if (!grid->isType<openvdb::points::PointDataGrid>()) continue;
-
             openvdb::points::PointDataGrid::Ptr points =
-               openvdb::gridPtrCast<openvdb::points::PointDataGrid>(grid);
-            if (options.mVerbose) std::cout << "  Executing on \"" + points->getName() + "\"...";
+                openvdb::gridPtrCast<openvdb::points::PointDataGrid>(grid);
+            axtimer();
+            axlog("[INFO] Executing on \"" << points->getName() << "\" "
+                  << count << " of " << total << '\n' << std::flush);
+            ++count;
 
             try {
                 pointExecutable->execute(*points);
-
                 if (openvdb::ax::ast::callsFunction(*syntaxTree, "deletepoint")) {
                     openvdb::points::deleteFromGroup(points->tree(), "dead", false, false);
                 }
             }
             catch (std::exception& e) {
-                OPENVDB_LOG_FATAL("Execution error!");
-                OPENVDB_LOG_FATAL("Errors:");
-                OPENVDB_LOG_FATAL(e.what());
+                OPENVDB_LOG_FATAL("Execution error!\nErrors:\n" << e.what());
                 return EXIT_FAILURE;
             }
 
-            if (options.mVerbose) std::cout << "done." << std::endl << std::endl;
+            axlog("[INFO] | Execution success.\n");
+            axlog("[INFO] | " << axtime() << '\n' << std::flush);
         }
     }
 
-    // Execute on Volumes
+    // Execute volumes
 
-    bool executeOnVolumes = false;
-    for (auto grid : *grids) {
-        if (!grid->isType<openvdb::points::PointDataGrid>()) {
-            executeOnVolumes = true;
-            break;
-        }
-    }
+    if (opts.mCompileFor == ProgOptions::Compilation::All ||
+        opts.mCompileFor == ProgOptions::Compilation::Volumes) {
 
-    if (executeOnVolumes) {
-        openvdb::ax::CustomData::Ptr customData = openvdb::ax::CustomData::create();
+        axlog("[INFO] VDB Volumes Found\n" << std::flush);
 
-        using openvdb::ax::VolumeExecutable;
-        VolumeExecutable::Ptr volumeExecutable;
-
-        if (options.mVerbose) std::cout << "OpenVDB Volume Grids Found" << std::endl;
         std::vector<std::string> warnings;
+        openvdb::ax::VolumeExecutable::Ptr volumeExecutable;
 
+        axtimer();
         try {
-            if (options.mVerbose) std::cout << "  Compiling for Volume VDB Grid...";
-            volumeExecutable =
-                compiler->compile<VolumeExecutable>(*syntaxTree, customData, &warnings);
+            axlog("[INFO] Compiling for VDB Volumes\n" << std::flush);
+            volumeExecutable = compiler->compile<openvdb::ax::VolumeExecutable>(*syntaxTree, customData, &warnings);
         } catch (std::exception& e) {
-            OPENVDB_LOG_FATAL("Compilation error!");
-            OPENVDB_LOG_FATAL("Errors:");
-            OPENVDB_LOG_FATAL(e.what());
+            OPENVDB_LOG_FATAL("Compilation error!\nErrors:\n" << e.what());
             return EXIT_FAILURE;
         }
 
@@ -517,45 +707,47 @@ main(int argc, char *argv[])
             OPENVDB_LOG_WARN(warning);
         }
 
-        if (options.mVerbose) std::cout << "done." << std::endl;
+        axlog("[INFO] | Compilation success.\n");
+        axlog("[INFO] | " << axtime() << '\n' << std::flush);
 
-        if (options.mVerbose) {
-            std::string names("");
+        if (opts.mVerbose) {
+            std::vector<const std::string*> names;
+            axlog("[INFO] Executing using:\n");
             for (auto grid : *grids) {
                 if (grid->isType<openvdb::points::PointDataGrid>()) continue;
-                names += grid->getName() + ", ";
+                axlog("  " << grid->getName() << '\n');
+                axlog("    " << grid->valueType() << '\n');
+                axlog("    " << grid->gridClassToString(grid->getGridClass()) << '\n');
             }
-
-            names.pop_back();
-            names.pop_back();
-            std::cout << "  Executing using \"" + names + "\"...";
+            axlog(std::flush);
         }
 
-        try {
-            volumeExecutable->execute(*grids);
-        } catch (std::exception& e) {
-            OPENVDB_LOG_FATAL("Execution error!");
-            OPENVDB_LOG_FATAL("Errors:");
-            OPENVDB_LOG_FATAL(e.what());
+        try { volumeExecutable->execute(*grids); }
+        catch (std::exception& e) {
+            OPENVDB_LOG_FATAL("Execution error!\nErrors:\n" << e.what());
             return EXIT_FAILURE;
         }
 
-        if (options.mVerbose) std::cout << "done." << std::endl;
+        axlog("[INFO] | Execution success.\n");
+        axlog("[INFO] | " << axtime() << '\n' << std::flush);
     }
 
-    if (!options.mOutputVDBFile.empty()) {
-        openvdb::io::File out(options.mOutputVDBFile);
-
+    if (!opts.mOutputVDBFile.empty()) {
+        axtimer();
+        axlog("[INFO] Writing results" << std::flush);
+        openvdb::io::File out(opts.mOutputVDBFile);
         try {
             out.write(*grids, *meta);
         } catch (openvdb::Exception& e) {
             OPENVDB_LOG_ERROR(e.what() << " (" << out.filename() << ")");
+            return EXIT_FAILURE;
         }
+        axlog("[INFO] | " << axtime() << '\n' << std::flush);
     }
 
     return EXIT_SUCCESS;
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

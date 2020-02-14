@@ -1,7 +1,0 @@
-
-double seed = 2.0;
-
-double@rand_test_0 = rand(seed);
-double@rand_test_1 = rand(seed); // should be the same as rand_test_0
-
-double@rand_test_2 = rand(seed + 1.0); // should be different to rand_test_0 and rand_test_1

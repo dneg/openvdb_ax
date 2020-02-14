@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -27,6 +27,11 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
+///
+/// @file unittest/TestHarness.h
+///
+/// @authors Francisco Gochez
+///
 
 #ifndef OPENVDB_POINTS_UNITTEST_TEST_HARNESS_INCLUDED
 #define OPENVDB_POINTS_UNITTEST_TEST_HARNESS_INCLUDED
@@ -39,16 +44,11 @@
 #include <openvdb_ax/compiler/VolumeExecutable.h>
 
 #include <openvdb/points/PointAttribute.h>
+#include <openvdb/points/PointScatter.h>
 
 #include <cppunit/TestCase.h>
 
 #include <unordered_map>
-
-/// @file unittest/TestHarness.h
-///
-/// @authors Francisco Gochez
-///
-/// @brief Structure for wrapping up most of the existing integration tests with a simple interface
 
 namespace unittest_util
 {
@@ -60,14 +60,20 @@ void wrapExecution(openvdb::points::PointDataGrid& grid,
                    const std::string * const group = nullptr,
                    std::vector<std::string>* warnings = nullptr,
                    const openvdb::ax::CustomData::Ptr& data =
-                      openvdb::ax::CustomData::create());
+                       openvdb::ax::CustomData::create(),
+                   const openvdb::ax::CompilerOptions& opts =
+                       openvdb::ax::CompilerOptions());
 
 void wrapExecution(openvdb::GridPtrVec& grids,
                    const std::string& codeFileName,
                    std::vector<std::string>* warnings = nullptr,
                    const openvdb::ax::CustomData::Ptr& data =
-                        openvdb::ax::CustomData::create());
+                       openvdb::ax::CustomData::create(),
+                   const openvdb::ax::CompilerOptions& opts =
+                       openvdb::ax::CompilerOptions());
 
+/// @brief Structure for wrapping up most of the existing integration
+///        tests with a simple interface
 struct AXTestHarness
 {
     AXTestHarness() :
@@ -77,6 +83,7 @@ struct AXTestHarness
       , mOutputVolumeGrids()
       , mUseVolumes(true)
       , mUsePoints(true)
+      , mVolumeBounds({0,0,0},{0,0,0})
     {
         reset();
     }
@@ -86,65 +93,23 @@ struct AXTestHarness
 
     /// @brief adds attributes to input data set
     template <typename T>
-    void addInputAttributes(const std::vector<std::string>& names,
+    typename std::enable_if<!openvdb::ValueTraits<T>::IsMat>::type
+    addInputAttributes(const std::vector<std::string>& names,
+                       const std::vector<T>& values)
+    {
+        if (mUsePoints)  addInputPtAttributes<T>(names, values);
+        if (mUseVolumes) addInputVolumes(names, values);
+    }
+
+    /// @brief override of addInputAttributes for Matrix types which won't add to volumes
+    ///        necessary since there are no matrix volumes
+    template <typename T>
+    typename std::enable_if<openvdb::ValueTraits<T>::IsMat>::type
+    addInputAttributes(const std::vector<std::string>& names,
                        const std::vector<T>& values)
     {
         if (mUsePoints) {
             addInputPtAttributes<T>(names, values);
-        }
-
-        if (mUseVolumes) {
-            addInputVolumes(names, values);
-        }
-    }
-
-    /// @brief override of addInputAttributes for strings which won't add to volumes
-    ///        necessary since there are no "string volumes"
-    void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<std::string>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<std::string>(names, values);
-        }
-    }
-
-    /// @brief override of addInputAttributes for Mat3f which won't add to volumes
-    ///        necessary since there are no matrix volumes
-    void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<openvdb::math::Mat3<float>>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<openvdb::math::Mat3<float>>(names, values);
-        }
-    }
-
-    /// @brief override of addInputAttributes for Mat3d which won't add to volumes
-    ///        necessary since there are no matrix volumes
-    void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<openvdb::math::Mat3<double>>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<openvdb::math::Mat3<double>>(names, values);
-        }
-    }
-
-    /// @brief override of addInputAttributes for Mat4f which won't add to volumes
-    ///        necessary since there are no matrix volumes
-    void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<openvdb::math::Mat4<float>>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<openvdb::math::Mat4<float> >(names, values);
-        }
-    }
-
-    /// @brief override of addInputAttributes for Mat4d which won't add to volumes
-    ///        necessary since there are no matrix volumes
-    void addInputAttributes(const std::vector<std::string>& names,
-                            const std::vector<openvdb::math::Mat4<double>>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<openvdb::math::Mat4<double>>(names, values);
         }
     }
 
@@ -156,56 +121,25 @@ struct AXTestHarness
 
     /// @brief adds attributes to expected output data sets
     template <typename T>
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                       const std::vector<T>& values)
+    typename std::enable_if<!openvdb::ValueTraits<T>::IsMat>::type
+    addExpectedAttributes(const std::vector<std::string>& names,
+                          const std::vector<T>& values)
+    {
+        if (mUsePoints)  addExpectedPtAttributes<T>(names, values);
+        if (mUseVolumes) addExpectedVolumes<T>(names, values);
+    }
+
+    /// @brief adds attributes to expected output data sets
+    /// @brief override of addExpectedAttributes for Matrix types which won't add to
+    ///        volumes necessary since there are no matrix volumes
+    template <typename T>
+    typename std::enable_if<openvdb::ValueTraits<T>::IsMat>::type
+    addExpectedAttributes(const std::vector<std::string>& names,
+                          const std::vector<T>& values)
     {
         if (mUsePoints) {
             addExpectedPtAttributes<T>(names, values);
         }
-
-        if (mUseVolumes) {
-            addExpectedVolumes<T>(names, values);
-        }
-    }
-
-    /// @brief adds attributes to both to expected output data sets
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                               const std::vector<std::string>& values)
-    {
-        addExpectedPtAttributes<std::string>(names, values);
-    }
-
-    /// @brief adds attributes to both to expected output data sets
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                                const std::vector<openvdb::math::Mat3<float>>& values)
-    {
-        addExpectedPtAttributes<openvdb::math::Mat3<float>>(names, values);
-    }
-
-    /// @brief adds attributes to both to expected output data sets
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                                const std::vector<openvdb::math::Mat3<double>>& values)
-    {
-        addExpectedPtAttributes<openvdb::math::Mat3<double>>(names, values);
-    }
-        /// @brief adds attributes to both to expected output data sets
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                                const std::vector<openvdb::math::Mat4<float>>& values)
-    {
-        addExpectedPtAttributes<openvdb::math::Mat4<float>>(names, values);
-    }
-        /// @brief adds attributes to both to expected output data sets
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                                const std::vector<openvdb::math::Mat4<double>>& values)
-    {
-        addExpectedPtAttributes<openvdb::math::Mat4<double>>(names, values);
-    }
-
-    /// @brief adds attributes to both to expected output data sets
-    void addExpectedAttributes(const std::vector<std::string>& names,
-                               const std::vector<short>& values)
-    {
-        addExpectedPtAttributes<short>(names, values);
     }
 
     /// @brief adds attributes to both input and expected data
@@ -250,26 +184,42 @@ struct AXTestHarness
                      const std::string * const group = nullptr,
                      std::vector<std::string>* warnings = nullptr,
                      const openvdb::ax::CustomData::Ptr& data =
-                        openvdb::ax::CustomData::create());
+                        openvdb::ax::CustomData::create(),
+                     const openvdb::ax::CompilerOptions& opts =
+                        openvdb::ax::CompilerOptions());
 
-    /// @brief rebuilds the input and output data sets to their "default" states
+    /// @brief rebuilds the input and output data sets to their default harness states. This
+    ///        sets the bounds of volumes to a single voxel, with a single and four point grid
     void reset();
+
+    /// @brief reset the input data to a set amount of points per voxel within a given bounds
+    /// @note  The bounds is also used to fill the volume data of numerical vdb volumes when
+    ///        calls to addAttribute functions are made, where as points have their positions
+    ///        generated here
+    void reset(const openvdb::Index64, const openvdb::CoordBBox&);
+
+    /// @brief reset all grids without changing the harness data. This has the effect of zeroing
+    ///        out all volume voxel data and point data attributes (except for position) without
+    ///        changing the number of points or voxels
+    void resetInputsToZero();
 
     /// @brief compares the input and expected point grids and outputs a report of differences to
     /// the provided stream
     bool checkAgainstExpected(std::ostream& sstream);
 
+    /// @brief Toggle whether to execute tests for points or volumes
     void testVolumes(const bool);
     void testPoints(const bool);
 
-    std::unordered_map<std::string, openvdb::points::PointDataGrid::Ptr> mInputPointGrids;
-    std::unordered_map<std::string, openvdb::points::PointDataGrid::Ptr> mOutputPointGrids;
+    std::vector<openvdb::points::PointDataGrid::Ptr> mInputPointGrids;
+    std::vector<openvdb::points::PointDataGrid::Ptr> mOutputPointGrids;
 
-    std::unordered_map<std::string, openvdb::GridPtrVec> mInputVolumeGrids;
-    std::unordered_map<std::string, openvdb::GridPtrVec> mOutputVolumeGrids;
+    openvdb::GridPtrVec mInputVolumeGrids;
+    openvdb::GridPtrVec mOutputVolumeGrids;
 
     bool mUseVolumes;
     bool mUsePoints;
+    openvdb::CoordBBox mVolumeBounds;
 
 private:
     template <typename T>
@@ -278,7 +228,7 @@ private:
     {
         for (size_t i = 0; i < names.size(); i++) {
             for (auto& grid : mInputPointGrids) {
-                openvdb::points::appendAttribute<T>(grid.second->tree(), names[i], values[i]);
+                openvdb::points::appendAttribute<T>(grid->tree(), names[i], values[i]);
            }
         }
     }
@@ -295,9 +245,9 @@ private:
 
         for (size_t i = 0; i < names.size(); i++) {
             typename GridType::Ptr grid = GridType::create();
-            grid->tree().setValue(openvdb::Coord(0, 0, 0), values[i]);
+            grid->denseFill(mVolumeBounds, values[i], true/*active*/);
             grid->setName(names[i]);
-            mInputVolumeGrids["one_voxel"].emplace_back(grid);
+            mInputVolumeGrids.emplace_back(grid);
         }
     }
 
@@ -307,7 +257,7 @@ private:
     {
         for (size_t i = 0; i < names.size(); i++) {
             for (auto& grid : mOutputPointGrids) {
-                openvdb::points::appendAttribute<T>(grid.second->tree(), names[i], values[i]);
+                openvdb::points::appendAttribute<T>(grid->tree(), names[i], values[i]);
            }
         }
     }
@@ -324,9 +274,9 @@ private:
 
         for (size_t i = 0; i < names.size(); i++) {
             typename GridType::Ptr grid = GridType::create();
-            grid->tree().setValue(openvdb::Coord(0, 0, 0), values[i]);
+            grid->denseFill(mVolumeBounds, values[i], true/*active*/);
             grid->setName(names[i] + "_expected");
-            mOutputVolumeGrids["one_voxel"].emplace_back(grid);
+            mOutputVolumeGrids.emplace_back(grid);
         }
     }
 
@@ -353,6 +303,6 @@ protected:
 
 #endif // OPENVDB_POINTS_UNITTEST_TEST_HARNESS_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

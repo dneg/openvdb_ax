@@ -1,8 +1,0 @@
-
-float temp1 = 4.3f;
-float temp2 = -4.3f;
-int temp3 = 3;
-
-@float_test1 = ceil(temp1);
-@float_test2 = ceil(temp2);
-i@int_test1 = int(ceil(temp3));

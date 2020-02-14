@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -553,6 +553,16 @@ Function ||\n\
 `double determinant(mat4d)`|\n\
     Returns the determinant of a matrix.\n\
 \n\
+`void diag(vec3f; mat3f)`\n\
+`void diag(vec4f; mat4f)`\n\
+`void diag(vec3d; mat3d)`\n\
+`void diag(vec4d; mat4d)`\n\
+`void diag(mat3f; vec3f)`\n\
+`void diag(mat4f; vec4f)`\n\
+`void diag(mat3d; vec3d)`\n\
+`void diag(mat4d; vec4d)`|\n\
+    Create a diagonal matrix from a vector, or return the diagonal components of a matrix as a vector.\n\
+\n\
 `double dot(vec3d; vec3d)`\n\
 `float dot(vec3f; vec3f)`\n\
 `int dot(vec3i; vec3i)`|\n\
@@ -620,8 +630,6 @@ Function ||\n\
 \n\
 `float lerp(float; float; float)`\n\
 `double lerp(double; double; double)`\n\
-`vec3f lerp(vec3f; vec3f; vec3f)`\n\
-`vec3d lerp(vec3d; vec3d; vec3d)`|\n\
     Performs bilinear interpolation between the values. If the amount is outside the range 0 to 1, the values will be extrapolated linearly. If amount is 0, the first value is returned. If it is 1, the second value is returned.\n\
 \n\
 `double log(double)`\n\
@@ -676,19 +684,19 @@ Function ||\n\
 `vec4f pretransform(mat4f; vec4f)`|\n\
     Return the transformed vector by transpose of this matrix. This function is equivalent to pre-multiplying the matrix.\n\
 \n\
-`void print(string)`\n\
 `void print(double)`\n\
 `void print(float)`\n\
 `void print(int)`\n\
+`void print(string)`\n\
 `void print(vec2i)`\n\
 `void print(vec2f)`\n\
 `void print(vec2d)`\n\
 `void print(vec3i)`\n\
 `void print(vec3f)`\n\
 `void print(vec3d)`\n\
-`void print(vec3i)`\n\
-`void print(vec3f)`\n\
-`void print(vec3d)`\n\
+`void print(vec4i)`\n\
+`void print(vec4f)`\n\
+`void print(vec4d)`\n\
 `void print(mat3f)`\n\
 `void print(mat3d)`\n\
 `void print(mat4f)`\n\
@@ -698,7 +706,7 @@ Function ||\n\
 `double rand()`\n\
 `double rand(double)`\n\
 `double rand(int)`|\n\
-    Creates a random number based on the provided seed. The number will be in the range of 0 to 1. The same number is produced for the same seed. Note that if rand is called without a seed the previous state of the random number generator is advanced for the currently processing point. This state is determined by the last call to rand() with a given seed. If rand is not called with a seed, the generator advances continuously across different points which can produce non-deterministic results. It is important that rand is always called with a seed at least once for deterministic results.\n\
+    Creates a random number based on the provided seed. The number will be in the range of 0 to 1. The same number is produced for the same seed. Note that if rand is called without a seed the previous state of the random number generator is advanced for the currently processing element. This state is determined by the last call to rand() with a given seed. If rand is not called with a seed, the generator advances continuously across different elements which can produce non-deterministic results. It is important that rand is always called with a seed at least once for deterministic results.\n\
 \n\
 `void removefromgroup(string)`|\n\
     Remove the current point from the given group name, effectively setting its membership to false. This function has no effect if the group does not exist.\n\
@@ -1318,6 +1326,7 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
 {
     using VectorData = TypedMetadata<math::Vec3<float>>;
     using FloatData = TypedMetadata<float>;
+    using StringData = openvdb::ax::AXStringMetadata;
     using FloatRampData = hax::RampDataCache<float>;
     using VectorRampData = hax::RampDataCache<math::Vec3<float>>;
 
@@ -1401,9 +1410,13 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
         //        to consider the case where it could be a channel
 
         const bool isCHRampLookup(type == "ramp");
-        const bool isCHLookup(!isCHRampLookup && type == openvdb::typeNameAsString<float>());
+        const bool isCHLookup(!isCHRampLookup &&
+            type == openvdb::typeNameAsString<float>());
         const bool isCHVLookup(!isCHRampLookup && !isCHLookup &&
             type == openvdb::typeNameAsString<openvdb::Vec3f>());
+        const bool isCHSLookup(!isCHRampLookup && !isCHLookup && !isCHVLookup &&
+            type == openvdb::typeNameAsString<std::string>());
+
         const bool lookForChannel = !isCHRampLookup;
 
         // findParmRelativeTo finds the node and parameter index on the node which is
@@ -1496,6 +1509,24 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
                     dep->addExplicitInput(parm.microNode(subIndex));
                 }
             }
+            else if (isCHSLookup) {
+
+                assert(subIndex != -1);
+
+                UT_String string;
+                node->evalString(string, index, subIndex, time);
+
+                StringData::Ptr stringData(new StringData(string.toStdString()));
+                data.insertData(nameOrPath, stringData);
+
+                // add a dependency to this micronode if it exists
+
+                if (dep) {
+                    // micro node is guaranteed to exist as we've evaluated the param
+                    PRM_Parm& parm = node->getParm(index);
+                    dep->addExplicitInput(parm.microNode(subIndex));
+                }
+            }
             else if (isCHRampLookup) {
 
                 PRM_Parm& parm = node->getParm(index);
@@ -1557,6 +1588,10 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
                 FloatData::Ptr floatData(new FloatData(0.0f));
                 data.insertData<FloatData>(nameOrPath, floatData);
             }
+            else if (isCHSLookup) {
+                StringData::Ptr stringData(new StringData(""));
+                data.insertData<StringData>(nameOrPath, stringData);
+            }
             else if (isCHRampLookup) {
                 FloatRampData::Ptr floatRampData(new FloatRampData());
                 data.insertData<FloatRampData>(nameOrPath, floatRampData);
@@ -1575,6 +1610,6 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
 
 ////////////////////////////////////////
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

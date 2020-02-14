@@ -24,9 +24,9 @@ inline T pow2 (T x)
 }
 
 template <typename T>
-inline inttype fastFloori (T x)
+inline OSNoise::inttype fastFloori (T x)
 {
-    inttype ip = (inttype)x;
+    OSNoise::inttype ip = (OSNoise::inttype)x;
 
     if (x < 0.0) --ip;
 
@@ -55,9 +55,9 @@ const int OSNoise::sGradients [] = {
 };
 
 template <typename T>
-inline T OSNoise::extrapolate(const inttype xsb,
-                              const inttype ysb,
-                              const inttype zsb,
+inline T OSNoise::extrapolate(const OSNoise::inttype xsb,
+                              const OSNoise::inttype ysb,
+                              const OSNoise::inttype zsb,
                               const T dx,
                               const T dy,
                               const T dz) const
@@ -70,9 +70,9 @@ inline T OSNoise::extrapolate(const inttype xsb,
 }
 
 template <typename T>
-inline T OSNoise::extrapolate(const inttype xsb,
-                              const inttype ysb,
-                              const inttype zsb,
+inline T OSNoise::extrapolate(const OSNoise::inttype xsb,
+                              const OSNoise::inttype ysb,
+                              const OSNoise::inttype zsb,
                               const T dx,
                               const T dy,
                               const T dz,
@@ -84,7 +84,7 @@ inline T OSNoise::extrapolate(const inttype xsb,
          (de[2] = sGradients[index + 2]) * dz;
 }
 
-OSNoise::OSNoise(inttype seed)
+OSNoise::OSNoise(OSNoise::inttype seed)
 {
   int source [256];
   for (int i = 0; i < 256; ++i) { source[i] = i; }
@@ -119,7 +119,7 @@ T OSNoise::eval(const T x, const T y, const T z) const
   static const T SQUISH_CONSTANT  = (T)(1.0 / 3.0);  // (sqrt(3 + 1) - 1) / 3
   static const T NORM_CONSTANT    = (T)(1.0 / 103.0);
 
-  inttype xsb, ysb, zsb;
+  OSNoise::inttype xsb, ysb, zsb;
   T dx0, dy0, dz0;
   T xins, yins, zins;
 
@@ -139,9 +139,9 @@ T OSNoise::eval(const T x, const T y, const T z) const
     T xsbd = std::floor(xs);
     T ysbd = std::floor(ys);
     T zsbd = std::floor(zs);
-    xsb = (inttype)xsbd;
-    ysb = (inttype)ysbd;
-    zsb = (inttype)zsbd;
+    xsb = (OSNoise::inttype)xsbd;
+    ysb = (OSNoise::inttype)ysbd;
+    zsb = (OSNoise::inttype)zsbd;
 #else
     xsb = fastFloori(xs);
     ysb = fastFloori(ys);
@@ -169,8 +169,8 @@ T OSNoise::eval(const T x, const T y, const T z) const
   }
 
   // These are given values inside the next block, and used afterwards.
-  inttype xsv_ext0, ysv_ext0, zsv_ext0;
-  inttype xsv_ext1, ysv_ext1, zsv_ext1;
+  OSNoise::inttype xsv_ext0, ysv_ext0, zsv_ext0;
+  OSNoise::inttype xsv_ext1, ysv_ext1, zsv_ext1;
   T dx_ext0, dy_ext0, dz_ext0;
   T dx_ext1, dy_ext1, dz_ext1;
 
@@ -699,9 +699,9 @@ T OSNoise::eval(const T x, const T y, const T z) const
   return (value * NORM_CONSTANT);
 }
 
-template double OSNoise::extrapolate(const inttype xsb, const inttype ysb, const inttype zsb,
+template double OSNoise::extrapolate(const OSNoise::inttype xsb, const OSNoise::inttype ysb, const OSNoise::inttype zsb,
                                      const double dx, const double dy, const double dz) const;
-template double OSNoise::extrapolate(const inttype xsb, const inttype ysb, const inttype zsb,
+template double OSNoise::extrapolate(const OSNoise::inttype xsb, const OSNoise::inttype ysb, const OSNoise::inttype zsb,
                                      const double dx, const double dy, const double dz,
                                      double (&de) [3]) const;
 

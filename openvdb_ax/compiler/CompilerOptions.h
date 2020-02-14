@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -39,14 +39,23 @@ namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
 
-/// @brief Options that control how a function registry behaves
+/// @brief Options that control how functions behave
 struct FunctionOptions
 {
-    // Function options
-
+    /// @brief  Enable the constant folding of C bindings. Functions may use this setting
+    ///         to determine whether they are allowed to be called during code generation
+    ///         to evaluate call sites with purely constant arguments and replace the call
+    ///         with the result.
+    /// @note   This does not impact IR functions which we leave to LLVM's CF during
+    ///         IR optimization.
+    /// @note   We used to bind IR methods to corresponding C bindings, however it can be
+    ///         very easy to implement incorrectly, leading to discrepancies in the CF
+    ///         results. Fundamentally, LLVM's support for CF IR is far superior and our
+    ///         framework only supports some types of folding (see codegen/ConstantFolding.h)
+    bool mConstantFoldCBindings = true;
     /// @brief  When enabled, functions which have IR builder instruction definitions will
     ///         prioritise those over any registered external calls
-    bool mPrioritiseFunctionIR = false;
+    bool mPrioritiseIR = true;
     /// @brief  When enabled, the function registry is only populated on a function visit.
     ///         At the end of code generation, only functions which have been instantiated
     ///         will exist in the function map.
@@ -83,6 +92,6 @@ struct CompilerOptions
 
 #endif // OPENVDB_AX_COMPILER_FUNCTION_REGISTRY_OPTIONS_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

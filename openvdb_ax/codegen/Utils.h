@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -135,6 +135,32 @@ llvmPointerFromAddress(const ValueT* const& ptr,
     return builder.CreateIntToPtr(address, LLVMType<ValueT*>::get(builder.getContext()));
 }
 
+/// @brief  Insert a stack allocation at the beginning of the current function
+///         of the provided type and size. The IRBuilder's insertion point must
+///         be set to a BasicBlock with a valid Function parent.
+/// @note   If a size is provided, the size must not depend on any other
+///         instructions. If it does, invalid LLVM IR will bb generated.
+///
+/// @param  B  The IRBuilder
+/// @param  type  The type to allocate
+/// @param  size  Optional count of allocations. If nullptr, runs a single allocation
+inline llvm::Value*
+insertStaticAlloca(llvm::IRBuilder<>& B,
+                   llvm::Type* type,
+                   llvm::Value* size = nullptr)
+{
+    // Create the allocation at the start of the function block
+    llvm::Function* parent = B.GetInsertBlock()->getParent();
+    assert(parent && !parent->empty());
+    auto IP = B.saveIP();
+    llvm::BasicBlock& block = parent->front();
+    if (block.empty()) B.SetInsertPoint(&block);
+    else B.SetInsertPoint(&(block.front()));
+    llvm::Value* result = B.CreateAlloca(type, size);
+    B.restoreIP(IP);
+    return result;
+}
+
 /// @brief  Returns the highest order type from two LLVM Scalar types
 ///
 /// @param  typeA  The first scalar llvm type
@@ -144,10 +170,10 @@ inline llvm::Type*
 typePrecedence(llvm::Type* const typeA,
                llvm::Type* const typeB)
 {
-    assert(typeA && isScalarType(typeA) &&
+    assert(typeA && (typeA->isIntegerTy() || typeA->isFloatingPointTy()) &&
         "First Type in typePrecedence is not a scalar type");
-    assert(typeB && isScalarType(typeB) &&
-        "First Type in typePrecedence is not a scalar type");
+    assert(typeB && (typeB->isIntegerTy() || typeB->isFloatingPointTy()) &&
+        "Second Type in typePrecedence is not a scalar type");
 
     // handle implicit arithmetic conversion
     // (http://osr507doc.sco.com/en/tools/clang_conv_implicit.html)
@@ -354,6 +380,28 @@ llvmBinaryConversion(const llvm::Type* const type,
     OPENVDB_THROW(LLVMTypeError, "Invalid type for binary operation");
 }
 
+/// @brief  Returns true if the llvm Type 'from' can be safely cast to the llvm
+///         Type 'to'.
+inline bool isValidCast(llvm::Type* from, llvm::Type* to)
+{
+    assert(from && "llvm Type 'from' is null in isValidCast");
+    assert(to && "llvm Type 'to' is null in isValidCast");
+
+    if ((from->isIntegerTy() || from->isFloatingPointTy()) &&
+        (to->isIntegerTy() || to->isFloatingPointTy())) {
+        return true;
+    }
+    if (from->isArrayTy() && to->isArrayTy()) {
+        llvm::ArrayType* af = llvm::cast<llvm::ArrayType>(from);
+        llvm::ArrayType* at = llvm::cast<llvm::ArrayType>(to);
+        if (af->getArrayNumElements() == at->getArrayNumElements()) {
+            return isValidCast(af->getArrayElementType(),
+                at->getArrayElementType());
+        }
+    }
+    return false;
+}
+
 /// @brief  Casts a scalar llvm Value to a target scalar llvm Type. Returns
 ///         the cast scalar value of type targetType.
 ///
@@ -413,7 +461,8 @@ arrayCast(llvm::Value* ptrToArray,
 
     const size_t elementSize = arrayType->getArrayNumElements();
     llvm::Value* targetArray =
-        builder.CreateAlloca(llvm::ArrayType::get(targetElementType, elementSize));
+        insertStaticAlloca(builder,
+            llvm::ArrayType::get(targetElementType, elementSize));
 
     for (size_t i = 0; i < elementSize; ++i) {
         llvm::Value* target = builder.CreateConstGEP2_64(targetArray, 0, i);
@@ -471,7 +520,9 @@ arithmeticConversion(std::vector<llvm::Value*>& values,
     llvm::Type* typeCast = LLVMType<bool>::get(builder.getContext());
     for (llvm::Value*& value : values) {
         llvm::Type* type = value->getType();
-        if (isScalarType(type)) typeCast = typePrecedence(typeCast, type);
+        if (type->isIntegerTy() || type->isFloatingPointTy()) {
+            typeCast = typePrecedence(typeCast, type);
+        }
     }
 
     arithmeticConversion(values, typeCast, builder);
@@ -654,7 +705,7 @@ array3Pack(llvm::Value* value1,
     value3 = arithmeticConversion(value3, type, builder);
 
     llvm::Type* vectorType = llvm::ArrayType::get(type, 3);
-    llvm::Value* vector = builder.CreateAlloca(vectorType);
+    llvm::Value* vector = insertStaticAlloca(builder, vectorType);
 
     llvm::Value* e1 = builder.CreateConstGEP2_64(vector, 0, 0);
     llvm::Value* e2 = builder.CreateConstGEP2_64(vector, 0, 1);
@@ -686,7 +737,8 @@ arrayPack(llvm::Value* value,
 
     llvm::Type* type = value->getType();
     llvm::Value* array =
-        builder.CreateAlloca(llvm::ArrayType::get(type, size));
+        insertStaticAlloca(builder,
+            llvm::ArrayType::get(type, size));
 
     for (size_t i = 0; i < size; ++i) {
         llvm::Value* element = builder.CreateConstGEP2_64(array, 0, i);
@@ -707,8 +759,8 @@ arrayPack(const std::vector<llvm::Value*>& values,
           llvm::IRBuilder<>& builder)
 {
     llvm::Type* type = values.front()->getType();
-    llvm::Value* array =
-        builder.CreateAlloca(llvm::ArrayType::get(type, values.size()));
+    llvm::Value* array = insertStaticAlloca(builder,
+        llvm::ArrayType::get(type, values.size()));
 
     size_t idx = 0;
     for (llvm::Value* const& value : values) {
@@ -755,6 +807,6 @@ arrayPackCast(std::vector<llvm::Value*>& values,
 
 #endif // OPENVDB_AX_CODEGEN_UTILS_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -52,6 +52,10 @@
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
+
+using Vec4IGrid = BoolGrid::ValueConverter<math::Vec4<int32_t>>::Type;
+using Vec4fGrid = BoolGrid::ValueConverter<math::Vec4<float>>::Type;
+using Vec4dGrid = BoolGrid::ValueConverter<math::Vec4<double>>::Type;
 
 namespace ax {
 
@@ -167,6 +171,10 @@ inline bool supported(const ast::tokens::CoreType type)
         case ast::tokens::VEC3I   : return true;
         case ast::tokens::VEC3F   : return true;
         case ast::tokens::VEC3D   : return true;
+        case ast::tokens::VEC4I   : return true;
+        case ast::tokens::VEC4F   : return true;
+        case ast::tokens::VEC4D   : return true;
+        case ast::tokens::STRING  : return true;
         case ast::tokens::UNKNOWN :
         default                   :
             return false;
@@ -189,6 +197,11 @@ retrieveAccessor(VolumeFunctionArguments& args,
         case ast::tokens::VEC3I   : return retrieveAccessorTyped<Vec3IGrid>(args, grid);
         case ast::tokens::VEC3F   : return retrieveAccessorTyped<Vec3fGrid>(args, grid);
         case ast::tokens::VEC3D   : return retrieveAccessorTyped<Vec3dGrid>(args, grid);
+        case ast::tokens::STRING  : return retrieveAccessorTyped<StringGrid>(args, grid);
+        // @note custom
+        case ast::tokens::VEC4I   : return retrieveAccessorTyped<Vec4IGrid>(args, grid);
+        case ast::tokens::VEC4F   : return retrieveAccessorTyped<Vec4fGrid>(args, grid);
+        case ast::tokens::VEC4D   : return retrieveAccessorTyped<Vec4dGrid>(args, grid);
         case ast::tokens::UNKNOWN :
         default                   : return;
     }
@@ -209,6 +222,11 @@ createGrid(const ast::tokens::CoreType& type)
         case ast::tokens::VEC3I   : return openvdb::Vec3IGrid::create();
         case ast::tokens::VEC3F   : return openvdb::Vec3fGrid::create();
         case ast::tokens::VEC3D   : return openvdb::Vec3dGrid::create();
+        case ast::tokens::STRING  : return openvdb::StringGrid::create();
+        // @note custom types
+        case ast::tokens::VEC4I   : return openvdb::Vec4IGrid::create();
+        case ast::tokens::VEC4F   : return openvdb::Vec4fGrid::create();
+        case ast::tokens::VEC4D   : return openvdb::Vec4dGrid::create();
         case ast::tokens::UNKNOWN :
         default                   : return nullptr;
     }
@@ -303,7 +321,8 @@ void registerVolumes(GridPtrVec& grids,
             }
         }
         if (!matchedName && !matchedGrid) {
-            OPENVDB_THROW(LookupError, "Missing grid \"@" + iter.name() + "\".");
+            OPENVDB_THROW(LookupError, "Missing grid \"" +
+                ast::tokens::typeStringFromToken(iter.type()) + "@" + iter.name() + "\".");
         }
         if (matchedName && !matchedGrid) {
             OPENVDB_THROW(TypeError, "Mismatching grid access type. \"@" + iter.name() +
@@ -411,8 +430,20 @@ inline void run(const openvdb::GridPtrVec& writeableGrids,
         else if (grid->isType<Vec3dGrid>()) {
             run<IterT, Vec3dGrid>(*grid, readGrids, kernel, registry, custom);
         }
+        else if (grid->isType<Vec4IGrid>()) {
+            run<IterT, Vec4IGrid>(*grid, readGrids, kernel, registry, custom);
+        }
+        else if (grid->isType<Vec4fGrid>()) {
+            run<IterT, Vec4fGrid>(*grid, readGrids, kernel, registry, custom);
+        }
+        else if (grid->isType<Vec4dGrid>()) {
+            run<IterT, Vec4dGrid>(*grid, readGrids, kernel, registry, custom);
+        }
         else if (grid->isType<MaskGrid>()) {
             run<IterT, MaskGrid>(*grid, readGrids, kernel, registry, custom);
+        }
+        else if (grid->isType<StringGrid>()) {
+            run<IterT, StringGrid>(*grid, readGrids, kernel, registry, custom);
         }
         else {
             OPENVDB_THROW(TypeError, "Could not retrieve volume '" + grid->getName()
@@ -455,6 +486,6 @@ void VolumeExecutable::execute(openvdb::GridPtrVec& grids,
 }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

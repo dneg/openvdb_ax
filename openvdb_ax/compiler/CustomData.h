@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -36,6 +36,8 @@
 
 #ifndef OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED
+
+#include <openvdb_ax/ast/Literals.h>
 
 #include <openvdb/Metadata.h>
 #include <openvdb/Types.h>
@@ -185,12 +187,76 @@ private:
     std::unordered_map<Name, Metadata::Ptr> mData;
 };
 
+
+struct AXStringMetadata : public StringMetadata
+{
+    using Ptr = openvdb::SharedPtr<AXStringMetadata>;
+    using ConstPtr = openvdb::SharedPtr<const AXStringMetadata>;
+
+    AXStringMetadata(const std::string& string)
+        : StringMetadata(string)
+        , mData()
+    {
+        this->initialize();
+    }
+
+    // delegate, ensure valid string initialization
+    AXStringMetadata() : AXStringMetadata("") {}
+    AXStringMetadata(const AXStringMetadata& other)
+        : StringMetadata(other)
+        , mData()
+    {
+        this->initialize();
+    }
+
+    ~AXStringMetadata() override {}
+
+    openvdb::Metadata::Ptr copy() const override {
+        openvdb::Metadata::Ptr metadata(new AXStringMetadata());
+        metadata->copy(*this);
+        return metadata;
+    }
+
+    void copy(const openvdb::Metadata& other) override {
+        const AXStringMetadata* t = dynamic_cast<const AXStringMetadata*>(&other);
+        if (t == nullptr) OPENVDB_THROW(openvdb::TypeError, "Incompatible type during copy");
+        this->StringMetadata::setValue(t->StringMetadata::value());
+        this->initialize();
+    }
+
+    void setValue(const std::string& string)
+    {
+        this->StringMetadata::setValue(string);
+        this->initialize();
+    }
+
+    ax::AXString& value() { return mData; }
+    const ax::AXString& value() const { return mData; }
+
+protected:
+
+    void readValue(std::istream& is, openvdb::Index32 size) override {
+        StringMetadata::readValue(is, size);
+        this->initialize();
+    }
+
+private:
+    void initialize()
+    {
+        mData.ptr = StringMetadata::value().c_str();
+        mData.size = StringMetadata::value().size();
+    }
+
+    ax::AXString mData;
+};
+
+
 }
 }
 }
 
 #endif // OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
