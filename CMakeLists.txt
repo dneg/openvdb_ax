@@ -164,7 +164,7 @@ message(STATUS "CMake Build Type: ${CMAKE_BUILD_TYPE}")
 # for sub projects and verify version requirements
 
 set(HAS_AVAILABLE_WARNINGS FALSE)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
   if(OPENVDB_CXX_STRICT)
     message(STATUS "Configuring Clang CXX warnings")
     set(HAS_AVAILABLE_WARNINGS TRUE)
