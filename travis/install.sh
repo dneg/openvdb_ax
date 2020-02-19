@@ -40,22 +40,9 @@ cd build
 
 echo "Testing aginst LLVM version $LLVM_VERSION"
 
-OPENVDB_CXX_STRICT="ON"
 LLVM_DIR="/usr/lib/llvm-$LLVM_VERSION/share/llvm/cmake"
-
 if [ "$TRAVIS_OS_NAME" = "osx" ]; then
     LLVM_DIR="/usr/local/opt/llvm@$LLVM_VERSION/lib/cmake/llvm"
-    OPENVDB_CXX_STRICT="OFF"
-fi
-
-# @todo fix clang warnings
-if [ "$TRAVIS_COMPILER" = "clang" ]; then
-    OPENVDB_CXX_STRICT="OFF"
-fi
-
-# @todo fix llvm 9 warnings
-if [ "$LLVM_VERSION" = "9" ]; then
-    OPENVDB_CXX_STRICT="OFF"
 fi
 
 cmake \
@@ -65,7 +52,7 @@ cmake \
     -D OPENVDB_BUILD_AX_BINARIES=ON \
     -D OPENVDB_BUILD_AX_GRAMMAR=OFF \
     -D OPENVDB_BUILD_AX_PYTHON_MODULE=OFF \
-    -D OPENVDB_CXX_STRICT=$OPENVDB_CXX_STRICT \
+    -D OPENVDB_CXX_STRICT=ON \
     -D LLVM_DIR=$LLVM_DIR \
     -D OPENVDB_ROOT=$HOME/openvdb/install \
     -D CMAKE_INSTALL_PREFIX=$HOME/install \
