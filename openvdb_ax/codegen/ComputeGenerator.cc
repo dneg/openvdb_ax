@@ -68,7 +68,7 @@ const std::array<std::string, ComputeKernel::N_ARGS>&
 ComputeKernel::getArgumentKeys()
 {
     static const std::array<std::string, ComputeKernel::N_ARGS> arguments = {
-        "custom_data"
+        { "custom_data" }
     };
 
     return arguments;
