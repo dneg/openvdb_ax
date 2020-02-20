@@ -67,14 +67,14 @@ namespace codegen {
 const std::array<std::string, PointKernel::N_ARGS>&
 PointKernel::argumentKeys()
 {
-    static const std::array<std::string, PointKernel::N_ARGS> arguments = {
+    static const std::array<std::string, PointKernel::N_ARGS> arguments = {{
         "custom_data",
         "attribute_set",
         "point_index",
         "attribute_handles",
         "group_handles",
         "leaf_data"
-    };
+    }};
 
     return arguments;
 }

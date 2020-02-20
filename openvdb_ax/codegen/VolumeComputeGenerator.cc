@@ -51,7 +51,7 @@ namespace codegen {
 const std::array<std::string, VolumeKernel::N_ARGS>&
 VolumeKernel::argumentKeys()
 {
-    static const std::array<std::string, VolumeKernel::N_ARGS> arguments = {
+    static const std::array<std::string, VolumeKernel::N_ARGS> arguments = {{
         "custom_data",
         "coord_is",
         "coord_ws",
@@ -59,7 +59,7 @@ VolumeKernel::argumentKeys()
         "transforms",
         "write_index",
         "write_acccessor"
-    };
+    }};
 
     return arguments;
 }
