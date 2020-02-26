@@ -53,41 +53,6 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
-void
-stackValuesForFunction(std::vector<llvm::Value*>& arguments,
-                   std::stack<llvm::Value*>& values,
-                   const size_t count,
-                   llvm::IRBuilder<>& builder)
-{
-    // initialize arguments. scalars are always passed by value, arrays
-    // and strings always by pointer
-    llvm::Type* strType =
-        LLVMType<AXString>::get(builder.getContext());
-
-    arguments.resize(count);
-    for (auto r = arguments.rbegin(); r != arguments.rend(); ++r) {
-        llvm::Value* arg = values.top(); values.pop();
-        llvm::Type* type = arg->getType();
-        if (type->isPointerTy()) {
-            type = type->getPointerElementType();
-            if (type->isIntegerTy() || type->isFloatingPointTy()) {
-                // pass by value
-                arg = builder.CreateLoad(arg);
-            }
-            else if (type->isArrayTy()) {/*pass by pointer*/}
-            else if (type == strType) {/*pass by pointer*/}
-        }
-        else {
-            // arrays should never be loaded
-            assert(!type->isArrayTy());
-            assert(type != strType);
-            if (type->isIntegerTy() || type->isFloatingPointTy()) {
-                /*pass by value*/
-            }
-        }
-        *r = arg;
-    }
-}
 
 inline void
 printType(const llvm::Type* type, llvm::raw_os_ostream& stream, const bool axTypes)
@@ -101,18 +66,18 @@ printType(const llvm::Type* type, llvm::raw_os_ostream& stream, const bool axTyp
 inline void
 printTypes(llvm::raw_os_ostream& stream,
            const std::vector<llvm::Type*>& types,
-           const std::vector<const char*>* names = nullptr,
+           const std::vector<const char*>& names = {},
            const std::string sep = "; ",
            const bool axTypes = false)
 {
     if (types.empty()) return;
     auto typeIter = types.cbegin();
     std::vector<const char*>::const_iterator nameIter;
-    if (names) nameIter = names->cbegin();
+    if (!names.empty()) nameIter = names.cbegin();
 
     for (; typeIter != types.cend() - 1; ++typeIter) {
         printType(*typeIter, stream, axTypes);
-        if (names && nameIter != names->cend()) {
+        if (!names.empty() && nameIter != names.cend()) {
             if (*nameIter && (*nameIter)[0] != '\0') {
                 stream << ' ' << *nameIter;
             }
@@ -122,7 +87,7 @@ printTypes(llvm::raw_os_ostream& stream,
     }
 
     printType(*typeIter, stream, axTypes);
-    if (names && nameIter != names->cend()) {
+    if (!names.empty() && nameIter != names.cend()) {
         if (*nameIter && (*nameIter)[0] != '\0') {
             stream << ' ' << *nameIter;
         }
@@ -134,7 +99,7 @@ printSignature(std::ostream& os,
                const std::vector<llvm::Type*>& signature,
                const llvm::Type* returnType,
                const char* name,
-               const std::vector<const char*>* names,
+               const std::vector<const char*>& names,
                const bool axTypes)
 {
     llvm::raw_os_ostream stream(os);
@@ -181,12 +146,14 @@ Function::create(llvm::LLVMContext& C, llvm::Module* M) const
 
 llvm::Value*
 Function::call(const std::vector<llvm::Value*>& args,
-     const std::unordered_map<std::string, llvm::Value*>&,
      llvm::IRBuilder<>& B,
      const bool cast) const
 {
-    llvm::Module* M =
-        B.GetInsertBlock()->getParent()->getParent();
+    llvm::BasicBlock* block = B.GetInsertBlock();
+    assert(block);
+    llvm::Function* currentFunction = block->getParent();
+    assert(currentFunction);
+    llvm::Module* M = currentFunction->getParent();
     assert(M);
     llvm::Function* function = this->create(B.getContext(), M);
     std::vector<llvm::Value*> inputs(args);
@@ -255,7 +222,7 @@ Function::print(llvm::LLVMContext& C,
     for (size_t i = 0; i < this->size(); ++i) {
         names.emplace_back(this->argName(i));
     }
-    printSignature(os, current, ret, name, &names, axTypes);
+    printSignature(os, current, ret, name, names, axTypes);
 }
 
 void
@@ -264,8 +231,8 @@ Function::cast(std::vector<llvm::Value*>& args,
             llvm::IRBuilder<>& B)
 {
     llvm::LLVMContext& C = B.getContext();
-    assert(args.size() >= types.size());
     for (size_t i = 0; i < args.size(); ++i) {
+        if (i >= types.size()) break;
         llvm::Value*& value = args[i];
         llvm::Type* type = value->getType();
         if (type->isIntegerTy() || type->isFloatingPointTy()) {
@@ -323,59 +290,33 @@ Function::flattenAttrs(llvm::LLVMContext& C) const
 ///////////////////////////////////////////////////////////////////////////
 
 
-llvm::Value* IRFunctionBase::call(const std::vector<llvm::Value*>& args,
-     const std::unordered_map<std::string, llvm::Value*>& globals,
-     llvm::IRBuilder<>& B,
-     const bool cast) const
+llvm::Function*
+IRFunctionBase::create(llvm::LLVMContext& C, llvm::Module* M) const
 {
-    std::vector<llvm::Value*> inputs(args);
-    if (cast) {
-        std::vector<llvm::Type*> types;
-        this->types(types, B.getContext());
-        this->cast(inputs, types, B);
-    }
+    if (this->hasEmbedIR()) return nullptr;
 
-    if (this->hasEmbedIR()) {
-        auto result = mGen(inputs, globals, B);
-        if (result) {
-            std::vector<llvm::Type*> unused;
-            this->verifyResultType(result->getType(),
-                this->types(unused, B.getContext()));
-        }
-        return result;
-    }
+    llvm::Function* F = this->Function::create(C, M);
+    assert(F);
+    // return if the function has already been generated or if no
+    // module has been provided (just the function prototype requested)
+    if (!F->empty() || !M) return F;
 
-    // Get the function from the module - if it already exists, we assume its
-    // already had its body generated
-    llvm::Module* M =
-        B.GetInsertBlock()->getParent()->getParent();
-    llvm::Function* function = M->getFunction(this->symbol());
-    if (function) return B.CreateCall(function, inputs);
-
-    function = this->create(B.getContext(), M);
-    assert(function);
-
-    llvm::Value* result = B.CreateCall(function, inputs);
-    std::vector<llvm::Type*> unused;
-    this->verifyResultType(result->getType(),
-        this->types(unused, B.getContext()));
-
-    // function didn't exist, generate the body
-    llvm::BasicBlock* entry = llvm::BasicBlock::Create(B.getContext(),
-        this->symbol(), // twine
-        function); // parent
+    // generate the body
+    llvm::BasicBlock* BB =
+        llvm::BasicBlock::Create(C,
+            "entry_" + std::string(this->symbol()), F);
 
     std::vector<llvm::Value*> fnargs;
     fnargs.reserve(this->size());
-    for (auto arg = function->arg_begin(), arg_end = function->arg_end();
+    for (auto arg = F->arg_begin(), arg_end = F->arg_end();
          arg != arg_end; ++arg) {
         fnargs.emplace_back(llvm::cast<llvm::Value>(arg));
     }
 
-    auto IP = B.saveIP();
-    B.SetInsertPoint(entry);
-
-    llvm::Value* lastInstruction = mGen(fnargs, globals, B);
+    // create a new builder per function (its lightweight)
+    // @todo could pass in the builder similar to Function::call
+    llvm::IRBuilder<> B(BB);
+    llvm::Value* lastInstruction = mGen(fnargs, B);
 
     // Allow the user to return a nullptr, an actual value or a return
     // instruction from the generator callback. This facilitates the same
@@ -384,13 +325,57 @@ llvm::Value* IRFunctionBase::call(const std::vector<llvm::Value*>& args,
     // if nullptr, insert a ret void inst, otherwise if it's not a return
     // instruction, either return the value if its supported or insert a
     // ret void
-    if (!lastInstruction) B.CreateRetVoid();
+    if (!lastInstruction) {
+        // @note  if the ret type is not expected to be void, this will
+        //        cause verifyResultType to throw
+        lastInstruction = B.CreateRetVoid();
+    }
     else if (!llvm::isa<llvm::ReturnInst>(lastInstruction)) {
-        if (lastInstruction->getType()->isVoidTy()) B.CreateRetVoid();
-        else B.CreateRet(lastInstruction);
+        assert(lastInstruction);
+        if (lastInstruction->getType()->isVoidTy()) {
+            lastInstruction = B.CreateRetVoid();
+        }
+        else {
+            lastInstruction = B.CreateRet(lastInstruction);
+        }
+    }
+    assert(lastInstruction);
+    assert(llvm::isa<llvm::ReturnInst>(lastInstruction));
+
+    // pull out the ret type - is null if void
+    llvm::Value* rvalue =
+        llvm::cast<llvm::ReturnInst>
+            (lastInstruction)->getReturnValue();
+    llvm::Type* type = rvalue ? rvalue->getType() :
+        llvm::Type::getVoidTy(C);
+
+    this->verifyResultType(type, F->getReturnType());
+    return F;
+}
+
+llvm::Value* IRFunctionBase::call(const std::vector<llvm::Value*>& args,
+     llvm::IRBuilder<>& B,
+     const bool cast) const
+{
+    if (!this->hasEmbedIR()) {
+        return this->Function::call(args, B, cast);
     }
 
-    B.restoreIP(IP);
+    std::vector<llvm::Value*> inputs(args);
+    if (cast) {
+        std::vector<llvm::Type*> types;
+        this->types(types, B.getContext());
+        this->cast(inputs, types, B);
+    }
+
+    llvm::Value* result = mGen(inputs, B);
+    if (result) {
+        // only verify if result is not nullptr to
+        // allow for embedded instructions
+        std::vector<llvm::Type*> unused;
+        this->verifyResultType(result->getType(),
+            this->types(unused, B.getContext()));
+    }
     return result;
 }
 
@@ -427,30 +412,34 @@ FunctionGroup::match(const std::vector<llvm::Type*>& types,
 
 llvm::Value*
 FunctionGroup::execute(const std::vector<llvm::Value*>& args,
-            const std::unordered_map<std::string, llvm::Value*>& globals,
             llvm::IRBuilder<>& B) const
 {
-    std::vector<llvm::Type*> types;
-    valuesToTypes(args, types);
+    std::vector<llvm::Type*> inputTypes;
+    valuesToTypes(args, inputTypes);
 
     llvm::LLVMContext& C = B.getContext();
 
     Function::SignatureMatch match;
-    const Function::Ptr target = this->match(types, C, &match);
+    const Function::Ptr target = this->match(inputTypes, C, &match);
 
     if (!target) {
+        if (this->list().empty()) {
+            OPENVDB_THROW(LLVMFunctionError, "FunctionGroup \"" << mName << "\" "
+                "has no function declarations.");
+        }
+
         std::ostringstream os;
         if (match == Function::SignatureMatch::None) {
             os << "Wrong number of arguments. \"" << mName << "\""
                << " was called with: (";
             llvm::raw_os_ostream stream(os);
-            printTypes(stream, types);
+            printTypes(stream, inputTypes);
             stream << ")";
         }
         else {
             // match == Function::SignatureMatch::Size
             os << "No matching function for ";
-            printSignature(os, types, LLVMType<void>::get(C), mName, nullptr, true);
+            printSignature(os, inputTypes, LLVMType<void>::get(C), mName, {}, true);
             os << ".";
         }
 
@@ -465,11 +454,11 @@ FunctionGroup::execute(const std::vector<llvm::Value*>& args,
 
     llvm::Value* result = nullptr;
     if (match == Function::SignatureMatch::Implicit) {
-        result = target->call(args, globals, B, /*cast=*/true);
+        result = target->call(args, B, /*cast=*/true);
     }
     else {
         // match == Function::SignatureMatch::Explicit
-        result = target->call(args, globals, B, /*cast=*/false);
+        result = target->call(args, B, /*cast=*/false);
     }
 
     if (!result) {

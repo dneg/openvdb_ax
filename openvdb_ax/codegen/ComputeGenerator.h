@@ -204,9 +204,6 @@ protected:
     // The function used as the base code block
     llvm::Function* mFunction;
 
-    // The string mapped function variables, defined by the Function interface
-    SymbolTable mLLVMArguments;
-
     const FunctionOptions mOptions;
 
 private:

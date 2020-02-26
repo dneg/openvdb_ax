@@ -53,10 +53,11 @@ find_package(CppUnit REQUIRED)
 
 set(TEST_SOURCE_FILES
   ast/TestScanners.cc
-  backend/TestFunctionBase.cc
+  backend/TestFunctionGroup.cc
   backend/TestFunctionRegistry.cc
-  backend/TestFunctionSignature.cc
+  backend/TestFunctionTypes.cc
   backend/TestSymbolTable.cc
+  backend/TestTypes.cc
   compiler/TestPointExecutable.cc
   compiler/TestVolumeExecutable.cc
   frontend/TestArrayPack.cc

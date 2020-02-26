@@ -536,12 +536,18 @@ haxchramp(const openvdb::ax::FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
+        // Pull out the custom data from the parent function
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        llvm::Value* arg = openvdb::ax::codegen::extractArgument(compute, 0);
+        assert(arg);
+        assert(arg->getName() == "custom_data");
+
         std::vector<llvm::Value*> inputs(args);
-        inputs.emplace_back(globals.at("custom_data"));
-        hax_chramp(op)->execute(inputs, globals, B);
+        inputs.emplace_back(arg);
+        hax_chramp(op)->execute(inputs, B);
         return nullptr;
     };
 

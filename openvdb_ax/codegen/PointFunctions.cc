@@ -139,15 +139,27 @@ inline FunctionGroup::Ptr axingroup(const FunctionOptions& op)
 {
     static auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
+        // Pull out parent function arguments
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(compute->getName() == "ax.compute.point");
+        llvm::Value* point_index = extractArgument(compute, "point_index");
+        llvm::Value* group_handles = extractArgument(compute, "group_handles");
+        llvm::Value* leaf_data = extractArgument(compute, "leaf_data");
+        llvm::Value* attribute_set = extractArgument(compute, "attribute_set");
+        assert(point_index);
+        assert(group_handles);
+        assert(leaf_data);
+        assert(attribute_set);
+
         std::vector<llvm::Value*> input(args);
-        input.emplace_back(globals.at("point_index"));
-        input.emplace_back(globals.at("group_handles"));
-        input.emplace_back(globals.at("leaf_data"));
-        input.emplace_back(globals.at("attribute_set"));
-        return ax_ingroup(op)->execute(input, globals, B);
+        input.emplace_back(point_index);
+        input.emplace_back(group_handles);
+        input.emplace_back(leaf_data);
+        input.emplace_back(attribute_set);
+        return ax_ingroup(op)->execute(input, B);
     };
 
     return FunctionBuilder("ingroup")
@@ -222,16 +234,28 @@ inline FunctionGroup::Ptr axaddtogroup(const FunctionOptions& op)
 {
     static auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
+        // Pull out parent function arguments
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(compute->getName() == "ax.compute.point");
+        llvm::Value* point_index = extractArgument(compute, "point_index");
+        llvm::Value* group_handles = extractArgument(compute, "group_handles");
+        llvm::Value* leaf_data = extractArgument(compute, "leaf_data");
+        llvm::Value* attribute_set = extractArgument(compute, "attribute_set");
+        assert(point_index);
+        assert(group_handles);
+        assert(leaf_data);
+        assert(attribute_set);
+
         std::vector<llvm::Value*> input(args);
-        input.emplace_back(globals.at("point_index"));
-        input.emplace_back(globals.at("group_handles"));
-        input.emplace_back(globals.at("leaf_data"));
-        input.emplace_back(globals.at("attribute_set"));
+        input.emplace_back(point_index);
+        input.emplace_back(group_handles);
+        input.emplace_back(leaf_data);
+        input.emplace_back(attribute_set);
         input.emplace_back(llvm::ConstantInt::get(LLVMType<bool>::get(B.getContext()), true));
-        return axeditgroup(op)->execute(input, globals, B);
+        return axeditgroup(op)->execute(input, B);
     };
 
     return FunctionBuilder("addtogroup")
@@ -251,16 +275,28 @@ inline FunctionGroup::Ptr axremovefromgroup(const FunctionOptions& op)
 {
     static auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
+        // Pull out parent function arguments
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(compute->getName() == "ax.compute.point");
+        llvm::Value* point_index = extractArgument(compute, "point_index");
+        llvm::Value* group_handles = extractArgument(compute, "group_handles");
+        llvm::Value* leaf_data = extractArgument(compute, "leaf_data");
+        llvm::Value* attribute_set = extractArgument(compute, "attribute_set");
+        assert(point_index);
+        assert(group_handles);
+        assert(leaf_data);
+        assert(attribute_set);
+
         std::vector<llvm::Value*> input(args);
-        input.emplace_back(globals.at("point_index"));
-        input.emplace_back(globals.at("group_handles"));
-        input.emplace_back(globals.at("leaf_data"));
-        input.emplace_back(globals.at("attribute_set"));
+        input.emplace_back(point_index);
+        input.emplace_back(group_handles);
+        input.emplace_back(leaf_data);
+        input.emplace_back(attribute_set);
         input.emplace_back(llvm::ConstantInt::get(LLVMType<bool>::get(B.getContext()), false));
-        return axeditgroup(op)->execute(input, globals, B);
+        return axeditgroup(op)->execute(input, B);
     };
 
     return FunctionBuilder("removefromgroup")
@@ -275,11 +311,10 @@ inline FunctionGroup::Ptr axremovefromgroup(const FunctionOptions& op)
         .get();
 }
 
-inline FunctionGroup::Ptr axdeletpoint(const FunctionOptions& op)
+inline FunctionGroup::Ptr axdeletepoint(const FunctionOptions& op)
 {
     static auto generate =
         [op](const std::vector<llvm::Value*>&,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
         // args guaranteed to be empty
@@ -291,14 +326,14 @@ inline FunctionGroup::Ptr axdeletpoint(const FunctionOptions& op)
         llvm::Value* alloc =
             B.CreateAlloca(LLVMType<AXString>::get(B.getContext()));
         B.CreateStore(str, alloc);
-        return axaddtogroup(op)->execute({alloc}, globals, B);
+        return axaddtogroup(op)->execute({alloc}, B);
     };
 
     return FunctionBuilder("deletepoint")
         .addSignature<void()>(generate)
         .addDependency("addtogroup")
         .addFunctionAttribute(llvm::Attribute::AlwaysInline)
-        .setEmbedIR(true) // axaddtogroup needs globals
+        .setEmbedIR(true) // axaddtogroup needs access to parent function arguments
         .setConstantFold(false)
         .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
         .setDocumentation("Delete the current point from the point set. Note that this does not "
@@ -581,7 +616,7 @@ void insertVDBPointFunctions(FunctionRegistry& registry,
     add("addtogroup", axaddtogroup);
     add("ingroup", axingroup);
     add("removefromgroup",axremovefromgroup);
-    add("deletepoint", axdeletpoint);
+    add("deletepoint", axdeletepoint);
     add("_ingroup", ax_ingroup, true);
     add("editgroup", axeditgroup, true);
     add("getattribute", axgetattribute, true);

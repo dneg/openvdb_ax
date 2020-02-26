@@ -161,6 +161,25 @@ insertStaticAlloca(llvm::IRBuilder<>& B,
     return result;
 }
 
+inline llvm::Argument*
+extractArgument(llvm::Function* F, const size_t idx)
+{
+    if (!F) return nullptr;
+    if (idx >= F->arg_size()) return nullptr;
+    return llvm::cast<llvm::Argument>(F->arg_begin() + idx);
+}
+
+inline llvm::Argument*
+extractArgument(llvm::Function* F, const std::string& name)
+{
+    if (!F) return nullptr;
+    for (auto iter = F->arg_begin(); iter != F->arg_end(); ++iter) {
+        llvm::Argument* arg = llvm::cast<llvm::Argument>(iter);
+        if (arg->getName() == name) return arg;
+    }
+    return nullptr;
+}
+
 /// @brief  Returns the highest order type from two LLVM Scalar types
 ///
 /// @param  typeA  The first scalar llvm type

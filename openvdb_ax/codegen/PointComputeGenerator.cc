@@ -79,9 +79,9 @@ PointKernel::argumentKeys()
     return arguments;
 }
 
-std::string PointKernel::getDefaultName() { return "compute_point"; }
+std::string PointKernel::getDefaultName() { return "ax.compute.point"; }
 
-std::string PointRangeKernel::getDefaultName() { return "compute_point_range"; }
+std::string PointRangeKernel::getDefaultName() { return "ax.compute.pointrange"; }
 
 
 ///////////////////////////////////////////////////////////////////////////
@@ -110,10 +110,7 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
     auto keyIter = arguments.cbegin();
 
     for (; argIter != mFunction->arg_end(); ++argIter, ++keyIter) {
-        if (!mLLVMArguments.insert(*keyIter, llvm::cast<llvm::Value>(argIter))) {
-            OPENVDB_THROW(LLVMFunctionError, "Function \"" + PointKernel::getDefaultName()
-                + "\" has been setup with non-unique argument keys.");
-        }
+        argIter->setName(*keyIter);
     }
 
     type = llvmFunctionTypeFromSignature<PointRangeKernel::Signature>(mContext);
@@ -265,18 +262,23 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
                 value = mBuilder.CreateLoad(value);
             }
 
+            llvm::Value* pointidx = extractArgument(mFunction, "point_index");
+            assert(pointidx);
+
             // construct function arguments
             std::vector<llvm::Value*> args {
                 handlePtr, // handle
-                mLLVMArguments.get("point_index"), // point index
+                pointidx, // point index
                 value // set value
             };
 
             if (usingString) {
-                args.emplace_back(mLLVMArguments.get("leaf_data"));
+                llvm::Value* leafdata = extractArgument(mFunction, "leaf_data");
+                assert(leafdata);
+                args.emplace_back(leafdata);
             }
 
-            function->execute(args, mLLVMArguments.map(), mBuilder);
+            function->execute(args, mBuilder);
         }
     }
 
@@ -302,6 +304,10 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
     ast::Attribute::nametypeFromToken(globalName, &name, &type);
 
     llvm::Value* handlePtr = this->attributeHandleFromToken(globalName);
+    llvm::Value* pointidx = extractArgument(mFunction, "point_index");
+    llvm::Value* leafdata = extractArgument(mFunction, "leaf_data");
+    assert(leafdata);
+    assert(pointidx);
 
     std::vector<llvm::Value*> args;
 
@@ -309,9 +315,9 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
 
     if (usingString) {
         const FunctionGroup::Ptr function = this->getFunction("strattribsize", mOptions, true);
+
         llvm::Value* size =
-            function->execute({handlePtr, mLLVMArguments.get("point_index"), mLLVMArguments.get("leaf_data")},
-                mLLVMArguments.map(), mBuilder);
+            function->execute({handlePtr, pointidx, leafdata}, mBuilder);
 
         // add room for the null terminator
         llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
@@ -333,20 +339,18 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
     }
 
     args.emplace_back(handlePtr);
-    args.emplace_back(mLLVMArguments.get("point_index"));
+    args.emplace_back(pointidx);
     args.emplace_back(location);
 
-    if (usingString) args.emplace_back(mLLVMArguments.get("leaf_data"));
+    if (usingString) args.emplace_back(leafdata);
 
     const FunctionGroup::Ptr function = this->getFunction("getattribute", mOptions, true);
-    function->execute(args, mLLVMArguments.map(), mBuilder);
+    function->execute(args, mBuilder);
 }
 
 llvm::Value* PointComputeGenerator::attributeHandleFromToken(const std::string& token)
 {
     // Visiting an attribute - get the attribute handle out of a vector of void pointers
-    // mLLVMArguments.get("attribute_handles") is a void pointer to a vector of void
-    // pointers (void**)
 
     // insert the attribute into the map of global variables and get a unique global representing
     // the location which will hold the attribute handle offset.
@@ -359,8 +363,10 @@ llvm::Value* PointComputeGenerator::attributeHandleFromToken(const std::string& 
     // The result is a loaded void* value
 
     index = mBuilder.CreateLoad(index);
-    llvm::Value* handlePtr =
-        mBuilder.CreateGEP(mLLVMArguments.get("attribute_handles"), index);
+
+    llvm::Value* handles = extractArgument(mFunction, "attribute_handles");
+    assert(handles);
+    llvm::Value* handlePtr = mBuilder.CreateGEP(handles, index);
 
     // return loaded void** = void*
     return mBuilder.CreateLoad(handlePtr);
