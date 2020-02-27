@@ -109,7 +109,6 @@ struct SimplexNoise
     {                                                                                       \
         static auto generate =                                                              \
             [](const std::vector<llvm::Value*>& args,                                       \
-               const std::unordered_map<std::string, llvm::Value*>&,                        \
                llvm::IRBuilder<>& B) -> llvm::Value*                                        \
         {                                                                                   \
             llvm::Module* M = B.GetInsertBlock()->getParent()->getParent();                 \
@@ -176,7 +175,6 @@ inline FunctionGroup::Ptr llvm_pow(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         llvm::Type* overloadType = args[0]->getType();
@@ -214,14 +212,13 @@ inline FunctionGroup::Ptr axabs(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
         llvm::Value* value = args.front();
         llvm::Type* type = value->getType();
 
         if (type->isFloatingPointTy()) {
-            return llvm_fabs(op)->execute(args, globals, B);
+            return llvm_fabs(op)->execute(args, B);
         }
 
         // if negative flip all the bits and add 1 (xor with -1 and sub 1)
@@ -257,7 +254,6 @@ inline FunctionGroup::Ptr axdot(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> v1, v2;
@@ -302,7 +298,6 @@ inline FunctionGroup::Ptr axcross(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> ptrs, left, right;
@@ -363,7 +358,6 @@ inline FunctionGroup::Ptr axlengthsq(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> elements;
@@ -414,13 +408,12 @@ inline FunctionGroup::Ptr axlength(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globs,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
         auto a = axlengthsq(op);
         auto s = llvm_sqrt(op);
-        llvm::Value* lsq = a->execute(args, globs, B);
-        return s->execute({lsq}, globs, B);
+        llvm::Value* lsq = a->execute(args, B);
+        return s->execute({lsq}, B);
     };
 
     static auto length = [](auto in) -> auto
@@ -460,11 +453,10 @@ inline FunctionGroup::Ptr axnormalize(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globs,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
         auto a = axlength(op);
-        llvm::Value* len = a->execute({args[1]}, globs, B);
+        llvm::Value* len = a->execute({args[1]}, B);
 
         std::vector<llvm::Value*> ptrs, elements;
         arrayUnpack(args[0], ptrs, B, /*load*/false);
@@ -522,7 +514,6 @@ inline FunctionGroup::Ptr axlerp(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         assert(args.size() == 3);
@@ -563,7 +554,6 @@ inline FunctionGroup::Ptr axmin(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         llvm::Value* result =
@@ -594,7 +584,6 @@ inline FunctionGroup::Ptr axmax(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         llvm::Value* result =
@@ -625,11 +614,10 @@ inline FunctionGroup::Ptr axclamp(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
-        llvm::Value* min = axmax(op)->execute({args[0], args[1]}, globals, B);
-        llvm::Value* result = axmin(op)->execute({min, args[2]}, globals, B);
+        llvm::Value* min = axmax(op)->execute({args[0], args[1]}, B);
+        llvm::Value* result = axmin(op)->execute({min, args[2]}, B);
         return result;
     };
 
@@ -659,7 +647,6 @@ inline FunctionGroup::Ptr axfit(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-             const std::unordered_map<std::string, llvm::Value*>& globals,
              llvm::IRBuilder<>& B) -> llvm::Value*
     {
         //         (outMax - outMin)(x - inMin)
@@ -696,7 +683,7 @@ inline FunctionGroup::Ptr axfit(const FunctionOptions& op)
         // clamp
         {
             auto clamp = axclamp(op);
-            argcopy[0] = clamp->execute({ argcopy[0], minInputRange, maxInputRange }, globals, B);
+            argcopy[0] = clamp->execute({ argcopy[0], minInputRange, maxInputRange }, B);
         }
 
         // cast all (the following requires floating point precision)
@@ -854,7 +841,6 @@ inline FunctionGroup::Ptr axdeterminant(const FunctionOptions& op)
     // 3 by 3 determinant
     static auto generate3 =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> m1;
@@ -885,7 +871,6 @@ inline FunctionGroup::Ptr axdeterminant(const FunctionOptions& op)
     // 4 by 4 determinant
     static auto generate4 =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>& globals,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> m1;
@@ -909,7 +894,7 @@ inline FunctionGroup::Ptr axdeterminant(const FunctionOptions& op)
                     ++sourceIndex;
                 }
             }
-            llvm::Value* subResult = generate3({subMat}, globals, B);
+            llvm::Value* subResult = generate3({subMat}, B);
             subResult = binaryOperator(m1[i], subResult, ast::tokens::MULTIPLY, B);
 
             if (i % 2) result = binaryOperator(result, subResult, ast::tokens::MINUS, B);
@@ -947,7 +932,6 @@ inline FunctionGroup::Ptr axdiag(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> ptrs, arg1;
@@ -1062,7 +1046,6 @@ inline FunctionGroup::Ptr axidentity3(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> elements;
@@ -1091,7 +1074,6 @@ inline FunctionGroup::Ptr axidentity4(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> elements;
@@ -1120,7 +1102,6 @@ inline FunctionGroup::Ptr axmmmult(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> ptrs, m1, m2;
@@ -1210,7 +1191,6 @@ inline FunctionGroup::Ptr axpostscale(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> m1, v1;
@@ -1258,7 +1238,6 @@ inline FunctionGroup::Ptr axpretransform(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> ptrs, m1, v1;
@@ -1328,7 +1307,6 @@ inline FunctionGroup::Ptr axprescale(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> m1, v1;
@@ -1375,7 +1353,6 @@ inline FunctionGroup::Ptr axtrace(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> m1;
@@ -1427,7 +1404,6 @@ inline FunctionGroup::Ptr axtransform(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> ptrs, m1, v1;
@@ -1497,7 +1473,6 @@ inline FunctionGroup::Ptr axtranspose(const FunctionOptions& op)
 {
     static auto generate =
         [](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>&,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
         std::vector<llvm::Value*> ptrs, m1;
@@ -1847,15 +1822,22 @@ inline FunctionGroup::Ptr axexternal(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>& globals,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
+        // Pull out the custom data from the parent function
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(std::string(compute->getName()).rfind("ax.compute", 0) == 0);
+        llvm::Value* arg = extractArgument(compute, 0);
+        assert(arg);
+        assert(arg->getName() == "custom_data");
+
         std::vector<llvm::Value*> inputs;
         inputs.reserve(2 + args.size());
         inputs.emplace_back(insertStaticAlloca(B, LLVMType<float>::get(B.getContext())));
-        inputs.emplace_back(globals.at("custom_data"));
+        inputs.emplace_back(arg);
         inputs.insert(inputs.end(), args.begin(), args.end());
-        ax_external(op)->execute(inputs, globals, B);
+        ax_external(op)->execute(inputs, B);
         return B.CreateLoad(inputs.front());
     };
 
@@ -1879,15 +1861,22 @@ inline FunctionGroup::Ptr axexternalv(const FunctionOptions& op)
 {
     auto generate =
         [op](const std::vector<llvm::Value*>& args,
-           const std::unordered_map<std::string, llvm::Value*>& globals,
            llvm::IRBuilder<>& B) -> llvm::Value*
     {
+        // Pull out the custom data from the parent function
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(std::string(compute->getName()).rfind("ax.compute", 0) == 0);
+        llvm::Value* arg = extractArgument(compute, 0);
+        assert(arg);
+        assert(arg->getName() == "custom_data");
+
         std::vector<llvm::Value*> inputs;
         inputs.reserve(2 + args.size());
         inputs.emplace_back(insertStaticAlloca(B, LLVMType<float[3]>::get(B.getContext())));
-        inputs.emplace_back(globals.at("custom_data"));
+        inputs.emplace_back(arg);
         inputs.insert(inputs.end(), args.begin(), args.end());
-        ax_external(op)->execute(inputs, globals, B);
+        ax_external(op)->execute(inputs, B);
         return inputs.front();
     };
 

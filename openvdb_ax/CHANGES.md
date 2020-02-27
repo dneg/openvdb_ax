@@ -91,6 +91,10 @@ Version 0.2.0 - In Development
       static allocations. New isValidCast utility method to check if a cast is
       valid between two types
     - Removed a number of unused utility methods
+    - Removed the function arguments vector from the ComputeGenerator in favor
+      of new utility methods to extract arguments (extractArgument)
+    - Renamed the ComputeGenerator functions to prefix with ax and suffix
+      with the generator type
 
     Compiler:
     - Initial implementation of LLVM's new PassManager. Currently disabled by
@@ -110,6 +114,7 @@ Version 0.2.0 - In Development
       OpenSimplexNoise headers
 
     CMake / Build / Testing:
+    - New test suites for various back-end utilities
     - Added CMake SIMD options. Note that these optional apply to the compiled
       CXX source files of OpenVDB AX, not the JIT LLVM IR. The IR is always
       optimized to the host specification.

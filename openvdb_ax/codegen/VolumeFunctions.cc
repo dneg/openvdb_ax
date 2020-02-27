@@ -60,9 +60,15 @@ namespace codegen {
 inline FunctionGroup::Ptr axgetvoxelpws(const FunctionOptions& op)
 {
     static auto generate = [](const std::vector<llvm::Value*>&,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>&) -> llvm::Value* {
-        return globals.at("coord_ws");
+         llvm::IRBuilder<>& B) -> llvm::Value*
+    {
+        // Pull out parent function arguments
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(compute->getName() == "ax.compute.voxel");
+        llvm::Value* coordws = extractArgument(compute, "coord_ws");
+        assert(coordws);
+        return coordws;
     };
 
     return FunctionBuilder("getvoxelpws")
@@ -80,9 +86,15 @@ inline FunctionGroup::Ptr axgetcoord(const FunctionOptions& op)
     static_assert(Index <= 2, "Invalid index for axgetcoord");
 
     static auto generate = [](const std::vector<llvm::Value*>&,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
-         llvm::IRBuilder<>& B) -> llvm::Value* {
-        return B.CreateLoad(B.CreateConstGEP2_64(globals.at("coord_is"), 0, Index));
+         llvm::IRBuilder<>& B) -> llvm::Value*
+    {
+        // Pull out parent function arguments
+        llvm::Function* compute = B.GetInsertBlock()->getParent();
+        assert(compute);
+        assert(compute->getName() == "ax.compute.voxel");
+        llvm::Value* coordis = extractArgument(compute, "coord_is");
+        assert(coordis);
+        return B.CreateLoad(B.CreateConstGEP2_64(coordis, 0, Index));
     };
 
     return FunctionBuilder((Index == 0 ? "getcoordx" : Index == 1 ? "getcoordy" : "getcoordz"))

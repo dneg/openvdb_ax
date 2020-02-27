@@ -74,7 +74,7 @@ ComputeKernel::getArgumentKeys()
     return arguments;
 }
 
-std::string ComputeKernel::getDefaultName() { return "compute"; }
+std::string ComputeKernel::getDefaultName() { return "ax.compute"; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -94,7 +94,6 @@ ComputeGenerator::ComputeGenerator(llvm::Module& module,
     , mSymbolTables()
     , mWarnings(warnings)
     , mFunction(nullptr)
-    , mLLVMArguments()
     , mOptions(options)
     , mFunctionRegistry(functionRegistry) {}
 
@@ -115,10 +114,7 @@ bool ComputeGenerator::generate(const ast::Tree& tree)
     auto keyIter = arguments.cbegin();
 
     for (; argIter != mFunction->arg_end(); ++argIter, ++keyIter) {
-        if (!mLLVMArguments.insert(*keyIter, llvm::cast<llvm::Value>(argIter))) {
-            OPENVDB_THROW(LLVMFunctionError, "Function \"" + ComputeKernel::getDefaultName()
-                + "\" has been setup with non-unique argument keys.");
-        }
+        argIter->setName(*keyIter);
     }
 
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(mContext,
@@ -488,7 +484,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     if (lhsSize > 4 && rhsSize > 4) {
                         // matrix matrix multiplication all handled through mmmult
                         const FunctionGroup::Ptr function = this->getFunction("mmmult", mOptions, /*internal*/true);
-                        result = function->execute({lhs, rhs}, mLLVMArguments.map(), mBuilder);
+                        result = function->execute({lhs, rhs}, mBuilder);
                         assert(result);
                         mValues.push(result);
                         return true;
@@ -496,7 +492,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     else if (lhsSize > 4 && rhsSize <= 4) {
                         // matrix vector multiplication all handled through pretransform
                         const FunctionGroup::Ptr function = this->getFunction("pretransform", mOptions);
-                        result = function->execute({lhs, rhs}, mLLVMArguments.map(), mBuilder);
+                        result = function->execute({lhs, rhs}, mBuilder);
                         assert(result);
                         mValues.push(result);
                         return true;
@@ -504,7 +500,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     else if (lhsSize <= 4 && rhsSize > 4) {
                         // vector matrix multiplication all handled through transform
                         const FunctionGroup::Ptr function = this->getFunction("transform", mOptions);
-                        result = function->execute({lhs, rhs}, mLLVMArguments.map(), mBuilder);
+                        result = function->execute({lhs, rhs}, mBuilder);
                         assert(result);
                         mValues.push(result);
                         return true;
@@ -870,11 +866,39 @@ bool ComputeGenerator::visit(const ast::FunctionCall* node)
 {
     const FunctionGroup::Ptr function = this->getFunction(node->name(), mOptions);
     const size_t args = node->numArgs();
+    assert(mValues.size() >= args);
+
+    // initialize arguments. scalars are always passed by value, arrays
+    // and strings always by pointer
+    llvm::Type* strType = LLVMType<AXString>::get(mContext);
 
     std::vector<llvm::Value*> arguments;
-    stackValuesForFunction(arguments, mValues, args, mBuilder);
+    arguments.resize(args);
 
-    llvm::Value* result = function->execute(arguments, mLLVMArguments.map(), mBuilder);
+    for (auto r = arguments.rbegin(); r != arguments.rend(); ++r) {
+        llvm::Value* arg = mValues.top(); mValues.pop();
+        llvm::Type* type = arg->getType();
+        if (type->isPointerTy()) {
+            type = type->getPointerElementType();
+            if (type->isIntegerTy() || type->isFloatingPointTy()) {
+                // pass by value
+                arg = mBuilder.CreateLoad(arg);
+            }
+            else if (type->isArrayTy()) {/*pass by pointer*/}
+            else if (type == strType) {/*pass by pointer*/}
+        }
+        else {
+            // arrays should never be loaded
+            assert(!type->isArrayTy());
+            assert(type != strType);
+            if (type->isIntegerTy() || type->isFloatingPointTy()) {
+                /*pass by value*/
+            }
+        }
+        *r = arg;
+    }
+
+    llvm::Value* result = function->execute(arguments, mBuilder);
     assert(result);
     mValues.push(result);
     return true;

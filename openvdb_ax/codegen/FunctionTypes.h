@@ -267,7 +267,7 @@ llvmFunctionTypeFromSignature(llvm::LLVMContext& C)
 ///
 /// @param  os    The stream to print to
 /// @param  types The function argument types
-/// @param  returnType  The return type of the function
+/// @param  returnType  The return type of the function. Must not be a nullptr
 /// @param  name  The name of the function. If not provided, the return type
 ///               neighbours the first parenthesis
 /// @param  names Names of the function parameters. If a name is nullptr, it
@@ -279,24 +279,8 @@ printSignature(std::ostream& os,
                const std::vector<llvm::Type*>& types,
                const llvm::Type* returnType,
                const char* name = nullptr,
-               const std::vector<const char*>* names = nullptr,
+               const std::vector<const char*>& names = {},
                const bool axTypes = false);
-
-/// @brief  Parse a set amount of llvm Values from the stack and "format" them
-///         such that they are in the default expected state. This state defined
-///         scalars to be loaded, arrays to be pointers to the underlying array
-///         and strings to be a pointer to the start of the string.
-///
-/// @param arguments  A vector of llvm arguments to populate
-/// @param values     The value stack from the computer generation
-/// @param count      The number of values to pop from the stack
-/// @param builder    The current llvm IRBuilder
-///
-void
-stackValuesForFunction(std::vector<llvm::Value*>& arguments,
-                   std::stack<llvm::Value*>& values,
-                   const size_t count,
-                   llvm::IRBuilder<>& builder);
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -324,40 +308,61 @@ struct Function
     ///         Function::print and Function::match.
     virtual llvm::Type* types(std::vector<llvm::Type*>&, llvm::LLVMContext&) const = 0;
 
-    /// @brief  Converts and creates this AX function into a llvm Function.
+    /// @brief   Converts and creates this AX function into a llvm Function.
     /// @details This method uses the result from Function::types() to construct
-    ///          a llvm FunctionType and a subsequent a llvm Function. Any
+    ///          a llvm::FunctionType and a subsequent a llvm::Function. Any
     ///          parameter, return or function attributes are also added to the
-    ///          function. If a module is provided, the module if first checked to
-    ///          see if the function already exists. If it does, it is immediately
-    ///          returned. If the function doesn't exist in the module, it is
-    ///          created and also inserted into the end of the modules function
-    ///          list. If no module is provided, the function is left detached
-    ///          and must be added to a valid Module to be callable.
-    /// @note  This does not create the body of the function, which is to be
-    ///        done by dervied classes.
+    ///          function. If a module is provided, the module if first checked
+    ///          to see if the function already exists. If it does, it is
+    ///          immediately returned. If the function doesn't exist in the
+    ///          module, its prototype is created and also inserted into the end
+    ///          of the modules function list. If no module is provided, the
+    ///          function is left detached and must be added to a valid Module
+    ///          to be callable.
+    /// @note    The body of the function is left to derived classes to
+    ///          implement. As you need a Module to generate the prototype/body,
+    ///          this function serves two purposes. The first is to return the
+    ///          detached function signature if only a context is provided.
+    ///          The second is to ensure the function prototype and body (if
+    ///          required) is inserted into the module prior to returning.
+    /// @note    It is possible to end up with function symbol collisions if you
+    ///          do not have unique function symbols in your module
     ///
     /// @param C  The LLVM Context
-    /// @param M  An optional llvm Module to use
+    /// @param M  The Module to write the function to
     virtual llvm::Function*
     create(llvm::LLVMContext& C, llvm::Module* M = nullptr) const;
 
+    /// @brief  Convenience method which always uses the provided module to find
+    ///         the function or insert it if necessary.
+    /// @param M  The llvm::Module to use
     llvm::Function* create(llvm::Module& M) const {
         return this->create(M.getContext(), &M);
     }
 
     /// @brief  Uses the IRBuilder to create a call to this function with the
     ///         given arguments, creating the function and inserting it into the
-    ///         IRBuilder's Module if necessary.
-    /// @note   The IRBuilder must have a valid llvm Module attached.
+    ///         IRBuilder's Module if necessary (through Function::create).
+    /// @note   The IRBuilder must have a valid llvm Module/Function/Block
+    ///         attached
+    /// @note   If the number of provided arguments do not match the size of the
+    ///         current function, invalid IR will be generated.
+    /// @note   If the provided argument types do not match the current function
+    ///         and cast is false, invalid IR will be generated. Additionally,
+    ///         invalid IR will be generated if cast is true but no valid cast
+    ///         exists for a given argument.
+    /// @note   When casting arguments, the readonly flags of the function are
+    ///         not checked (unlike Function::match). Casting an argument will
+    ///         cause a new copy of the argument to be created and passed to the
+    ///         function. These new values do not propagate back any changes to
+    ///         the original argument. Separate functions for all writable
+    ///         argument types must be created.
     ///
     /// @param args    The llvm Value arguments to call this function with
-    /// @param parent  The parent arguments available from the parent caller
     /// @param B       The llvm IRBuilder
     /// @param cast    Whether to allow implicit casting of arguments
     virtual llvm::Value*
     call(const std::vector<llvm::Value*>& args,
-         const std::unordered_map<std::string, llvm::Value*>& parent,
          llvm::IRBuilder<>& B,
          const bool cast = false) const;
 
@@ -452,6 +457,13 @@ struct Function
 
 protected:
 
+    /// @brief  Cast the provided arguments to the given type as supported by
+    ///         implicit casting of function types. If the types already match
+    ///         OR if a cast cannot be performed, nothing is done to the argument.
+    /// @todo   This should really be generalized out for Function::call and
+    ///         Function::match to both use. However, due to SRET functions,
+    ///         this logic must be performed somewhere in the Function class
+    ///         hierarchy and not in FunctionGroup
     static void cast(std::vector<llvm::Value*>& args,
                 const std::vector<llvm::Type*>& types,
                 llvm::IRBuilder<>& B);
@@ -531,9 +543,12 @@ public:
 
     /// @brief  Override of call which allocates the required SRET llvm::Value
     ///         for this function.
+    /// @note   Unlike other function where the returned llvm::Value* is a
+    ///         llvm::CallInst (which also represents the return value),
+    ///         SRET functions return the allocated 1st argument i.e. not a
+    ///         llvm::CallInst
     llvm::Value*
     call(const std::vector<llvm::Value*>& args,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
          llvm::IRBuilder<>& B,
          const bool cast) const override
     {
@@ -542,7 +557,7 @@ public:
         llvm::Type* sret = LLVMType<SRetType>::get(B.getContext());
         inputs.emplace_back(insertStaticAlloca(B, sret));
         std::rotate(inputs.rbegin(), inputs.rbegin() + 1, inputs.rend());
-        DerivedFunction::call(inputs, globals, B, cast);
+        DerivedFunction::call(inputs, B, cast);
         return inputs.front();
     }
 
@@ -564,7 +579,7 @@ public:
         for (size_t i = 0; i < this->size()-1; ++i) {
             names.emplace_back(this->argName(i));
         }
-        printSignature(os, current, ret, name, &names, axTypes);
+        printSignature(os, current, ret, name, names, axTypes);
     }
 
 protected:
@@ -637,13 +652,12 @@ struct CFunction : public CFunctionBase
 
     llvm::Value*
     call(const std::vector<llvm::Value*>& args,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
          llvm::IRBuilder<>& B,
          const bool cast) const override
     {
         llvm::Value* result = this->fold(args, B.getContext());
         if (result) return result;
-        return Function::call(args, globals, B, cast);
+        return Function::call(args, B, cast);
     }
 
     llvm::Value* fold(const std::vector<llvm::Value*>& args, llvm::LLVMContext& C) const override final
@@ -682,26 +696,42 @@ struct IRFunctionBase : public Function
     /// @details  The first argument is the vector of functional arguments. i.e.
     ///           a representation of the value that the callback has been invoked
     ///           with.
-    ///           The second argument is the map of symbols available to this
-    ///           function. Note that this is currently only valid/usable if you're
-    ///           inlining IR.
     ///           The last argument is the IR builder which should be used to
     ///           generate the function body IR.
     /// @note     You can return a nullptr from this method which will represent
     ///           a ret void, a ret void instruction, or an actual value
     using GeneratorCb = std::function<llvm::Value*
-        (const std::vector<llvm::Value*>&,
-        const std::unordered_map<std::string, llvm::Value*>&,
-        llvm::IRBuilder<>&)>;
+        (const std::vector<llvm::Value*>&, llvm::IRBuilder<>&)>;
 
-    llvm::Type* types(std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const override = 0;
+    llvm::Type* types(std::vector<llvm::Type*>& types,
+            llvm::LLVMContext& C) const override = 0;
 
+    /// @brief  Enable or disable the embedding of IR. Embedded IR is currently
+    ///         required for function which use parent function parameters.
     inline void setEmbedIR(bool on) { mEmbedIR = on; }
     inline bool hasEmbedIR() const { return mEmbedIR; }
 
+    /// @brief  Override for the creation of an IR function. This ensures that
+    ///         the body and prototype of the function are generated if a Module
+    ///         is provided.
+    /// @note   A nullptr is returned if mEmbedIR is true and no action is
+    ///         performed.
+    /// @note   Throws if this function has been initialized with a nullptr
+    ///         generator callback. In this case, the function prototype will
+    ///         be created, but not the function body.
+    /// @note   Throws if the return type of the generator callback does not
+    ///         match the function prototype. In this case, both the prototype
+    ///         and the function body will be created and inserted, but the IR
+    ///         will be invalid.
+    llvm::Function*
+    create(llvm::LLVMContext& C, llvm::Module* M) const override;
+
+    /// @brief  Override for call, which is only necessary if mEmbedIR is true,
+    ///         as the IR generation for embedded functions is delayed until
+    ///         the function is called. If mEmbedIR is false, this simply calls
+    ///         Function::call
     llvm::Value*
     call(const std::vector<llvm::Value*>& args,
-         const std::unordered_map<std::string, llvm::Value*>& globals,
          llvm::IRBuilder<>& B,
          const bool cast) const override;
 
@@ -714,11 +744,11 @@ protected:
     {
         if (result == expected) return;
         std::string source, target;
-        llvmTypeToString(result, source);
+        if (result) llvmTypeToString(result, source);
         llvmTypeToString(expected, target);
         OPENVDB_THROW(LLVMFunctionError, "Function \"" + std::string(this->symbol()) +
             "\" has been invoked with a mismatching return type. Expected: \"" +
-            source + "\", got \"" + target + "\".");
+            target + "\", got \"" + source + "\".");
     }
 
     IRFunctionBase(const std::string& symbol,
@@ -743,7 +773,8 @@ struct IRFunction : public IRFunctionBase
     IRFunction(const std::string& symbol, const GeneratorCb& gen)
         : IRFunctionBase(symbol, gen, Traits::N_ARGS) {}
 
-    inline llvm::Type* types(std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const override
+    inline llvm::Type*
+    types(std::vector<llvm::Type*>& types, llvm::LLVMContext& C) const override
     {
         return llvmTypesFromSignature<SignatureT>(C, &types);
     }
@@ -787,7 +818,14 @@ struct FunctionGroup
     ~FunctionGroup() = default;
 
     /// @brief  Given a vector of llvm types, automatically returns the best
-    ///         possible function signature pointer and match type.
+    ///         possible function declaration from the stored function list. The
+    ///         'best' declaration is determined by the provided types
+    ///         compatibility to each functions signature.
+    /// @note   If multiple implicit matches are found, the first match is
+    ///         returned.
+    /// @note   Returns a nullptr if no compatible match was found or if the
+    ///         function list is empty. A compatible match is defined as an
+    ///         Explicit or Implicit match.
     ///
     /// @param types  A vector of types representing the function argument types
     /// @param C      The llvm context
@@ -802,14 +840,15 @@ struct FunctionGroup
     ///         best possible function signature, generate and execute the
     ///         function body. Returns the return value of the function (can be
     ///         void).
+    /// @note   This function will throw if not compatible match is found or if
+    ///         no valid return is provided by the matched declarations
+    ///         implementation.
     ///
     /// @param args     A vector of values representing the function arguments
-    /// @param globals  The map of global names to llvm::Values
     /// @param B        The current llvm IRBuilder
     ///
     llvm::Value*
     execute(const std::vector<llvm::Value*>& args,
-            const std::unordered_map<std::string, llvm::Value*>& globals,
             llvm::IRBuilder<>& B) const;
 
     /// @brief  Accessor to the underlying function signature list

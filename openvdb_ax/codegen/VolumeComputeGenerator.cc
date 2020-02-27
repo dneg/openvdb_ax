@@ -64,7 +64,7 @@ VolumeKernel::argumentKeys()
     return arguments;
 }
 
-std::string VolumeKernel::getDefaultName() { return "compute_voxel"; }
+std::string VolumeKernel::getDefaultName() { return "ax.compute.voxel"; }
 
 
 ///////////////////////////////////////////////////////////////////////////
@@ -94,10 +94,7 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
     auto keyIter = arguments.cbegin();
 
     for (; argIter != mFunction->arg_end(); ++argIter, ++keyIter) {
-        if (!mLLVMArguments.insert(*keyIter, llvm::cast<llvm::Value>(argIter))) {
-            OPENVDB_THROW(LLVMFunctionError, "Function \"" + VolumeKernel::getDefaultName()
-                + "\" has been setup with non-unique argument keys.");
-        }
+        argIter->setName(*keyIter);
     }
 
     llvm::BasicBlock* entry = llvm::BasicBlock::Create(mContext,
@@ -182,7 +179,13 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
                 continue;
             }
 
-            llvm::Value* accessIndex = mLLVMArguments.get("write_index");
+            llvm::Value* coordis = extractArgument(mFunction, "coord_is");
+            llvm::Value* accessIndex = extractArgument(mFunction, "write_index");
+            llvm::Value* accessor = extractArgument(mFunction, "write_acccessor");
+            assert(coordis);
+            assert(accessor);
+            assert(accessIndex);
+
             llvm::Value* registeredIndex = llvm::cast<llvm::GlobalVariable>
                 (mModule.getOrInsertGlobal(token, LLVMType<int64_t>::get(mContext)));
             registeredIndex = mBuilder.CreateLoad(registeredIndex);
@@ -198,8 +201,6 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
             mBuilder.CreateCondBr(result, thenBlock, continueBlock);
             mBuilder.SetInsertPoint(thenBlock);
 
-            // get the accessor
-            llvm::Value* accessor = mLLVMArguments.get("write_acccessor");
             llvm::Type* type = value->getType()->getPointerElementType();
 
             // load the result (if its a scalar)
@@ -207,13 +208,8 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
                 value = mBuilder.CreateLoad(value);
             }
 
-            // construct function arguments
-            const std::vector<llvm::Value*> argumentValues {
-                accessor, mLLVMArguments.get("coord_is"), value
-            };
-
             const FunctionGroup::Ptr function = this->getFunction("setvoxel", mOptions, true);
-            function->execute(argumentValues, mLLVMArguments.map(), mBuilder);
+            function->execute({accessor, coordis, value}, mBuilder);
 
             mBuilder.CreateBr(continueBlock);
             mBuilder.SetInsertPoint(continueBlock);
@@ -253,17 +249,21 @@ void VolumeComputeGenerator::getAccessorValue(const std::string& globalName, llv
     // index into the void* array of handles and load the value.
     // The result is a loaded void* value
 
-    llvm::Value* accessorPtr = mBuilder.CreateGEP(mLLVMArguments.get("accessors"), registeredIndex);
-    llvm::Value* transformPtr = mBuilder.CreateGEP(mLLVMArguments.get("transforms"), registeredIndex);
+    llvm::Value* accessorPtr = extractArgument(mFunction, "accessors");
+    llvm::Value* transformPtr = extractArgument(mFunction, "transforms");
+    llvm::Value* coordws = extractArgument(mFunction, "coord_ws");
+    assert(accessorPtr);
+    assert(transformPtr);
+    assert(coordws);
+
+    accessorPtr = mBuilder.CreateGEP(accessorPtr, registeredIndex);
+    transformPtr = mBuilder.CreateGEP(transformPtr, registeredIndex);
+
     llvm::Value* accessor = mBuilder.CreateLoad(accessorPtr);
     llvm::Value* transform = mBuilder.CreateLoad(transformPtr);
 
-    const std::vector<llvm::Value*> args {
-        accessor, transform, mLLVMArguments.get("coord_ws"), location
-    };
-
     const FunctionGroup::Ptr function = this->getFunction("getvoxel", mOptions, true);
-    function->execute(args, mLLVMArguments.map(), mBuilder);
+    function->execute({accessor, transform, coordws, location}, mBuilder);
 }
 
 llvm::Value* VolumeComputeGenerator::accessorHandleFromToken(const std::string& globalName)
@@ -280,8 +280,9 @@ llvm::Value* VolumeComputeGenerator::accessorHandleFromToken(const std::string& 
     // index into the void* array of handles and load the value.
     // The result is a loaded void* value
 
-    llvm::Value* accessorPtr =
-        mBuilder.CreateGEP(mLLVMArguments.get("accessors"), registeredIndex);
+    llvm::Value* accessorPtr = extractArgument(mFunction, "accessors");
+    assert(accessorPtr);
+    accessorPtr = mBuilder.CreateGEP(accessorPtr, registeredIndex);
 
     // return loaded void** = void*
     return mBuilder.CreateLoad(accessorPtr);
