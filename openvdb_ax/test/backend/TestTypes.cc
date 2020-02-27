@@ -87,8 +87,11 @@ TestTypes::testTypes()
 
     // array types
 
+#if LLVM_VERSION_MAJOR > 6
     CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(llvm::ArrayType::get(llvm::Type::getInt1Ty(C), 1)),
         LLVMType<bool[1]>::get(C));
+#endif
+
     CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(llvm::ArrayType::get(llvm::Type::getInt8Ty(C), 2)),
         LLVMType<int8_t[2]>::get(C));
     CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Type>(llvm::ArrayType::get(llvm::Type::getInt16Ty(C), 3)),
@@ -104,19 +107,33 @@ TestTypes::testTypes()
 
     // array values
 
+#if LLVM_VERSION_MAJOR > 6
     CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<bool>(C, {true})),
         LLVMType<bool[1]>::get(C, {true}));
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<int8_t>(C, {1,2})),
-        LLVMType<int8_t[2]>::get(C, {1,2}));
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<int16_t>(C, {1,2,3})),
-        LLVMType<int16_t[3]>::get(C, {1,2,3}));
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<int32_t>(C, {1,2,3,4})),
-        LLVMType<int32_t[4]>::get(C, {1,2,3,4}));
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<int64_t>(C, {1,2,3,4,5})),
-        LLVMType<int64_t[5]>::get(C, {1,2,3,4,5}));
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<float>(C, {.0f,.1f,.2f,.3f,.4f,.5f})),
+#endif
+
+    const std::vector<uint8_t> veci8{1,2};
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get(C, veci8)),
+        LLVMType<uint8_t[2]>::get(C, {1,2}));
+
+    const std::vector<uint16_t> veci16{1,2,3};
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get(C, veci16)),
+        LLVMType<uint16_t[3]>::get(C, {1,2,3}));
+
+    const std::vector<uint32_t> veci32{1,2,3,4};
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get(C, veci32)),
+        LLVMType<uint32_t[4]>::get(C, {1,2,3,4}));
+
+    const std::vector<uint64_t> veci64{1,2,3,4,5};
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get(C, veci64)),
+        LLVMType<uint64_t[5]>::get(C, {1,2,3,4,5}));
+
+    const std::vector<float> vecf{.0f,.1f,.2f,.3f,.4f,.5f};
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get(C, vecf)),
         LLVMType<float[6]>::get(C, {.0f,.1f,.2f,.3f,.4f,.5f}));
-    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get<double>(C, {.0,.1,.2,.3,.4,.5,.6})),
+
+    const std::vector<double> vecd{.0,.1,.2,.3,.4,.5,.6};
+    CPPUNIT_ASSERT_EQUAL(llvm::cast<llvm::Constant>(llvm::ConstantDataArray::get(C, vecd)),
         LLVMType<double[7]>::get(C, {.0,.1,.2,.3,.4,.5,.6}));
 
     // void
