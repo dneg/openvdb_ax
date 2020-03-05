@@ -1,7 +1,7 @@
 OpenVDB AX Version History
 ==========================
 
-Version 0.2.0 - In Development
+Version 0.2.0 - March 5, 2020
 
     As of this release, a C++14 compiler is required.
 
