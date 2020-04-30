@@ -196,31 +196,24 @@ struct ArgumentIterator
     using ArgT = typename FunctionTraits<SignatureT>::template Arg<I-1>;
     using ArgumentValueType = typename ArgT::Type;
 
-    static void iter(std::vector<llvm::Type*>& args,
-                     llvm::LLVMContext& C)
-    {
-        ArgumentIterator<SignatureT, I-1>::iter(args, C);
-        args.emplace_back(LLVMType<ArgumentValueType>::get(C));
+    template <typename OpT>
+    static void apply(const OpT& op, const bool forwards) {
+        if (forwards) {
+            ArgumentIterator<SignatureT, I-1>::apply(op, forwards);
+            op(ArgumentValueType());
+        }
+        else {
+            op(ArgumentValueType());
+            ArgumentIterator<SignatureT, I-1>::apply(op, forwards);
+        }
     }
-
-    static std::string symbol()
-    {
-        std::string s;
-        s += ArgumentIterator<SignatureT, I-1>::symbol();
-        s += TypeToSymbol<ArgumentValueType>::s();
-        return s;
-    }
-
 };
 
 template <typename SignatureT>
 struct ArgumentIterator<SignatureT, 0>
 {
-    static void iter(std::vector<llvm::Type*>&, llvm::LLVMContext&) {}
-    static std::string symbol() {
-        using ReturnType = typename FunctionTraits<SignatureT>::ReturnType;
-        return TypeToSymbol<ReturnType>::s();
-    }
+    template <typename OpT>
+    static void apply(const OpT&, const bool) {}
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -242,7 +235,11 @@ llvmTypesFromSignature(llvm::LLVMContext& C,
 
     if (types) {
         types->reserve(Traits::N_ARGS);
-        ArgumentIteratorT::iter(*types, C);
+        auto callback = [&types, &C](auto type) {
+            using Type = decltype(type);
+            types->emplace_back(LLVMType<Type>::get(C));
+        };
+        ArgumentIteratorT::apply(callback, /*forwards*/true);
     }
     return LLVMType<typename Traits::ReturnType>::get(C);
 }
@@ -863,7 +860,15 @@ private:
     const FunctionList mFunctionList;
 };
 
-
+/// @brief  The FunctionBuilder class provides a builder pattern framework to
+///         allow easy and valid construction of AX functions. There are a
+///         number of complex tasks which may need to be performed during
+///         construction of C or IR function which are delegated to this
+///         builder, whilst ensuring that the constructed functions are
+///         guaranteed to be valid.
+/// @details  Use the FunctionBuilder::addSignature methods to append function
+///           signatures. Finalize the group of functions with
+///           FunctionBuilder::get.
 struct FunctionBuilder
 {
     enum DeclPreferrence {
@@ -899,7 +904,9 @@ struct FunctionBuilder
 
 
     template <typename Signature, bool SRet = false>
-    inline FunctionBuilder& addSignature(const IRFunctionBase::GeneratorCb& cb, const char* symbol = nullptr)
+    inline FunctionBuilder&
+    addSignature(const IRFunctionBase::GeneratorCb& cb,
+            const char* symbol = nullptr)
     {
         using IRFType = typename std::conditional
             <!SRet, IRFunction<Signature>, IRFunctionSRet<Signature>>::type;
@@ -922,7 +929,9 @@ struct FunctionBuilder
     }
 
     template <typename Signature, bool SRet = false>
-    inline FunctionBuilder& addSignature(const Signature* ptr, const char* symbol = nullptr)
+    inline FunctionBuilder&
+    addSignature(const Signature* ptr,
+            const char* symbol = nullptr)
     {
         using CFType = typename std::conditional
             <!SRet, CFunction<Signature>, CFunctionSRet<Signature>>::type;
@@ -1100,12 +1109,24 @@ struct FunctionBuilder
 private:
 
     template <typename Signature>
-    std::string genSymbol() const {
+    std::string genSymbol() const
+    {
+        using Traits = FunctionTraits<Signature>;
+
+        std::string args;
+        auto callback = [&args](auto type) {
+            using Type = decltype(type);
+            args += TypeToSymbol<Type>::s();
+        };
+
+        ArgumentIterator<Signature>::apply(callback, /*forwards*/true);
         /// @note  important to prefix all symbols with "ax." so that
         ///        they will never conflict with internal llvm symbol
-        ///        names (such as standard libary methods e.g, cos, cosh)
-        return "ax." + std::string(this->mName) +
-            ArgumentIterator<Signature>::symbol();
+        ///        names (such as standard library methods e.g, cos, cosh
+
+        // assemble the symbol
+        return "ax." + std::string(this->mName) + "." +
+            TypeToSymbol<typename Traits::ReturnType>::s() + args;
     }
 
     const char* mName = "";

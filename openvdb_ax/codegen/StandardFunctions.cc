@@ -1162,7 +1162,14 @@ inline FunctionGroup::Ptr axmmmult(const FunctionOptions& op)
 inline FunctionGroup::Ptr axpolardecompose(const FunctionOptions& op)
 {
     static auto polardecompose = [](auto in, auto orth, auto symm) -> bool {
-        return openvdb::math::polarDecomposition(*in, *orth, *symm);
+        bool success = false;
+        try {
+            success = openvdb::math::polarDecomposition(*in, *orth, *symm);
+        }
+        catch (const openvdb::ArithmeticError&) {
+            success = false;
+        }
+        return success;
     };
 
     using PolarDecompositionM3D =
@@ -1179,7 +1186,7 @@ inline FunctionGroup::Ptr axpolardecompose(const FunctionOptions& op)
         .addSignature<PolarDecompositionM3F>((PolarDecompositionM3F*)(polardecompose))
         .setArgumentNames({"input", "unitary", "symmetric"})
         .addParameterAttribute(0, llvm::Attribute::ReadOnly)
-        // @note - this can throw through mat.inverse(), so do not mark as nounwind
+        .addFunctionAttribute(llvm::Attribute::NoUnwind)
         .setConstantFold(op.mConstantFoldCBindings)
         .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
         .setDocumentation("Decompose an invertible 3x3 matrix into its orthogonal matrix "

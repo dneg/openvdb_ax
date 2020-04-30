@@ -10,9 +10,6 @@ v@vec_float_test1 = 5 + test;
 vec3i@vec_int_test1 = 3 + 7;
 vec3i@vec_int_test2 = v@vec_float_test1 - 2;
 
-// float scalar and vec3f arithmetic
-@float_test2 = @float_test1 + v@vec_float_test1;
-
 // float vec3f and integer and float scalar arithmetic
 
 vec3f value1 = { 0.0, 0.9, 0.9 };

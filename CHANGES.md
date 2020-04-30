@@ -1,6 +1,31 @@
 OpenVDB AX Version History
 ==========================
 
+Version 1.0.0 - In Development
+
+    New Features:
+    - New and improved doxygen and language reference material. NOTE: Work on
+      this is still in progress. Incremental changes will continue to be made
+      up to release.
+
+    Improvements:
+    - polardecompose() no longer throws on unsuccessful inversion and will now
+      return false if it fails.
+    - Removed the ability to compare vectors or matrices with the following
+      relation operators: <= >= < >
+    - Removed support for implicit narrowing of vector/matrices to scalars
+      i.e. vec3f a; int b = a;
+    - Added support for unary logical/bitwise not on integer vector types
+      e.g. vec3i a; a = !a;
+
+    Bug Fixes:
+    - Fixed a bug which would cause a crash if a vector/matrix was accessed
+      with a single index consisting of an invalid type. e.g. mat[{1,1,1}];
+
+    Code Generation:
+    - Converted static methods on the ArgumentIterator class to a generic
+      apply method
+
 Version 0.2.0 - March 5, 2020
 
     As of this release, a C++14 compiler is required.

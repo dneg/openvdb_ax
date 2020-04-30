@@ -255,7 +255,7 @@ AttributeRegistry::Ptr PointComputeGenerator::generate(const ast::Tree& tree)
             const bool usingString = type == strType;
 
             llvm::Value* handlePtr = this->attributeHandleFromToken(token);
-            const FunctionGroup::Ptr function = this->getFunction("setattribute", mOptions, true);
+            const FunctionGroup::Ptr function = this->getFunction("setattribute", true);
 
             // load the result (if its a scalar)
             if (type->isIntegerTy() || type->isFloatingPointTy()) {
@@ -314,7 +314,7 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
     const bool usingString = type == "string";
 
     if (usingString) {
-        const FunctionGroup::Ptr function = this->getFunction("strattribsize", mOptions, true);
+        const FunctionGroup::Ptr function = this->getFunction("strattribsize", true);
 
         llvm::Value* size =
             function->execute({handlePtr, pointidx, leafdata}, mBuilder);
@@ -344,7 +344,7 @@ void PointComputeGenerator::getAttributeValue(const std::string& globalName, llv
 
     if (usingString) args.emplace_back(leafdata);
 
-    const FunctionGroup::Ptr function = this->getFunction("getattribute", mOptions, true);
+    const FunctionGroup::Ptr function = this->getFunction("getattribute", true);
     function->execute(args, mBuilder);
 }
 

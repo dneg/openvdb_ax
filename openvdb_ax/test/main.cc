@@ -266,8 +266,17 @@ run(int argc, char* argv[])
 
 } // anonymous namespace
 
-template <typename ValueT>
-using ConverterT = typename openvdb::BoolGrid::ValueConverter<ValueT>::Type;
+template <typename T>
+static inline void registerType()
+{
+    using ConverterT =
+        typename openvdb::BoolGrid::ValueConverter<T>::Type;
+
+    if (!openvdb::points::TypedAttributeArray<T>::isRegistered())
+        openvdb::points::TypedAttributeArray<T>::registerType();
+    if (!ConverterT::isRegistered())
+        ConverterT::registerGrid();
+}
 
 int
 main(int argc, char *argv[])
@@ -276,21 +285,12 @@ main(int argc, char *argv[])
     openvdb::ax::initialize();
     openvdb::logging::initialize(argc, argv);
 
-    // Also intialize Vec4 point attributes and grids
+    // Also intialize Vec4 point attributes and grids as these
+    // are supported in the compoilers
 
-    if (!openvdb::points::TypedAttributeArray<openvdb::math::Vec4<int32_t>>::isRegistered())
-        openvdb::points::TypedAttributeArray<openvdb::math::Vec4<int32_t>>::registerType();
-    if (!openvdb::points::TypedAttributeArray<openvdb::math::Vec4<float>>::isRegistered())
-        openvdb::points::TypedAttributeArray<openvdb::math::Vec4<float>>::registerType();
-    if (!openvdb::points::TypedAttributeArray<openvdb::math::Vec4<double>>::isRegistered())
-        openvdb::points::TypedAttributeArray<openvdb::math::Vec4<double>>::registerType();
-
-    if (!ConverterT<openvdb::math::Vec4<int32_t>>::isRegistered())
-        ConverterT<openvdb::math::Vec4<int32_t>>::registerGrid();
-    if (!ConverterT<openvdb::math::Vec4<float>>::isRegistered())
-        ConverterT<openvdb::math::Vec4<float>>::registerGrid();
-    if (!ConverterT<openvdb::math::Vec4<double>>::isRegistered())
-        ConverterT<openvdb::math::Vec4<double>>::registerGrid();
+    registerType<openvdb::math::Vec4<int32_t>>();
+    registerType<openvdb::math::Vec4<float>>();
+    registerType<openvdb::math::Vec4<double>>();
 
     auto value = run(argc, argv);
 
