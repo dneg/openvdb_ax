@@ -179,7 +179,6 @@ struct ComputeGenerator : public ast::Visitor<ComputeGenerator>
 protected:
 
     FunctionGroup::Ptr getFunction(const std::string& identifier,
-            const FunctionOptions& op,
             const bool allowInternal = false);
 
     llvm::Module& mModule;

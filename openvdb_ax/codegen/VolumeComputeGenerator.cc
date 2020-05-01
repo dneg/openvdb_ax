@@ -208,7 +208,7 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
                 value = mBuilder.CreateLoad(value);
             }
 
-            const FunctionGroup::Ptr function = this->getFunction("setvoxel", mOptions, true);
+            const FunctionGroup::Ptr function = this->getFunction("setvoxel", true);
             function->execute({accessor, coordis, value}, mBuilder);
 
             mBuilder.CreateBr(continueBlock);
@@ -262,7 +262,7 @@ void VolumeComputeGenerator::getAccessorValue(const std::string& globalName, llv
     llvm::Value* accessor = mBuilder.CreateLoad(accessorPtr);
     llvm::Value* transform = mBuilder.CreateLoad(transformPtr);
 
-    const FunctionGroup::Ptr function = this->getFunction("getvoxel", mOptions, true);
+    const FunctionGroup::Ptr function = this->getFunction("getvoxel", true);
     function->execute({accessor, transform, coordws, location}, mBuilder);
 }
 

@@ -47,7 +47,7 @@ else()
   set(OPENVDBAX_LIB openvdb_ax)
 endif()
 
-set(VDB_AX_SOURCE_FILES openvdb_ax/main.cc)
+set(VDB_AX_SOURCE_FILES openvdb_ax.cc)
 add_executable(vdb_ax ${VDB_AX_SOURCE_FILES})
 target_link_libraries(vdb_ax ${OPENVDBAX_LIB})
 

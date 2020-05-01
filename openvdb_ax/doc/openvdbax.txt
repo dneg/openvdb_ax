@@ -1,0 +1,50 @@
+/**
+<div style="width:800px;text-align:justify;">
+
+@page openvdbax OpenVDB AX
+
+@section vdbaxcontents Contents
+- @ref vdbaxintro
+- @ref vdbaxdependencies
+- @ref vdbaxbuild
+- @ref vdbaxstructure
+    - @ref vdbaxgrammar
+    - @ref vdbaxast
+    - @ref vdbaxcodegen
+    - @ref vdbaxcompiler
+    - @ref vdbaxhoudini
+    - @ref vdbaxother
+- @ref vdbaxbinary
+- @ref vdbaxextend
+
+@section vdbaxintro Introduction
+
+<!-- Intro -->
+
+@section vdbaxdependencies OpenVDB AX Dependencies
+
+<!-- Dependency table -->
+
+@section vdbaxbuild Building OpenVDB AX
+
+<!-- Build instructions -->
+
+@section vdbaxstructure OpenVDB AX Repository Structure
+
+@subsection vdbaxgrammar The Grammar
+@subsection vdbaxast The AST
+@subsection vdbaxcodegen The Codegen
+@subsection vdbaxcompiler The Compiler
+@subsection vdbaxhoudini The Houdini Plugin
+@subsection vdbaxother Everything Else
+
+@section vdbaxbinary The Command Line Binary: vdb_ax
+
+<!-- Using the vdb_ax binary -->
+
+@section vdbaxextend Extending OpenVDB AX
+
+<!-- How to extend AX -->
+
+</div>
+*/

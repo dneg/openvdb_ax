@@ -436,15 +436,108 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
             mBuilder.CreateStore(total, sizeptr);
             break;
         }
-        case ARRAY_OP_SCALAR :
-        case SCALAR_OP_ARRAY :
         case ARRAY_OP_ARRAY  : {
+            if (op == ast::tokens::MORETHAN ||
+                op == ast::tokens::LESSTHAN ||
+                op == ast::tokens::MORETHANOREQUAL ||
+                op == ast::tokens::LESSTHANOREQUAL ||
+                opType == ast::tokens::LOGICAL ||
+                opType == ast::tokens::BITWISE) {
+                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
+                    + ast::tokens::operatorNameFromToken(op) +
+                    "\" with a vector/matrix argument");
+            }
+
+            // Array [+][-][*][/] etc Array (Array)
+            // Array [==][!=] Array (Scalar Bool)
+            // both lhs and rhs are arrays
+            const size_t lhsSize = lhsType->getArrayNumElements();
+            const size_t rhsSize = rhsType->getArrayNumElements();
+            assert(lhsSize != 0 && rhsSize != 0);
+
+            if (op == ast::tokens::MULTIPLY) {
+                FunctionGroup::Ptr function;
+                if (lhsSize > 4 && rhsSize > 4) {
+                    // matrix matrix multiplication all handled through mmmult
+                    function = this->getFunction("mmmult", /*internal*/true);
+                    assert(function);
+                }
+                else if (lhsSize > 4 && rhsSize <= 4) {
+                    // matrix vector multiplication all handled through pretransform
+                    function = this->getFunction("pretransform");
+                    assert(function);
+                }
+                else if (lhsSize <= 4 && rhsSize > 4) {
+                    // vector matrix multiplication all handled through transform
+                    function = this->getFunction("transform");
+                    assert(function);
+                }
+                if (function) {
+                    result = function->execute({lhs, rhs}, mBuilder);
+                    break;
+                }
+            }
+
+            if (lhsSize != rhsSize) {
+                OPENVDB_THROW(LLVMBinaryOperationError, "Unable to perform operation \""
+                    + ast::tokens::operatorNameFromToken(op) +
+                    "\" on arrays of mismatching sizes.");
+            }
+
+            std::vector<llvm::Value*> elements;
+            elements.reserve(lhsSize);
+            for (size_t i = 0; i < lhsSize; ++i) {
+                llvm::Value* relement = mBuilder.CreateConstGEP2_64(rhs, 0, i);
+                relement = mBuilder.CreateLoad(relement);
+                llvm::Value* lelement = mBuilder.CreateConstGEP2_64(lhs, 0, i);
+                lelement = mBuilder.CreateLoad(lelement);
+                arithmeticConversion(lelement, relement, mBuilder);
+                lelement = binaryOperator(lelement, relement, op, mBuilder);
+                elements.emplace_back(lelement);
+            }
+
+            if (op == ast::tokens::EQUALSEQUALS || op == ast::tokens::NOTEQUALS) {
+                const ast::tokens::OperatorToken reductionOp =
+                    op == ast::tokens::EQUALSEQUALS ?
+                        ast::tokens::AND :
+                        ast::tokens::OR;
+                // == and != operators create bool types
+                result = elements.front();
+                assert(result->getType() == LLVMType<bool>::get(mContext));
+                for (size_t i = 1; i < elements.size(); ++i) {
+                    result = binaryOperator(result, elements[i], reductionOp, mBuilder);
+                }
+            }
+            else {
+                llvm::Type* arrayType =
+                    llvm::ArrayType::get(elements.front()->getType(), elements.size());
+                // Create the allocation at the start of the function block
+                result = insertStaticAlloca(mBuilder, arrayType);
+                for (size_t i = 0; i < elements.size(); ++i) {
+                    llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
+                    mBuilder.CreateStore(elements[i], target);
+                }
+            }
+            break;
+        }
+        case ARRAY_OP_SCALAR :
+        case SCALAR_OP_ARRAY : {
+            if (op == ast::tokens::MORETHAN ||
+                op == ast::tokens::LESSTHAN ||
+                op == ast::tokens::MORETHANOREQUAL ||
+                op == ast::tokens::LESSTHANOREQUAL ||
+                opType == ast::tokens::LOGICAL ||
+                opType == ast::tokens::BITWISE) {
+                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
+                    + ast::tokens::operatorNameFromToken(op) +
+                    "\" with a vector/matrix argument");
+            }
+
             std::vector<llvm::Value*> elements;
 
             if (operandType == SCALAR_OP_ARRAY) {
                 // Scalar [+][-][*][/] etc Array (Array)
-                // Scalar [==][!=][>][<] etc Array (Scalar Bool)
-
+                // Scalar [==][!=] Array (Scalar Bool)
                 // rhs is array
                 const size_t count = rhsType->getArrayNumElements();
                 elements.reserve(count);
@@ -458,8 +551,7 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
             }
             else if (operandType == ARRAY_OP_SCALAR) {
                 // Array [+][-][*][/] etc Scalar (Array)
-                // Array [==][!=][>][<] etc Scalar (Scalar Bool)
-
+                // Array [==][!=] Scalar (Scalar Bool)
                 // lhs is array
                 const size_t count = lhsType->getArrayNumElements();
                 elements.reserve(count);
@@ -471,62 +563,8 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     elements.emplace_back(element);
                 }
             }
-            else {
-                // Array [+][-][*][/] etc Array (Array)
-                // Array [==][!=][>][<] etc Array (Scalar Bool)
 
-                // both lhs and rhs are arrays
-                const size_t lhsSize = lhsType->getArrayNumElements();
-                const size_t rhsSize = rhsType->getArrayNumElements();
-                assert(lhsSize != 0 && rhsSize != 0);
-
-                if (op == ast::tokens::MULTIPLY) {
-                    if (lhsSize > 4 && rhsSize > 4) {
-                        // matrix matrix multiplication all handled through mmmult
-                        const FunctionGroup::Ptr function = this->getFunction("mmmult", mOptions, /*internal*/true);
-                        result = function->execute({lhs, rhs}, mBuilder);
-                        assert(result);
-                        mValues.push(result);
-                        return true;
-                    }
-                    else if (lhsSize > 4 && rhsSize <= 4) {
-                        // matrix vector multiplication all handled through pretransform
-                        const FunctionGroup::Ptr function = this->getFunction("pretransform", mOptions);
-                        result = function->execute({lhs, rhs}, mBuilder);
-                        assert(result);
-                        mValues.push(result);
-                        return true;
-                    }
-                    else if (lhsSize <= 4 && rhsSize > 4) {
-                        // vector matrix multiplication all handled through transform
-                        const FunctionGroup::Ptr function = this->getFunction("transform", mOptions);
-                        result = function->execute({lhs, rhs}, mBuilder);
-                        assert(result);
-                        mValues.push(result);
-                        return true;
-                    }
-                }
-
-                if (lhsSize != rhsSize) {
-                    OPENVDB_THROW(LLVMBinaryOperationError, "Unable to perform operation \""
-                        + ast::tokens::operatorNameFromToken(op) + "\" on arrays of mismatching sizes.");
-                }
-
-                elements.reserve(lhsSize);
-                for (size_t i = 0; i < lhsSize; ++i) {
-                    llvm::Value* relement = mBuilder.CreateConstGEP2_64(rhs, 0, i);
-                    relement = mBuilder.CreateLoad(relement);
-                    llvm::Value* lelement = mBuilder.CreateConstGEP2_64(lhs, 0, i);
-                    lelement = mBuilder.CreateLoad(lelement);
-                    arithmeticConversion(lelement, relement, mBuilder);
-                    lelement = binaryOperator(lelement, relement, op, mBuilder);
-                    elements.emplace_back(lelement);
-                }
-            }
-
-            // Scalar == Array or Scalar != Array. Note that other comparisons
-            // (<, > <=, >=) work on the first element of the array only
-
+            // Scalar == Array or Scalar != Array
             if (op == ast::tokens::EQUALSEQUALS || op == ast::tokens::NOTEQUALS) {
                 const ast::tokens::OperatorToken reductionOp =
                     op == ast::tokens::EQUALSEQUALS ?
@@ -539,26 +577,11 @@ bool ComputeGenerator::visit(const ast::BinaryOperator* node)
                     result = binaryOperator(result, elements[i], reductionOp, mBuilder);
                 }
             }
-            else if (op == ast::tokens::MORETHAN ||
-                op == ast::tokens::LESSTHAN ||
-                op == ast::tokens::MORETHANOREQUAL ||
-                op == ast::tokens::LESSTHANOREQUAL) {
-                // first element only
-                result = elements.front();
-                assert(result->getType() == LLVMType<bool>::get(mContext));
-            }
-            else if (opType == ast::tokens::LOGICAL ||
-                     opType == ast::tokens::BITWISE) {
-                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
-                    + ast::tokens::operatorNameFromToken(op) + "\" with a vector argument");
-            }
             else {
                 llvm::Type* arrayType =
                     llvm::ArrayType::get(elements.front()->getType(), elements.size());
-
                 // Create the allocation at the start of the function block
                 result = insertStaticAlloca(mBuilder, arrayType);
-
                 for (size_t i = 0; i < elements.size(); ++i) {
                     llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
                     mBuilder.CreateStore(elements[i], target);
@@ -587,6 +610,13 @@ bool ComputeGenerator::visit(const ast::UnaryOperator* node)
     const ast::tokens::OperatorToken token = node->operation();
     if (token == ast::tokens::PLUS) return true;
 
+    if (token != ast::tokens::MINUS &&
+        token != ast::tokens::BITNOT &&
+        token != ast::tokens::NOT) {
+        OPENVDB_THROW(LLVMUnaryOperationError, "Unrecognised unary operator \"" +
+            ast::tokens::operatorNameFromToken(token) + "\"");
+    }
+
     llvm::Value* value = mValues.top(); mValues.pop();
     llvm::Type* type = value->getType();
     if (type->isPointerTy()) {
@@ -604,10 +634,6 @@ bool ComputeGenerator::visit(const ast::UnaryOperator* node)
             if (type->isIntegerTy(1))           result = mBuilder.CreateICmpEQ(value, llvm::ConstantInt::get(type, 0));
             else                                result = mBuilder.CreateICmpEQ(value, llvm::ConstantInt::getSigned(type, 0));
         }
-        else {
-            OPENVDB_THROW(LLVMTokenError, "Unrecognised int operator \"" +
-                ast::tokens::operatorNameFromToken(token) + "\"");
-        }
     }
     else if (type->isFloatingPointTy()) {
         if (token == ast::tokens::MINUS)         result = mBuilder.CreateFNeg(value);
@@ -616,50 +642,54 @@ bool ComputeGenerator::visit(const ast::UnaryOperator* node)
             OPENVDB_THROW(LLVMUnaryOperationError, "Unable to perform operation \""
                 + ast::tokens::operatorNameFromToken(token) + "\" on floating points values");
         }
-        else {
-            OPENVDB_THROW(LLVMTokenError, "Unrecognised FP operator \"" +
-                ast::tokens::operatorNameFromToken(token) + "\"");
-        }
     }
     else if (type->isArrayTy()) {
-        const size_t elements = type->getArrayNumElements();
-        result = insertStaticAlloca(mBuilder, type);
         type = type->getArrayElementType();
+        std::vector<llvm::Value*> elements;
+        arrayUnpack(value, elements, mBuilder, /*load*/true);
+        assert(elements.size() > 0);
 
-        if (token == ast::tokens::MINUS) {
-            if (type->isFloatingPointTy()) {
-                for (size_t i = 0; i < elements; ++i) {
-                    llvm::Value* source = mBuilder.CreateConstGEP2_64(value, 0, i);
-                    llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
-                    source = mBuilder.CreateLoad(source);
-                    source = mBuilder.CreateFNeg(source);
-                    mBuilder.CreateStore(source, target);
+        if (type->isIntegerTy()) {
+            if (token == ast::tokens::MINUS) {
+                for (llvm::Value*& element : elements) {
+                    element = mBuilder.CreateNeg(element);
                 }
             }
-            else if (type->isIntegerTy()) {
-                for (size_t i = 0; i < elements; ++i) {
-                    llvm::Value* source = mBuilder.CreateConstGEP2_64(value, 0, i);
-                    llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
-                    source = mBuilder.CreateLoad(source);
-                    source = mBuilder.CreateNeg(source);
-                    mBuilder.CreateStore(source, target);
+            else if (token == ast::tokens::NOT) {
+                for (llvm::Value*& element : elements) {
+                    element = mBuilder.CreateICmpEQ(element,
+                        llvm::ConstantInt::getSigned(type, 0));
+                }
+            }
+            else if (token == ast::tokens::BITNOT) {
+                for (llvm::Value*& element : elements) {
+                    element = mBuilder.CreateNot(element);
+                }
+            }
+        }
+        else if (type->isFloatingPointTy()) {
+            if (token == ast::tokens::MINUS) {
+                for (llvm::Value*& element : elements) {
+                    element = mBuilder.CreateFNeg(element);
                 }
             }
             else {
-                OPENVDB_THROW(LLVMUnaryOperationError, "Unrecognised array element type");
+                //@todo support NOT?
+                OPENVDB_THROW(LLVMUnaryOperationError, "Unable to perform operation \""
+                    + ast::tokens::operatorNameFromToken(token) +
+                    "\" on floating point vector/matrices");
             }
         }
-        else if (token == ast::tokens::NOT || token == ast::tokens::BITNOT) {
-            OPENVDB_THROW(LLVMUnaryOperationError, "Unable to perform operation \""
-                + ast::tokens::operatorNameFromToken(token) + "\" on arrays/vectors");
-        }
         else {
-            OPENVDB_THROW(LLVMTokenError, "Unrecognised array operator \"" +
-                ast::tokens::operatorNameFromToken(token) + "\"");
+            OPENVDB_THROW(LLVMUnaryOperationError,
+                "Unrecognised array element type");
         }
+
+        result = arrayPack(elements, mBuilder);
     }
     else {
-        OPENVDB_THROW(LLVMUnaryOperationError, "Value is not a scalar or vector");
+        OPENVDB_THROW(LLVMUnaryOperationError,
+            "Value is not a scalar, vector or matrix.");
     }
 
     assert(result);
@@ -796,11 +826,9 @@ bool ComputeGenerator::visit(const ast::AssignExpression*)
             break;
         }
         case SCALAR_EQ_ARRAY : {
-            // take the first value of the rhs array
-            rhs = mBuilder.CreateConstGEP2_64(rhs, 0, 0);
-            rhs = mBuilder.CreateLoad(rhs);
-            rhs = arithmeticConversion(rhs, lhsType, mBuilder);
-            mBuilder.CreateStore(rhs, lhs);
+            OPENVDB_THROW(LLVMArrayError, "Cannot assign a scalar value "
+                "from a vector or matrix. Consider using the [] operator to "
+                "get a particular element.");
             break;
         }
         case ARRAY_EQ_SCALAR : {
@@ -864,7 +892,7 @@ bool ComputeGenerator::visit(const ast::Crement* node)
 
 bool ComputeGenerator::visit(const ast::FunctionCall* node)
 {
-    const FunctionGroup::Ptr function = this->getFunction(node->name(), mOptions);
+    const FunctionGroup::Ptr function = this->getFunction(node->name());
     const size_t args = node->numArgs();
     assert(mValues.size() >= args);
 
@@ -1039,8 +1067,10 @@ bool ComputeGenerator::visit(const ast::ArrayUnpack* node)
         std::ostringstream os;
         llvm::raw_os_ostream stream(os);
         component0->getType()->print(stream);
-        stream << ", ";
-        component1->getType()->print(stream);
+        if (component1) {
+            stream << ", ";
+            component1->getType()->print(stream);
+        }
         stream.flush();
         OPENVDB_THROW(LLVMArrayError,
             "Unable to index into array with a non integer value. Types are ["
@@ -1147,10 +1177,9 @@ bool ComputeGenerator::visit(const ast::Value<std::string>* node)
 }
 
 FunctionGroup::Ptr ComputeGenerator::getFunction(const std::string &identifier,
-                                                const FunctionOptions &op,
                                                 const bool allowInternal)
 {
-    FunctionGroup::Ptr function = mFunctionRegistry.getOrInsert(identifier, op, allowInternal);
+    FunctionGroup::Ptr function = mFunctionRegistry.getOrInsert(identifier, mOptions, allowInternal);
     if (!function) {
         OPENVDB_THROW(LLVMFunctionError,
             "Unable to locate function \"" + identifier + "\".");

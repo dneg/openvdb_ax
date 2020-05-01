@@ -49,7 +49,6 @@ public:
     CPPUNIT_TEST(castLiteral);
     CPPUNIT_TEST(castImplicitAssign);
     CPPUNIT_TEST(castImplicitArithmetic);
-    CPPUNIT_TEST(castImplicitComponentAssign);
 
     // the following are atlernative versions of the preceding cast tests but which do not
     // use "short" data since we don't currently support "short" data volumes.  If this is fixed,
@@ -70,7 +69,6 @@ public:
     void castLiteral();
     void castImplicitAssign();
     void castImplicitArithmetic();
-    void castImplicitComponentAssign();
     void castDoubleVolume();
     void castFloatVolume();
     void castIntVolume();
@@ -187,7 +185,6 @@ void
 TestCast::castImplicitArithmetic()
 {
     mHarness.addAttribute<float>("float_test1", 2.5f);
-    mHarness.addAttribute<float>("float_test2", 2.5f + (5 - 4.2f));
     mHarness.addAttribute<openvdb::Vec3f>("vec_float_test1", openvdb::Vec3f(5 - 4.2f));
     mHarness.addAttribute<openvdb::Vec3i>("vec_int_test1", openvdb::Vec3i(10));
     mHarness.addAttribute<openvdb::Vec3i>("vec_int_test2", openvdb::Vec3i(-1));
@@ -196,19 +193,6 @@ TestCast::castImplicitArithmetic()
     mHarness.executeCode("test/snippets/cast/castImplicitArithmetic");
 
    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castImplicitComponentAssign()
-{
-    mHarness.addAttribute("vec_float_test1", openvdb::Vec3f(-5.361f, 10.3f, 6.0f));
-    mHarness.addAttribute("vec_float_test2", openvdb::Vec3f(40, 40, 40));
-    mHarness.addAttribute<int>("int_test1", -5);
-    mHarness.addAttribute<int64_t>("long_test1", 40);
-
-    mHarness.executeCode("test/snippets/cast/castImplicitComponentAssign");
-
-    AXTESTS_STANDARD_ASSERT();
 }
 
 void

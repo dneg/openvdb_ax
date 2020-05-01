@@ -59,7 +59,6 @@ public:
     CPPUNIT_TEST(testAssignVectorAttributes);
     CPPUNIT_TEST(testAssignVectorMappings);
     CPPUNIT_TEST(testAssignVectorFromScalar);
-    CPPUNIT_TEST(testAssignScalarFromVector);
     CPPUNIT_TEST(testAssignScopedLocalVariables);
     CPPUNIT_TEST(testAssignDuplicateLocalVariables);
     CPPUNIT_TEST(testAssignDuplicateScopedLocalVariables);
@@ -80,7 +79,6 @@ public:
     void testAssignVectorAttributes();
     void testAssignVectorMappings();
     void testAssignVectorFromScalar();
-    void testAssignScalarFromVector();
     void testAssignScopedLocalVariables();
     void testAssignDuplicateLocalVariables();
     void testAssignDuplicateScopedLocalVariables();
@@ -261,18 +259,6 @@ TestAssign::testAssignVectorFromScalar()
          openvdb::Vec3f(-3.f, -3.f, -3.f)});
 
     mHarness.executeCode("test/snippets/assign/assignVectorFromScalar");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestAssign::testAssignScalarFromVector()
-{
-    mHarness.addAttributes<float>({"float_test1", "float_test2", "float_test3"},
-        {10.0f, -10.0f, -5.0f});
-
-    mHarness.addAttributes<openvdb::Vec3f>({"vec_float_test1"}, {openvdb::Vec3f(10.f, 9.f, 8.f)});
-    mHarness.executeCode("test/snippets/assign/assignScalarFromVector");
 
     AXTESTS_STANDARD_ASSERT();
 }

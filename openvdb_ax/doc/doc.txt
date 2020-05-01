@@ -1,17 +1,48 @@
 /**
+<div style="width:800px;text-align:justify;">
+
 @mainpage OpenVDB AX
 
-The <b>OpenVDB AX</b> library provides a powerful way to interact with OpenVDB
-volumes and points using the expression language: AX.
+@section overview Overview
+@par
+<b>OpenVDB AX</b> is an open source C++ library that provides a powerful and
+easy way of interacting with OpenVDB volume and point data. The software strives
+to provide a concise, fast, highly parallalisable and portable solution to
+performing custom manipulation of OpenVDB data via an expression language: AX.
+AX expressions are JIT-compiled and used in combination with a multi-threaded
+execution framework, specifically designed for VDB, that in many cases rival
+custom C++ operators.
+@par
+<b>OpenVDB AX is currently in BETA</b>. This predominately means that the C++
+API is subject to change without backward compatible guarantees.
+@par
+The software is currently hosted on <A HREF="https://github.com/dneg/openvdb_ax">github</A>
+and has a variety of releases for download.
 
-<b>OpenVDB AX</b> is maintained by
-<A HREF="https://www.dneg.com/">DNEG</A>
-and currently supported by DNEG's:
+@subsection docs Documentation
+@par
+The doxygen documentation provide information on both AX as a language and the
+developer documentation for OpenVDB AX as a C++ API. There are two main sections:
+@par
+ - The @subpage ax "AX Language Documentation" provides useful information for front-end users looking for documentation on the AX Language.
+ - The @subpage openvdbax "OpenVDB AX Documentation" provides build, API and other C++ specific software information for developers.
+@par
+Some additional quick links to useful subsections of the documentation are also
+provided:
+@par
+ - @subpage axexamples "Code Examples" for examples of OpenVDB AX in action.
+ - @subpage axfunctionlist "AX Functions" for a list of all available AX functions.
+ - @subpage vdbaxbuild "Building OpenVDB AX" for information on building <b>OpenVDB AX</b>.
+
+@subsection contact Contact
+@par
+<b>OpenVDB AX</b> is maintained by <A HREF="https://www.dneg.com/">DNEG</A>
+and currently supported by:
 - Nick Avramoussis
 - Richard Jones
-
+@par
 Please contact us on openvdbax@dneg.com if you have any questions.
-
+@par
 Other notable contributors include:
 - Francisco Gochez
 - Matthew Warner
@@ -20,47 +51,5 @@ Other notable contributors include:
 - James Bird
 - Harry Biddle
 
-See the @subpage overview "Overview" for an introduction to the library.
-
-See the @subpage languageReference "Language Reference" for details of the
-OpenVDB AX language.
-
-See the @subpage codeExamples "Code Examples" for examples of OpenVDB AX
-in action.
-
-@page overview OpenVDB AX Overview
-
-@section Contents
-- @ref secOverview
-- @ref secAX
-  - @ref subsecTheSyntax
-
-<!-- - @ref secRegistry -->
-
-@section secOverview Introduction
-
-This document is a summary of OpenVDB AX. OpenVDB AX is a JIT compiled
-C-like language for manipulating OpenVDB volumes and points. It has
-influences from C, C++ and SideFX's VEX. It is a highly paralellised and
-efficient way of exposing low level control over voxel values and point
-attributes. It is portable across DCCs provided a plugin for each DCC is
-written for it. Included with the tools as they stand is a plugin for
-Houdini: the OpenVDB AX SOP.
-
-@section secAX AX
-
-Compiled AX is run on OpenVDB "element" data: voxels or points. It
-allows users to write short code snippets which will be evaluated on every
-point or voxel for supplied grids.
-
-Each time a change is made to a snippet it needs to be recompiled, however
-once it has been compiled the "executable" can be run on any number of grids
-until the code snippet is changed.
-
-AX works on points or volumes currently, not both at the same time.
-
-@subsection subsecTheSyntax The syntax
-
-For a detailed description of all the features of AX please see the
-@subpage languageReference "Language Reference".
+</div>
 */
