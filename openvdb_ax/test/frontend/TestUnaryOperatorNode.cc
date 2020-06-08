@@ -45,53 +45,69 @@ namespace {
 
 static const unittest_util::CodeTests tests =
 {
-    { "-a;",            Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Local("a"))) },
-    { "+a;",            Node::Ptr(new UnaryOperator(OperatorToken::PLUS, new Local("a"))) },
-    { "!a;",            Node::Ptr(new UnaryOperator(OperatorToken::NOT, new Local("a"))) },
-    { "~a;",            Node::Ptr(new UnaryOperator(OperatorToken::BITNOT, new Local("a"))) },
-    { "~~a;",           Node::Ptr(new UnaryOperator(OperatorToken::BITNOT, new UnaryOperator(OperatorToken::BITNOT, new Local("a")))) },
-    { "!~a;",           Node::Ptr(new UnaryOperator(OperatorToken::NOT, new UnaryOperator(OperatorToken::BITNOT, new Local("a")))) },
-    { "+-a;",           Node::Ptr(new UnaryOperator(OperatorToken::PLUS, new UnaryOperator(OperatorToken::MINUS, new Local("a")))) },
-    { "-+a;",           Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new UnaryOperator(OperatorToken::PLUS, new Local("a")))) },
-    { "!!!a;",          Node::Ptr(new UnaryOperator(OperatorToken::NOT,
-                            new UnaryOperator(OperatorToken::NOT,
-                                new UnaryOperator(OperatorToken::NOT, new Local("a"))
-                            )
+    { "-a;",            Node::Ptr(new UnaryOperator(new Local("a"), OperatorToken::MINUS)) },
+    { "+a;",            Node::Ptr(new UnaryOperator(new Local("a"), OperatorToken::PLUS)) },
+    { "!a;",            Node::Ptr(new UnaryOperator(new Local("a"), OperatorToken::NOT)) },
+    { "~a;",            Node::Ptr(new UnaryOperator(new Local("a"), OperatorToken::BITNOT)) },
+    { "~~a;",           Node::Ptr(new UnaryOperator(new UnaryOperator(new Local("a"), OperatorToken::BITNOT), OperatorToken::BITNOT)) },
+    { "!~a;",           Node::Ptr(new UnaryOperator(new UnaryOperator(new Local("a"), OperatorToken::BITNOT), OperatorToken::NOT)) },
+    { "+-a;",           Node::Ptr(new UnaryOperator(new UnaryOperator(new Local("a"), OperatorToken::MINUS), OperatorToken::PLUS)) },
+    { "-+a;",           Node::Ptr(new UnaryOperator(new UnaryOperator(new Local("a"), OperatorToken::PLUS), OperatorToken::MINUS)) },
+    { "!!!a;",          Node::Ptr(new UnaryOperator(
+                            new UnaryOperator(
+                                new UnaryOperator(new Local("a"), OperatorToken::NOT),
+                                OperatorToken::NOT
+                            ),
+                            OperatorToken::NOT
                         ))
     },
-    { "~~~a;",          Node::Ptr(new UnaryOperator(OperatorToken::BITNOT,
-                            new UnaryOperator(OperatorToken::BITNOT,
-                                new UnaryOperator(OperatorToken::BITNOT, new Local("a"))
-                            )
+    { "~~~a;",          Node::Ptr(new UnaryOperator(
+                            new UnaryOperator(
+                                new UnaryOperator(new Local("a"), OperatorToken::BITNOT),
+                                OperatorToken::BITNOT
+                            ),
+                            OperatorToken::BITNOT
                         ))
     },
-    { "-(a+b);",        Node::Ptr(new UnaryOperator(OperatorToken::MINUS,
-                            new BinaryOperator(OperatorToken::PLUS,
-                                new Local("a"), new Local("b")
-                            )
+    { "-(a+b);",        Node::Ptr(new UnaryOperator(
+                            new BinaryOperator(
+                                new Local("a"), new Local("b"), OperatorToken::PLUS
+                            ),
+                            OperatorToken::MINUS
                         ))
     },
-    { "!func();",       Node::Ptr(new UnaryOperator(OperatorToken::NOT, new FunctionCall("func"))) },
-    { "-@a;",           Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Attribute("a", CoreType::FLOAT, true))) },
-    { "!v@a;",          Node::Ptr(new UnaryOperator(OperatorToken::NOT, new Attribute("a", CoreType::VEC3F))) },
-    { "~v@a;",          Node::Ptr(new UnaryOperator(OperatorToken::BITNOT, new Attribute("a", CoreType::VEC3F))) },
-    { "+int(a);",       Node::Ptr(new UnaryOperator(OperatorToken::PLUS, new Cast(new Local("a"), CoreType::INT))) },
-    { "-(float(a));",   Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Cast(new Local("a"), CoreType::FLOAT))) },
-    { "!a.x;",          Node::Ptr(new UnaryOperator(OperatorToken::NOT, new ArrayUnpack(new Local("a"), new Value<int32_t>(0)))) },
-    { "-a[0];",         Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new ArrayUnpack(new Local("a"), new Value<int32_t>(0)))) },
-    { "-++a;",          Node::Ptr(new UnaryOperator(OperatorToken::MINUS, new Crement(new Local("a"), Crement::Operation::Increment, false))) },
-    { "!{a,b,c};",      Node::Ptr(new UnaryOperator(OperatorToken::NOT,
-                            new ArrayPack(new ExpressionList({
+    { "!func();",       Node::Ptr(new UnaryOperator(new FunctionCall("func"), OperatorToken::NOT)) },
+    { "-@a;",           Node::Ptr(new UnaryOperator(new Attribute("a", CoreType::FLOAT, true), OperatorToken::MINUS)) },
+    { "!v@a;",          Node::Ptr(new UnaryOperator(new Attribute("a", CoreType::VEC3F), OperatorToken::NOT)) },
+    { "~v@a;",          Node::Ptr(new UnaryOperator(new Attribute("a", CoreType::VEC3F), OperatorToken::BITNOT)) },
+    { "+int(a);",       Node::Ptr(new UnaryOperator(new Cast(new Local("a"), CoreType::INT), OperatorToken::PLUS)) },
+    { "-(float(a));",   Node::Ptr(new UnaryOperator(new Cast(new Local("a"), CoreType::FLOAT), OperatorToken::MINUS)) },
+    { "!a.x;",          Node::Ptr(new UnaryOperator(new ArrayUnpack(new Local("a"), new Value<int32_t>(0)), OperatorToken::NOT)) },
+    { "-a[0];",         Node::Ptr(new UnaryOperator(new ArrayUnpack(new Local("a"), new Value<int32_t>(0)), OperatorToken::MINUS)) },
+    { "-++a;",          Node::Ptr(new UnaryOperator(new Crement(new Local("a"), Crement::Operation::Increment, false), OperatorToken::MINUS)) },
+    { "!{a,b,c};",      Node::Ptr(new UnaryOperator(
+                            new ArrayPack({
                                 new Local("a"),
                                 new Local("b"),
                                 new Local("c")
-                            }))
+                            }),
+                            OperatorToken::NOT
+                        ))
+    },
+    { "!(a,b,c);",      Node::Ptr(new UnaryOperator(
+                            new CommaOperator({
+                                new Local("a"),
+                                new Local("b"),
+                                new Local("c")
+                            }),
+                            OperatorToken::NOT
                         ))
     },
     // This is a bit of a weird one - should perhaps look to making this a syntax error
     // (it will fail at compilation with an lvalue error)
-    { "-a=a;",          Node::Ptr(new UnaryOperator(OperatorToken::MINUS,
-                            new AssignExpression(new Local("a"), new Local("a"), false)
+    { "-a=a;",          Node::Ptr(new UnaryOperator(
+                            new AssignExpression(new Local("a"), new Local("a")),
+                            OperatorToken::MINUS
                         ))
     }
 };

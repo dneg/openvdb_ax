@@ -99,7 +99,14 @@ struct LeafLocalData
         if (ptr) return ptr;
 
         static const size_t maxGroupsInArray =
+#if (OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER > 7 ||  \
+    (OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER >= 7 && \
+     OPENVDB_LIBRARY_MINOR_VERSION_NUMBER >= 1))
+            points::AttributeSet::Descriptor::groupBits();
+#else
+            // old removed method
             points::point_group_internal::GroupInfo::groupBits();
+#endif
 
         if (mArrays.empty() || mOffset == maxGroupsInArray) {
             assert(mPointCount < static_cast<size_t>(std::numeric_limits<openvdb::Index>::max()));

@@ -82,21 +82,6 @@ void catalogueVariables(const ast::Node& node,
         const bool locals = true,
         const bool attributes = true);
 
-/// @brief  For a given variable at a particular position in an AST, find all
-///   attributes, locals and external variables which it depends on (i.e. any
-///   Attribute, Local or ExternalVariable AST nodes which impacts the given
-///   variables value) by recursively traversing through all connected  paths.
-///   This includes both direct and indirect influences; for example, a direct
-///   assignment "@b = @a;" and an indirect code branch "if (@a) @b = 1";
-/// @note  This is position dependent in regards to the given variables location.
-///   Any code which writes to this variable after the given usage will not be
-///   cataloged in the output dependency vector.
-/// @warning  This does not currently handle scoped local variable re-declarations
-///   and instead will end up adding matching names are extra dependencies
-///
-void variableDependencies(const ast::Variable& var,
-        std::vector<const ast::Variable*>& dependencies);
-
 /// @brief  Parse all attributes into three unique vectors which represent how they
 ///         are accessed within the syntax tree. Read only attributes are stored
 ///         within the 'readOnly' container (for example @code int a=@a; @endcode),
@@ -191,12 +176,20 @@ inline void collectNodeTypes(const ast::Node& node, ContainerType& array)
     internal::CollectForEach<ContainerType, NodeTypeList>::exec(node, array);
 }
 
-template <typename NodeT, typename OpT>
+template <typename NodeT, typename OpT, typename Derived = void>
 struct VisitNodeType :
-    public ast::Visitor<VisitNodeType<NodeT, OpT>>
+    public ast::Visitor<typename std::conditional<
+        std::is_same<Derived, void>::value,
+        VisitNodeType<NodeT, OpT>,
+        Derived>::type>
 {
-    using ast::Visitor<VisitNodeType<NodeT, OpT>>::traverse;
-    using ast::Visitor<VisitNodeType<NodeT, OpT>>::visit;
+    using VisitorT = typename std::conditional<
+        std::is_same<Derived, void>::value,
+        VisitNodeType<NodeT, OpT>,
+        Derived>::type;
+
+    using ast::Visitor<VisitorT>::traverse;
+    using ast::Visitor<VisitorT>::visit;
 
     inline bool visitNodeHierarchies() const {
         return std::is_abstract<NodeT>::value;

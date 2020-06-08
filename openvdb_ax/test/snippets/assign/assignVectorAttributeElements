@@ -1,6 +1,0 @@
-
-v@vec_float_test;
-
-v@vec_float_test.x = 5.f;
-v@vec_float_test.y = 4.f;
-v@vec_float_test.z = 3.f;

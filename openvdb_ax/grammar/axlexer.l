@@ -133,6 +133,9 @@ COMMENT     "//".*
 
 ","                         { return COMMA; }
 
+"?"                         { return QUESTION; }
+":"                         { return COLON; }
+
 "("                         { return LPARENS; }
 ")"                         { return RPARENS; }
 "{"                         { return LCURLY; }

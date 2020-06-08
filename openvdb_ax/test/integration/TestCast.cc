@@ -39,223 +39,105 @@ using namespace openvdb::points;
 class TestCast : public unittest_util::AXTestCase
 {
 public:
+    std::string dir() const override { return GET_TEST_DIRECTORY(); }
 
     CPPUNIT_TEST_SUITE(TestCast);
-    CPPUNIT_TEST(castDouble);
-    CPPUNIT_TEST(castFloat);
-    CPPUNIT_TEST(castInt);
-    CPPUNIT_TEST(castLong);
-    CPPUNIT_TEST(castShort);
-    CPPUNIT_TEST(castLiteral);
-    CPPUNIT_TEST(castImplicitAssign);
-    CPPUNIT_TEST(castImplicitArithmetic);
-
-    // the following are atlernative versions of the preceding cast tests but which do not
-    // use "short" data since we don't currently support "short" data volumes.  If this is fixed,
-    // these tests should be deprecated.
-    CPPUNIT_TEST(castDoubleVolume);
-    CPPUNIT_TEST(castFloatVolume);
-    CPPUNIT_TEST(castIntVolume);
-    CPPUNIT_TEST(castLongVolume);
-
-
+    CPPUNIT_TEST(explicitScalar);
     CPPUNIT_TEST_SUITE_END();
 
-    void castDouble();
-    void castFloat();
-    void castInt();
-    void castLong();
-    void castShort();
-    void castLiteral();
-    void castImplicitAssign();
-    void castImplicitArithmetic();
-    void castDoubleVolume();
-    void castFloatVolume();
-    void castIntVolume();
-    void castLongVolume();
+    void explicitScalar();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestCast);
 
-void
-TestCast::castDouble()
-{
-    mHarness.testVolumes(false);
-    mHarness.addAttribute<short>("short_test", short(1));
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-    mHarness.addAttribute<double>("double_test2", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castDouble");
-
-    AXTESTS_STANDARD_ASSERT()
-}
 
 void
-TestCast::castFloat()
+TestCast::explicitScalar()
 {
-    mHarness.testVolumes(false);
-    mHarness.addAttribute<short>("short_test", short(1));
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<float>("float_test2", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
+    auto generate = [this](const auto& types) {
+        for (const auto& t1 : types) {
+            std::string code;
+            size_t idx = 1;
+            for (const auto& t2 : types) {
+                if (t1 == t2) continue;
+                std::string tmp = "_T1_@_A1_ = _T1_(_T2_@_A2_);";
+                unittest_util::replace(tmp, "_A1_", "test" +  std::to_string(idx));
+                unittest_util::replace(tmp, "_A2_", "test" +  t2);
+                unittest_util::replace(tmp, "_T1_", t1);
+                unittest_util::replace(tmp, "_T2_", t2);
+                code += tmp + "\n";
+                ++idx;
+            }
 
-    mHarness.executeCode("test/snippets/cast/castFloat");
+            this->registerTest(code, "cast_explicit." + t1 + ".ax");
+        }
+    };
 
-    AXTESTS_STANDARD_ASSERT();
-}
+    generate(std::vector<std::string>{ "bool", "short", "int", "long", "float", "double" });
 
-void
-TestCast::castInt()
-{
-    mHarness.testVolumes(false);
-    mHarness.addAttribute<short>("short_test", short(1));
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int>("int_test2", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
+    const auto names = unittest_util::nameSequence("test", 5);
+    const std::map<std::string, std::function<void()>> expected = {
+        { "bool", [&](){
+             mHarness.addAttribute<int16_t>("testshort", 1, 1);
+             mHarness.addAttribute<int32_t>("testint", 1, 1);
+             mHarness.addAttribute<int64_t>("testlong", 0, 0);
+             mHarness.addAttribute<float>("testfloat", 2.3f, 2.3f);
+             mHarness.addAttribute<double>("testdouble", 0.1, 0.1);
+             mHarness.addAttributes<bool>(names, {true, true, false, true, true});
+            }
+        },
+        { "short", [&](){
+             mHarness.addAttribute<bool>("testbool", true, true);
+             mHarness.addAttribute<int32_t>("testint", 2, 2);
+             mHarness.addAttribute<int64_t>("testlong", 2, 2);
+             mHarness.addAttribute<float>("testfloat", 2.3f, 2.3f);
+             mHarness.addAttribute<double>("testdouble", 2.1, 2.1);
+             mHarness.addAttributes<int16_t>(names, {1, 2, 2, 2, 2});
+            }
+        },
+        { "int", [&](){
+             mHarness.addAttribute<bool>("testbool", true, true);
+             mHarness.addAttribute<int16_t>("testshort", 2, 2);
+             mHarness.addAttribute<int64_t>("testlong", 2, 2);
+             mHarness.addAttribute<float>("testfloat", 2.3f, 2.3f);
+             mHarness.addAttribute<double>("testdouble", 2.1, 2.1);
+             mHarness.addAttributes<int32_t>(names, {1, 2, 2, 2, 2});
+            }
+        },
+        { "long", [&]() {
+             mHarness.addAttribute<bool>("testbool", true, true);
+             mHarness.addAttribute<int16_t>("testshort", 2, 2);
+             mHarness.addAttribute<int32_t>("testint", 2, 2);
+             mHarness.addAttribute<float>("testfloat", 2.3f, 2.3f);
+             mHarness.addAttribute<double>("testdouble", 2.1, 2.1);
+             mHarness.addAttributes<int64_t>(names, {1, 2, 2, 2, 2});
+            }
+        },
+        { "float", [&]() {
+             mHarness.addAttribute<bool>("testbool", true, true);
+             mHarness.addAttribute<int16_t>("testshort", 1, 1);
+             mHarness.addAttribute<int32_t>("testint", 1, 1);
+             mHarness.addAttribute<int64_t>("testlong", 1, 1);
+             mHarness.addAttribute<double>("testdouble", 1.1, 1.1);
+             mHarness.addAttributes<float>(names, {1.0f, 1.0f, 1.0f, 1.0f, float(1.1)});
+            }
+        },
+        { "double", [&]() {
+             mHarness.addAttribute<bool>("testbool", true, true);
+             mHarness.addAttribute<int16_t>("testshort", 1, 1);
+             mHarness.addAttribute<int32_t>("testint", 1, 1);
+             mHarness.addAttribute<int64_t>("testlong", 1, 1);
+             mHarness.addAttribute<float>("testfloat", 1.1f, 1.1f);
+             mHarness.addAttributes<double>(names, {1.0, 1.0, 1.0, 1.0, double(1.1f)});
+            }
+        }
+    };
 
-    mHarness.executeCode("test/snippets/cast/castInt");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castLong()
-{
-    mHarness.testVolumes(false);
-    mHarness.addAttribute<short>("short_test", short(1));
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<int64_t>("long_test2", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castLong");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castShort()
-{
-    mHarness.testVolumes(false);
-    mHarness.addAttribute<short>("short_test", short(1));
-    mHarness.addAttribute<short>("short_test2", short(1));
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castShort");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castLiteral()
-{
-    mHarness.addAttribute<float>("float_test", float(10.0));
-    mHarness.executeCode("test/snippets/cast/castLiteral");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castImplicitAssign()
-{
-    mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 3), {10.0f, 0.0f, 5.2f});
-    mHarness.addAttributes<openvdb::Vec3f>({"vec_float_test1", "vec_float_test2"},
-        {openvdb::Vec3f(1.0f, 1.0f, 1.0f), openvdb::Vec3f(openvdb::Vec3d(1.0, 3.4, 6.0))});
-    mHarness.addAttribute("vec_double_test1", openvdb::Vec3d(openvdb::Vec3i(3, 5, -6)));
-    mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3), {0, 0, 5});
-    mHarness.addAttribute<int64_t>("long_test1", 2147483648l);
-
-    mHarness.executeCode("test/snippets/cast/castImplicitAssign");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castImplicitArithmetic()
-{
-    mHarness.addAttribute<float>("float_test1", 2.5f);
-    mHarness.addAttribute<openvdb::Vec3f>("vec_float_test1", openvdb::Vec3f(5 - 4.2f));
-    mHarness.addAttribute<openvdb::Vec3i>("vec_int_test1", openvdb::Vec3i(10));
-    mHarness.addAttribute<openvdb::Vec3i>("vec_int_test2", openvdb::Vec3i(-1));
-    mHarness.addAttribute<bool>("bool_test", true);
-
-    mHarness.executeCode("test/snippets/cast/castImplicitArithmetic");
-
-   AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castDoubleVolume()
-{
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-    mHarness.addAttribute<double>("double_test2", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castDoubleVolume");
-
-    AXTESTS_STANDARD_ASSERT()
-}
-
-
-void
-TestCast::castFloatVolume()
-{
-    mHarness.testPoints(false);
-
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<float>("float_test2", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castFloatVolume");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castIntVolume()
-{
-    mHarness.testPoints(false);
-
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int>("int_test2", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castIntVolume");
-
-    AXTESTS_STANDARD_ASSERT();
-}
-
-void
-TestCast::castLongVolume()
-{
-    mHarness.testPoints(false);
-
-    mHarness.addAttribute<int>("int_test", int(1));
-    mHarness.addAttribute<int64_t>("long_test", int64_t(1));
-    mHarness.addAttribute<int64_t>("long_test2", int64_t(1));
-    mHarness.addAttribute<float>("float_test", float(1.0f));
-    mHarness.addAttribute<double>("double_test", double(1.0));
-
-    mHarness.executeCode("test/snippets/cast/castLongVolume");
-
-    AXTESTS_STANDARD_ASSERT();
+    for (const auto& expc : expected) {
+        mHarness.reset();
+        expc.second.operator()();
+        this->execute("cast_explicit." + expc.first + ".ax");
+    }
 }
 
 

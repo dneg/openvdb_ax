@@ -236,7 +236,13 @@ Function::cast(std::vector<llvm::Value*>& args,
         llvm::Value*& value = args[i];
         llvm::Type* type = value->getType();
         if (type->isIntegerTy() || type->isFloatingPointTy()) {
-            value = arithmeticConversion(value, types[i], B);
+            if (types[i]->isIntegerTy(1)) {
+                // assume boolean target value
+                value = boolComparison(value, B);
+            }
+            else {
+                value = arithmeticConversion(value, types[i], B);
+            }
         }
         else if (type->getContainedType(0)->isArrayTy()) {
             llvm::Type* arrayType = getBaseContainedType(types[i]);

@@ -46,22 +46,32 @@ namespace {
 static const unittest_util::CodeTests tests =
 {
     { "if ((a));",                                      Node::Ptr(new ConditionalStatement(new Local("a"), new Block())) },
+    { "if ((a,b));",                                    Node::Ptr(new ConditionalStatement(
+                                                            new CommaOperator({
+                                                                new Local("a"),
+                                                                new Local("b")
+                                                            }),
+                                                            new Block()
+                                                        ))
+    },
     { "if (a);",                                        Node::Ptr(new ConditionalStatement(new Local("a"), new Block())) },
     { "if(a);",                                         Node::Ptr(new ConditionalStatement(new Local("a"), new Block())) },
     { "if (@a);",                                       Node::Ptr(new ConditionalStatement(new Attribute("a", CoreType::FLOAT, true), new Block())) },
     { "if (1.0f);",                                     Node::Ptr(new ConditionalStatement(new Value<float>(1.0f), new Block())) },
     { "if (func());",                                   Node::Ptr(new ConditionalStatement(new FunctionCall("func"), new Block())) },
     { "if (a+b);",                                      Node::Ptr(new ConditionalStatement(
-                                                            new BinaryOperator(OperatorToken::PLUS,
+                                                            new BinaryOperator(
                                                                 new Local("a"),
-                                                                new Local("b")
+                                                                new Local("b"),
+                                                                OperatorToken::PLUS
                                                             ),
                                                             new Block())
                                                         )
     },
     { "if (-a);",                                       Node::Ptr(new ConditionalStatement(
-                                                            new UnaryOperator(OperatorToken::MINUS,
-                                                                new Local("a")
+                                                            new UnaryOperator(
+                                                                new Local("a"),
+                                                                OperatorToken::MINUS
                                                             ),
                                                             new Block())
                                                         )
@@ -69,8 +79,7 @@ static const unittest_util::CodeTests tests =
     { "if (a = 1);",                                    Node::Ptr(new ConditionalStatement(
                                                             new AssignExpression(
                                                                 new Local("a"),
-                                                                new Value<int32_t>(1),
-                                                                false
+                                                                new Value<int32_t>(1)
                                                             ),
                                                             new Block())
                                                         )
@@ -101,31 +110,28 @@ static const unittest_util::CodeTests tests =
                                                         )
     },
     { "if ({1.0, 2.0, 3.0});",                          Node::Ptr(new ConditionalStatement(
-                                                            new ArrayPack(
-                                                                new ExpressionList({
-                                                                    new Value<double>(1.0),
-                                                                    new Value<double>(2.0),
-                                                                    new Value<double>(3.0)
-                                                                })
-                                                            ),
+                                                            new ArrayPack({
+                                                                new Value<double>(1.0),
+                                                                new Value<double>(2.0),
+                                                                new Value<double>(3.0)
+                                                            }),
                                                             new Block())
                                                         )
     },
     { "if (a, b);",                                     Node::Ptr(new ConditionalStatement(
-                                                                    new ExpressionList({
+                                                                    new CommaOperator({
                                                                         new Local("a"),
                                                                         new Local("b")
                                                                     }),
                                                                     new Block())) },
     { "if (a, b, true, c = 1);",                        Node::Ptr(new ConditionalStatement(
-                                                                    new ExpressionList({
+                                                                    new CommaOperator({
                                                                         new Local("a"),
                                                                         new Local("b"),
                                                                         new Value<bool>(true),
                                                                         new AssignExpression(
                                                                             new Local("c"),
-                                                                            new Value<int32_t>(1),
-                                                                            false
+                                                                            new Value<int32_t>(1)
                                                                         ),
                                                                     }),
                                                                     new Block())) },
@@ -147,8 +153,7 @@ static const unittest_util::CodeTests tests =
                                                             new Block(
                                                                 new AssignExpression(
                                                                     new Local("b"),
-                                                                    new Value<int32_t>(1),
-                                                                    false
+                                                                    new Value<int32_t>(1)
                                                                 )
                                                             ),
                                                             new Block()))
@@ -158,8 +163,7 @@ static const unittest_util::CodeTests tests =
                                                             new Block(
                                                                 new AssignExpression(
                                                                     new Local("b"),
-                                                                    new Value<int32_t>(1),
-                                                                    false
+                                                                    new Value<int32_t>(1)
                                                                 )
                                                             ),
                                                             new Block()))
@@ -170,6 +174,20 @@ static const unittest_util::CodeTests tests =
                                                             new Block(
                                                                 new ConditionalStatement(
                                                                     new Local("b"),
+                                                                    new Block()
+                                                                )
+                                                            )
+                                                        ))
+    },
+    { "if (a); else if((a,b)) ;",                       Node::Ptr(new ConditionalStatement(
+                                                            new Local("a"),
+                                                            new Block(),
+                                                            new Block(
+                                                                new ConditionalStatement(
+                                                                    new CommaOperator({
+                                                                        new Local("a"),
+                                                                        new Local("b")
+                                                                    }),
                                                                     new Block()
                                                                 )
                                                             )
@@ -249,6 +267,47 @@ static const unittest_util::CodeTests tests =
                                                             )
                                                         ))
     },
+    { "if (a) { a,a; }",                               Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new CommaOperator({ new Local("a"), new Local("a") })
+                                                            )))
+    },
+    { "if (a) { a,a };",                               Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new ArrayPack({ new Local("a"), new Local("a") })
+                                                            )))
+    },
+    { "if (a) { a,a }; else { a,a; }",                  Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new ArrayPack({ new Local("a"), new Local("a") })
+                                                            ),
+                                                            new Block(
+                                                                new CommaOperator({ new Local("a"), new Local("a") })
+                                                            )))
+    },
+    { "if (a) { a,a }; else { a,a };",                  Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new ArrayPack({ new Local("a"), new Local("a") })
+                                                            ),
+                                                            new Block(
+                                                                new ArrayPack({ new Local("a"), new Local("a") })
+                                                            )
+                                                        ))
+    },
+    { "if (a) { { a,a; }  }",                          Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new Block(
+                                                                    new CommaOperator({ new Local("a"), new Local("a") })
+                                                                )
+                                                            )
+                                                        ))
+    },
+    { "if (a) { { a,a };  };",                         Node::Ptr(new ConditionalStatement(new Local("a"),
+                                                            new Block(
+                                                                new ArrayPack({ new Local("a"), new Local("a") })
+                                                            )
+                                                        ))
+    }
 };
 
 }

@@ -46,168 +46,290 @@ namespace {
 static const unittest_util::CodeTests tests =
 {
     { "for (int i = 0; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                            new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                             new Block(),
-                                            new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                            new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for(int i = 0; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                            new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                             new Block(),
-                                            new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                            new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (int i = 0;i < 10;++i) ;", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                        new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                        new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                         new Block(),
-                                        new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                        new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                        new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                        new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (i; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
                                     new Local("i"),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (@i; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
                                     new Attribute("i", CoreType::FLOAT, true),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (!i; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new UnaryOperator(OperatorToken::NOT, new Local("i")),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new UnaryOperator(new Local("i"), OperatorToken::NOT),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (i = 0; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new BinaryOperator(OperatorToken::PLUS, new Local("i"), new Local("j")),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new AssignExpression(new Local("i"), new Value<int32_t>(0)),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (i+j; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new Attribute("i", CoreType::FLOAT, true),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new BinaryOperator(new Local("i"), new Local("j"), OperatorToken::PLUS),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (func(i); i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new FunctionCall("func", new ExpressionList(new Local("i"))),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new FunctionCall("func", new Local("i")),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (1; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new Value<int>(1),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new Value<int32_t>(1),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (float$ext; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
                                     new ExternalVariable("ext", CoreType::FLOAT),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (i++; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
                                     new Crement(new Local("i"), Crement::Operation::Increment, true),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for ({1,2.0,3.0f}; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new ArrayPack(new ExpressionList({new Value<int>(1), new Value<double>(2.0), new Value<float>(3.0f)})),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new ArrayPack({new Value<int32_t>(1), new Value<double>(2.0), new Value<float>(3.0f)}),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
+    { "for (1,2.0,3.0f; (i < 10, i > 10); (++i, --i)) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
+                                    new CommaOperator({
+                                        new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
+                                        new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::MORETHAN)
+                                    }),
+                                    new Block(),
+                                    new CommaOperator({
+                                        new Value<int32_t>(1), new Value<double>(2.0), new Value<float>(3.0f)
+                                    }),
+                                    new CommaOperator({
+                                        new Crement(new Local("i"), Crement::Operation::Increment, false),
+                                        new Crement(new Local("i"), Crement::Operation::Decrement, false),
+                                    })
+                                ))
+    },
     { "for (++i; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                   new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (x[2]; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new ArrayUnpack(new Local("i"), new Value<int>(2)),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new ArrayUnpack(new Local("x"), new Value<int32_t>(2)),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for ((x[2]); i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
-                                    new ArrayUnpack(new Local("i"), new Value<int>(2)),
-                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))},
+                                    new ArrayUnpack(new Local("x"), new Value<int32_t>(2)),
+                                    new Crement(new Local("i"), Crement::Operation::Increment, false)))
+    },
     { "for (; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                     new Block(),
                                     nullptr,
-                                    new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                    new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (int i = 0; i < 10; ++i, ++j) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                                new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                                new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                                 new Block(),
-                                                new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                                new ExpressionList({new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false),
-                                                                    new Crement(new Local("j"), Crement::Operation::Increment, /*post*/false)})))},
+                                                new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                                new CommaOperator({
+                                                    new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false),
+                                                    new Crement(new Local("j"), Crement::Operation::Increment, /*post*/false)
+                                                })))
+    },
     { "for (i = 0; i < 10; ++i, ++j) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                            new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                             new Block(),
-                                            new AssignExpression(new Local("i"), new Value<int32_t>(0), false),
-                                            new ExpressionList({new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false),
-                                                                new Crement(new Local("j"), Crement::Operation::Increment, /*post*/false)})))},
+                                            new AssignExpression(new Local("i"), new Value<int32_t>(0)),
+                                            new CommaOperator({
+                                                new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false),
+                                                new Crement(new Local("j"), Crement::Operation::Increment, /*post*/false)
+                                            })))
+    },
     { "for (int i = 0; i; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
                                         new Local("i"),
                                         new Block(),
-                                        new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                        new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                        new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                        new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (int i = 0; func(i); ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new FunctionCall("func", new ExpressionList(new Local("i"))),
+                                            new FunctionCall("func", new Local("i")),
                                             new Block(),
-                                            new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                            new ExpressionList(new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false))))},
+                                            new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (int i = 0; int j = func(i); ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new AssignExpression(new DeclareLocal("j", CoreType::INT),
-                                                                 new FunctionCall("func", new ExpressionList(new Local("i"))), false),
+                                            new DeclareLocal(CoreType::INT, new Local("j"),new FunctionCall("func", new Local("i"))),
                                             new Block(),
-                                            new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                            new ExpressionList(new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false))))},
+                                            new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (; i < 10;) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
-                                new Block()))},
+                                new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
+                                new Block()))
+    },
     { "for (;;) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
                         new Value<bool>(true),
-                        new Block()))},
+                        new Block()))
+    },
+    { "for (;;) { 1,2,3 };", Node::Ptr(new Loop(tokens::LoopToken::FOR,
+                                new Value<bool>(true),
+                                new Block(new ArrayPack({
+                                    new Value<int32_t>(1),
+                                    new Value<int32_t>(2),
+                                    new Value<int32_t>(3)
+                                }))))
+    },
+    { "for (;;) { 1,2,3; }", Node::Ptr(new Loop(tokens::LoopToken::FOR,
+                                new Value<bool>(true),
+                                new Block(new CommaOperator({
+                                    new Value<int32_t>(1),
+                                    new Value<int32_t>(2),
+                                    new Value<int32_t>(3)
+                                }))))
+    },
     { "for (int i = 0, j = 0, k; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                                    new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
+                                                    new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
                                                     new Block(),
-                                                    new StatementList({new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                                                       new AssignExpression(new DeclareLocal("j", CoreType::INT), new Value<int32_t>(0), false),
-                                                                       new DeclareLocal("k", CoreType::INT)}),
-                                                    new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
-    { "for (i = 0, j = 0; i < 10; ++i) {}",         Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
-                                            new Block(),
-                                            new ExpressionList({new AssignExpression(new Local("i"), new Value<int32_t>(0), false),
-                                                                new AssignExpression(new Local("j"), new Value<int32_t>(0), false)}),
-                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                                    new StatementList({new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                                                       new DeclareLocal(CoreType::INT, new Local("j"), new Value<int32_t>(0)),
+                                                                       new DeclareLocal( CoreType::INT, new Local("k"))}),
+                                                    new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (i = 0, j = 0; i < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
-                                            new Block(),
-                                            new ExpressionList({new AssignExpression(new Local("i"), new Value<int32_t>(0), false),
-                                                                new AssignExpression(new Local("j"), new Value<int32_t>(0), false)}),
-                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                                new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
+                                                new Block(),
+                                                new CommaOperator({
+                                                    new AssignExpression(new Local("i"), new Value<int32_t>(0)),
+                                                    new AssignExpression(new Local("j"), new Value<int32_t>(0))
+                                                }),
+                                                new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "for (int i = 0; i < 10, j < 10; ++i) {}", Node::Ptr(new Loop(tokens::LoopToken::FOR,
-                                            new ExpressionList({new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10)),
-                                                               new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(10))}),
-                                            new Block(),
-                                            new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                            new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))},
+                                                    new CommaOperator({
+                                                        new BinaryOperator(new Local("i"), new Value<int32_t>(10), OperatorToken::LESSTHAN),
+                                                        new BinaryOperator(new Local("j"), new Value<int32_t>(10), OperatorToken::LESSTHAN)
+                                                    }),
+                                                    new Block(),
+                                                    new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                                    new Crement(new Local("i"), Crement::Operation::Increment, /*post*/false)))
+    },
     { "while (int i = 0) {}", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
-                                new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                new Block()))},
+                                new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                new Block()))
+    },
     { "while (i = 0) {}", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
-                            new AssignExpression(new Local("i"), new Value<int32_t>(0), false),
-                            new Block()))},
+                            new AssignExpression(new Local("i"), new Value<int32_t>(0)),
+                            new Block()))
+    },
+    { "while ((a,b,c)) {}", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
+                                new CommaOperator({
+                                    new Local("a"),
+                                    new Local("b"),
+                                    new Local("c")
+                                }),
+                                new Block()))
+    },
     { "while (i < 0, j = 10) ;", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
-                                    new ExpressionList({new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(0)),
-                                                        new AssignExpression(new Local("j"), new Value<int32_t>(10), false)}),
-                                    new Block()))},
+                                    new CommaOperator({
+                                        new BinaryOperator(new Local("i"), new Value<int32_t>(0), OperatorToken::LESSTHAN),
+                                        new AssignExpression(new Local("j"), new Value<int32_t>(10))
+                                    }),
+                                    new Block()))
+    },
+    { "while (i) { 1,2,3 };", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
+                                    new Local("i"),
+                                        new Block(new ArrayPack({
+                                            new Value<int32_t>(1),
+                                            new Value<int32_t>(2),
+                                            new Value<int32_t>(3)
+                                        }))))
+    },
+    { "while (i) { 1,2,3; }", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
+                                    new Local("i"),
+                                        new Block(new CommaOperator({
+                                            new Value<int32_t>(1),
+                                            new Value<int32_t>(2),
+                                            new Value<int32_t>(3)
+                                        }))))
+    },
     { "do {} while (i < 0, j = 10)", Node::Ptr(new Loop(tokens::LoopToken::DO,
-                                        new ExpressionList({new BinaryOperator(OperatorToken::LESSTHAN, new Local("i"), new Value<int32_t>(0)),
-                                                            new AssignExpression(new Local("j"), new Value<int32_t>(10), false)}),
-                                        new Block()))},
-    { "do ; while (int i = 0) {}", Node::Ptr(new Loop(tokens::LoopToken::DO,
-                                    new AssignExpression(new DeclareLocal("i", CoreType::INT), new Value<int32_t>(0), false),
-                                    new Block()))},
-    { "do {} while (i = 0) j++;", Node::Ptr(new Loop(tokens::LoopToken::WHILE,
-                                    new AssignExpression(new Local("i"), new Value<int32_t>(0), false),
-                                    new Block(new Crement(new Local("j"), Crement::Operation::Increment, /*post*/true))))},
+                                        new CommaOperator({
+                                            new BinaryOperator(new Local("i"), new Value<int32_t>(0), OperatorToken::LESSTHAN),
+                                            new AssignExpression(new Local("j"), new Value<int32_t>(10))
+                                        }),
+                                        new Block()))
+    },
+    { "do ; while (int i = 0)", Node::Ptr(new Loop(tokens::LoopToken::DO,
+                                    new DeclareLocal(CoreType::INT, new Local("i"), new Value<int32_t>(0)),
+                                    new Block()))
+    },
+    { "do ; while ((a,b,c))", Node::Ptr(new Loop(tokens::LoopToken::DO,
+                                       new CommaOperator({
+                                           new Local("a"),
+                                           new Local("b"),
+                                           new Local("c")
+                                       }),
+                                       new Block()))
+    },
+    { "do ; while (a,b,c)", Node::Ptr(new Loop(tokens::LoopToken::DO,
+                                       new CommaOperator({
+                                           new Local("a"),
+                                           new Local("b"),
+                                           new Local("c")
+                                       }),
+                                       new Block()))
+    },
+    { "do { 1,2,3 }; while (i) ", Node::Ptr(new Loop(tokens::LoopToken::DO,
+                                    new Local("i"),
+                                        new Block(new ArrayPack({
+                                            new Value<int32_t>(1),
+                                            new Value<int32_t>(2),
+                                            new Value<int32_t>(3)
+                                        }))))
+    },
+    { "do { 1,2,3; } while (i) ", Node::Ptr(new Loop(tokens::LoopToken::DO,
+                                    new Local("i"),
+                                        new Block(new CommaOperator({
+                                            new Value<int32_t>(1),
+                                            new Value<int32_t>(2),
+                                            new Value<int32_t>(3)
+                                        }))))
+    }
 };
 
 }
@@ -253,7 +375,6 @@ void TestLoopNode::testASTNode()
             openvdb::ax::ast::print(*result, true, os);
             CPPUNIT_FAIL(ERROR_MSG("Mismatching Trees for Loop code", code) + os.str());
         }
-        break;
     }
 }
 

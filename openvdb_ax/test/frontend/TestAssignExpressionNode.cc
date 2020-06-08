@@ -46,167 +46,130 @@ namespace {
 unittest_util::CodeTests tests =
 {
     // test an attribute type passes for all expression types
-    { "@a = (true);",       Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Value<bool>(true), false)) },
-    { "@a = test();",       Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new FunctionCall("test"), false)) },
+    { "@a = (true);",       Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Value<bool>(true))) },
+    { "@a = (1,2,3);",      Node::Ptr(new AssignExpression(
+                                new Attribute("a", CoreType::FLOAT, true),
+                                new CommaOperator({
+                                    new Value<int32_t>(1),
+                                    new Value<int32_t>(2),
+                                    new Value<int32_t>(3),
+                                })
+                            ))
+    },
+    { "@a = test();",       Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new FunctionCall("test"))) },
     { "@a = 1 + i@b;",      Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(OperatorToken::PLUS, new Value<int32_t>(1), new Attribute("b", CoreType::INT)),
-                                false
+                                new BinaryOperator(new Value<int32_t>(1), new Attribute("b", CoreType::INT), OperatorToken::PLUS)
                             ))
     },
     { "@a = -int@b;",       Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new UnaryOperator(OperatorToken::MINUS, new Attribute("b", CoreType::INT)),
-                                false
+                                new UnaryOperator(new Attribute("b", CoreType::INT), OperatorToken::MINUS)
                             ))
     },
     { "@a = ++float@b;",    Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new Crement(new Attribute("b", CoreType::FLOAT), Crement::Operation::Increment, false),
-                                false
+                                new Crement(new Attribute("b", CoreType::FLOAT), Crement::Operation::Increment, false)
                             ))
     },
     { "@a = bool(2);",      Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new Cast(new Value<int32_t>(2), CoreType::BOOL),
-                                false
+                                new Cast(new Value<int32_t>(2), CoreType::BOOL)
                             ))
     },
     { "@a = {1, 2, 3};",    Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new ArrayPack(new ExpressionList({
+                                new ArrayPack({
                                     new Value<int32_t>(1),
                                     new Value<int32_t>(2),
                                     new Value<int32_t>(3)
-                                })),
-                                false
+                                })
                             ))
     },
     { "@a = v@b.x;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new ArrayUnpack(new Attribute("b", CoreType::VEC3F), new Value<int32_t>(0)),
-                                false
+                                new ArrayUnpack(new Attribute("b", CoreType::VEC3F), new Value<int32_t>(0))
                             ))
     },
-    { "@a = 1s;",           Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Value<int16_t>(1), false)) },
-    { "@a = \"b\";",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Value<std::string>("b"), false)) },
-    { "@a = b;",            Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Local("b"), false)) },
+    { "@a = 1s;",           Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Value<int16_t>(1))) },
+    { "@a = \"b\";",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Value<std::string>("b"))) },
+    { "@a = b;",            Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT, true), new Local("b"))) },
 
     // test all attribute
-    { "bool@a = true;",     Node::Ptr(new AssignExpression(new Attribute("a", CoreType::BOOL), new Value<bool>(true), false)) },
-    { "short@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::SHORT), new Value<bool>(true), false)) },
-    { "i@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::INT), new Value<bool>(true), false)) },
-    { "int@a = true;",      Node::Ptr(new AssignExpression(new Attribute("a", CoreType::INT), new Value<bool>(true), false)) },
-    { "long@a = true;",     Node::Ptr(new AssignExpression(new Attribute("a", CoreType::LONG), new Value<bool>(true), false)) },
-    { "f@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT), new Value<bool>(true), false)) },
-    { "float@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT), new Value<bool>(true), false)) },
-    { "double@a = true;",   Node::Ptr(new AssignExpression(new Attribute("a", CoreType::DOUBLE), new Value<bool>(true), false)) },
-    { "vec3i@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3I), new Value<bool>(true), false)) },
-    { "v@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3F), new Value<bool>(true), false)) },
-    { "vec3f@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3F), new Value<bool>(true), false)) },
-    { "vec3d@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3D), new Value<bool>(true), false)) },
-    { "s@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::STRING), new Value<bool>(true), false)) },
-    { "string@a = true;",   Node::Ptr(new AssignExpression(new Attribute("a", CoreType::STRING), new Value<bool>(true), false)) },
+    { "bool@a = true;",     Node::Ptr(new AssignExpression(new Attribute("a", CoreType::BOOL), new Value<bool>(true))) },
+    { "short@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::SHORT), new Value<bool>(true))) },
+    { "i@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::INT), new Value<bool>(true))) },
+    { "int@a = true;",      Node::Ptr(new AssignExpression(new Attribute("a", CoreType::INT), new Value<bool>(true))) },
+    { "long@a = true;",     Node::Ptr(new AssignExpression(new Attribute("a", CoreType::LONG), new Value<bool>(true))) },
+    { "f@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT), new Value<bool>(true))) },
+    { "float@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::FLOAT), new Value<bool>(true))) },
+    { "double@a = true;",   Node::Ptr(new AssignExpression(new Attribute("a", CoreType::DOUBLE), new Value<bool>(true))) },
+    { "vec3i@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3I), new Value<bool>(true))) },
+    { "v@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3F), new Value<bool>(true))) },
+    { "vec3f@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3F), new Value<bool>(true))) },
+    { "vec3d@a = true;",    Node::Ptr(new AssignExpression(new Attribute("a", CoreType::VEC3D), new Value<bool>(true))) },
+    { "s@a = true;",        Node::Ptr(new AssignExpression(new Attribute("a", CoreType::STRING), new Value<bool>(true))) },
+    { "string@a = true;",   Node::Ptr(new AssignExpression(new Attribute("a", CoreType::STRING), new Value<bool>(true))) },
 
     // compound assignments (operation is stored implicitly)
     { "@a += true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::PLUS,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::PLUS
                             ))
     },
     { "@a -= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::MINUS,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::MINUS
                             ))
     },
     { "@a *= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::MULTIPLY,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::MULTIPLY
                             ))
     },
     { "@a /= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::DIVIDE,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::DIVIDE
                             ))
     },
     { "@a &= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::BITAND,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                    new Value<bool>(true),
+                                    OperatorToken::BITAND
                             ))
     },
     { "@a |= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::BITOR,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                    new Value<bool>(true),
+                                    OperatorToken::BITOR
                             ))
     },
     { "@a ^= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::BITXOR,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::BITXOR
                             ))
     },
     { "@a %= true;",        Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::MODULO,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::MODULO
                             ))
     },
     { "@a <<= true;",       Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::SHIFTLEFT,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::SHIFTLEFT
                             ))
     },
     { "@a >>= true;",       Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::SHIFTRIGHT,
-                                    new Attribute("a", CoreType::FLOAT, true),
-                                    new Value<bool>(true)
-                                ),
-                                true
+                                new Value<bool>(true),
+                                OperatorToken::SHIFTRIGHT
                             ))
     },
 
@@ -215,51 +178,43 @@ unittest_util::CodeTests tests =
                                     new ArrayUnpack(
                                         new Attribute("a", CoreType::VEC3I), new Value<int32_t>(0)
                                     ),
-                                    new Value<bool>(true), false
+                                    new Value<bool>(true)
                                 ))
     },
     { "vec3i@a[1] = true;",     Node::Ptr(new AssignExpression(
                                     new ArrayUnpack(
                                         new Attribute("a", CoreType::VEC3I), new Value<int32_t>(1)
                                     ),
-                                    new Value<bool>(true), false
+                                    new Value<bool>(true)
                                 ))
     },
     { "vec3i@a.b = true;",      Node::Ptr(new AssignExpression(
                                     new ArrayUnpack(
                                         new Attribute("a", CoreType::VEC3I), new Value<int32_t>(2)
                                     ),
-                                    new Value<bool>(true), false
+                                    new Value<bool>(true)
                                 ))
     },
     { "vec3i@a.x += true;",     Node::Ptr(new AssignExpression(
                                     new ArrayUnpack(
                                         new Attribute("a", CoreType::VEC3I), new Value<int32_t>(0)
                                     ),
-                                    new BinaryOperator(
-                                        OperatorToken::PLUS,
-                                        new ArrayUnpack(
-                                           new Attribute("a", CoreType::VEC3I), new Value<int32_t>(0)
-                                        ),
-                                        new Value<bool>(true)
-                                    ),
-                                    true
+                                    new Value<bool>(true),
+                                    OperatorToken::PLUS
                                 ))
     },
 
     // test other lhs
-    { "a = true;",      Node::Ptr(new AssignExpression(new Local("a"), new Value<bool>(true), false)) },
+    { "a = true;",      Node::Ptr(new AssignExpression(new Local("a"), new Value<bool>(true))) },
     { "++a = true;",    Node::Ptr(new AssignExpression(
                             new Crement(new Local("a"), Crement::Operation::Increment, false),
-                            new Value<bool>(true),
-                            false
+                            new Value<bool>(true)
                         ))
     },
 
     { "++@a = true;",   Node::Ptr(new AssignExpression(
                             new Crement(new Attribute("a", CoreType::FLOAT, true), Crement::Operation::Increment, false),
-                            new Value<bool>(true),
-                            false
+                            new Value<bool>(true)
                         ))
     },
 
@@ -268,46 +223,29 @@ unittest_util::CodeTests tests =
                             new Attribute("a", CoreType::FLOAT, true),
                             new AssignExpression(
                                 new Attribute("b", CoreType::FLOAT, true),
-                                new BinaryOperator(
-                                    OperatorToken::PLUS,
-                                    new Attribute("b", CoreType::FLOAT, true),
-                                    new Value<int32_t>(1)
-                                ),
-                                true
-                            ),
-                            false
+                                new Value<int32_t>(1),
+                                OperatorToken::PLUS)
                         ))
     },
     { "@a = v@b.x = 1;",    Node::Ptr(new AssignExpression(
                                 new Attribute("a", CoreType::FLOAT, true),
                                 new AssignExpression(
                                     new ArrayUnpack(new Attribute("b", CoreType::VEC3F), new Value<int32_t>(0)),
-                                    new Value<int32_t>(1),
-                                    false
-                                ),
-                                false
+                                    new Value<int32_t>(1)
+                                )
                             ))
     },
     { "@a += v@b.x = x %= 1;",  Node::Ptr(new AssignExpression(
                                     new Attribute("a", CoreType::FLOAT, true),
-                                    new BinaryOperator(
-                                        OperatorToken::PLUS,
-                                        new Attribute("a", CoreType::FLOAT, true),
+                                    new AssignExpression(
+                                        new ArrayUnpack(new Attribute("b", CoreType::VEC3F), new Value<int32_t>(0)),
                                         new AssignExpression(
-                                            new ArrayUnpack(new Attribute("b", CoreType::VEC3F), new Value<int32_t>(0)),
-                                            new AssignExpression(
-                                                new Local("x"),
-                                                new BinaryOperator(
-                                                    OperatorToken::MODULO,
-                                                    new Local("x"),
-                                                    new Value<int32_t>(1)
-                                                ),
-                                                true
-                                            ),
-                                            false
+                                            new Local("x"),
+                                            new Value<int32_t>(1),
+                                            OperatorToken::MODULO
                                         )
                                     ),
-                                    true
+                                    OperatorToken::PLUS
                                 ))
     }
 };

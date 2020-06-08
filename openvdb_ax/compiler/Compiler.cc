@@ -763,8 +763,10 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
 
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
     std::unique_ptr<llvm::TargetMachine> TM = initializeTargetMachine();
-    module->setDataLayout(TM->createDataLayout());
-    module->setTargetTriple(TM->getTargetTriple().normalize());
+    if (TM) {
+        module->setDataLayout(TM->createDataLayout());
+        module->setTargetTriple(TM->getTargetTriple().normalize());
+    }
 
     codegen::PointComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,
@@ -848,8 +850,10 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
     std::unique_ptr<llvm::TargetMachine> TM = initializeTargetMachine();
-    module->setDataLayout(TM->createDataLayout());
-    module->setTargetTriple(TM->getTargetTriple().normalize());
+    if (TM) {
+        module->setDataLayout(TM->createDataLayout());
+        module->setTargetTriple(TM->getTargetTriple().normalize());
+    }
 
     codegen::VolumeComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,

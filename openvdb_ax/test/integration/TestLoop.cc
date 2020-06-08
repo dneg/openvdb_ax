@@ -55,15 +55,12 @@ CPPUNIT_TEST_SUITE_REGISTRATION(TestLoop);
 void
 TestLoop::testLoopForLoop()
 {
-    mHarness.testVolumes(false);
-
     mHarness.addAttribute<openvdb::Vec3f>("loop_test1",  openvdb::Vec3f(1.0,2.0,3.0));
     mHarness.addAttribute<openvdb::Vec3f>("loop_test2",  openvdb::Vec3f(1.0,2.0,3.0));
     mHarness.addAttribute<openvdb::Vec3f>("loop_test3",  openvdb::Vec3f(1.0,2.0,3.0));
     mHarness.addAttribute<openvdb::Vec3f>("loop_test15", openvdb::Vec3f(0.0,0.0,0.0));
-    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test18", openvdb::math::Mat3s(1.0,2.0,3.0,
-                                                                                    4.0,5.0,6.0,
-                                                                                    7.0,8.0,9.0));
+    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test18",
+        openvdb::math::Mat3s(1.0,2.0,3.0, 4.0,5.0,6.0, 7.0,8.0,9.0));
     mHarness.addAttribute<int>("loop_test22", 3);
     mHarness.addAttribute<int>("loop_test23", 4);
     mHarness.addAttribute<int>("loop_test25", 1);
@@ -106,8 +103,8 @@ TestLoop::testLoopOverflow()
     // to avoid stack overflow
     openvdb::ax::CompilerOptions opts;
     opts.mOptLevel = openvdb::ax::CompilerOptions::OptLevel::NONE;
-    mHarness.executeCode("test/snippets/loop/loopOverflow",
-        nullptr, nullptr, nullptr, opts);
+    mHarness.mOpts = opts;
+    mHarness.executeCode("test/snippets/loop/loopOverflow");
 }
 
 // Copyright (c) 2015-2020 DNEG

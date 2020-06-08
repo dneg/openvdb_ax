@@ -45,102 +45,98 @@ namespace {
 
 static const unittest_util::CodeTests tests =
 {
-    { "{1s, 2, {1,2,3}};",              Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Value<int16_t>(1),
-                                                new Value<int32_t>(2),
-                                                new ArrayPack(new ExpressionList({
-                                                    new Value<int32_t>(1),
-                                                    new Value<int32_t>(2),
-                                                    new Value<int32_t>(3)
-                                                }))
-                                            })))
-    },
-    {  "{1.f,2.0,3l};" ,                Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Value<float>(1.0f),
-                                                new Value<double>(2.0),
-                                                new Value<int64_t>(3)
-                                            })))
-    },
-    { "{{a,b,c}, {d,e,f}, {g,h,i}};",   Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new ArrayPack(new ExpressionList({
-                                                    new Local("a"),
-                                                    new Local("b"),
-                                                    new Local("c")
-                                                })),
-                                                new ArrayPack(new ExpressionList({
-                                                    new Local("d"),
-                                                    new Local("e"),
-                                                    new Local("f")
-                                                })),
-                                                new ArrayPack(new ExpressionList({
-                                                    new Local("g"),
-                                                    new Local("h"),
-                                                    new Local("i")
-                                                }))
-                                            })))
-    },
-    { "{(a),b+1,-c};",                  Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Local("a"),
-                                                new BinaryOperator(OperatorToken::PLUS, new Local("b"), new Value<int32_t>(1)),
-                                                new UnaryOperator(OperatorToken::MINUS, new Local("c"))
-                                            })))
-    },
-    { "{@x,++z,true};",                 Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Attribute("x", CoreType::FLOAT, true),
-                                                new Crement(new Local("z"), Crement::Operation::Increment, false),
-                                                new Value<bool>(true)
-                                            })))
-    },
-    { "{@x,z++,\"bar\"};",              Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Attribute("x", CoreType::FLOAT, true),
-                                                new Crement(new Local("z"), Crement::Operation::Increment, true),
-                                                new Value<std::string>("bar")
-                                            })))
-    },
-    { "{float(x),b=c,c.z};",            Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Cast(new Local("x"), CoreType::FLOAT),
-                                                new AssignExpression(new Local("b"), new Local("c"), false),
-                                                new ArrayUnpack(new Local("c"), new Value<int32_t>(2))
-                                            })))
-    },
-    { "{test(),a[0],b[1,2]};",          Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new FunctionCall("test"),
-                                                new ArrayUnpack(new Local("a"), new Value<int32_t>(0)),
-                                                new ArrayUnpack(new Local("b"), new Value<int32_t>(1), new Value<int32_t>(2))
-                                            })))
-    },
-    { "({1,2,3});",                     Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
+    { "{1s, 2, {1,2,3}};",              Node::Ptr(new ArrayPack({
+                                            new Value<int16_t>(1),
+                                            new Value<int32_t>(2),
+                                            new ArrayPack({
                                                 new Value<int32_t>(1),
                                                 new Value<int32_t>(2),
                                                 new Value<int32_t>(3)
-                                            })))
+                                            })
+                                        }))
     },
-    { "{1,2,3,4,5,6,7,8,9};",           Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Value<int32_t>(1), new Value<int32_t>(2), new Value<int32_t>(3),
-                                                new Value<int32_t>(4), new Value<int32_t>(5), new Value<int32_t>(6),
-                                                new Value<int32_t>(7), new Value<int32_t>(8), new Value<int32_t>(9)
-                                            })))
+    {  "{1.f,2.0,3l};" ,                Node::Ptr(new ArrayPack({
+                                            new Value<float>(1.0f),
+                                            new Value<double>(2.0),
+                                            new Value<int64_t>(3)
+                                        }))
+    },
+    {  "({1.f,2.0,3l});" ,              Node::Ptr(new ArrayPack({
+                                            new Value<float>(1.0f),
+                                            new Value<double>(2.0),
+                                            new Value<int64_t>(3)
+                                        }))
+    },
+    { "{{a,b,c}, {d,e,f}, {g,h,i}};",   Node::Ptr(new ArrayPack({
+                                            new ArrayPack({
+                                                new Local("a"),
+                                                new Local("b"),
+                                                new Local("c")
+                                            }),
+                                            new ArrayPack({
+                                                new Local("d"),
+                                                new Local("e"),
+                                                new Local("f")
+                                            }),
+                                            new ArrayPack({
+                                                new Local("g"),
+                                                new Local("h"),
+                                                new Local("i")
+                                            })
+                                        }))
+    },
+    { "{(a),b+1,-c};",                  Node::Ptr(new ArrayPack({
+                                            new Local("a"),
+                                            new BinaryOperator(new Local("b"), new Value<int32_t>(1), OperatorToken::PLUS),
+                                            new UnaryOperator(new Local("c"), OperatorToken::MINUS)
+                                        }))
+    },
+    { "{@x,++z,true};",                 Node::Ptr(new ArrayPack({
+                                            new Attribute("x", CoreType::FLOAT, true),
+                                            new Crement(new Local("z"), Crement::Operation::Increment, false),
+                                            new Value<bool>(true)
+                                        }))
+},
+    { "{@x,z++,\"bar\"};",              Node::Ptr(new ArrayPack({
+                                            new Attribute("x", CoreType::FLOAT, true),
+                                            new Crement(new Local("z"), Crement::Operation::Increment, true),
+                                            new Value<std::string>("bar")
+                                        }))
+    },
+    { "{float(x),b=c,c.z};",            Node::Ptr(new ArrayPack({
+                                            new Cast(new Local("x"), CoreType::FLOAT),
+                                            new AssignExpression(new Local("b"), new Local("c")),
+                                            new ArrayUnpack(new Local("c"), new Value<int32_t>(2))
+                                        }))
+    },
+    { "{test(),a[0],b[1,2]};",          Node::Ptr(new ArrayPack({
+                                            new FunctionCall("test"),
+                                            new ArrayUnpack(new Local("a"), new Value<int32_t>(0)),
+                                            new ArrayUnpack(new Local("b"), new Value<int32_t>(1), new Value<int32_t>(2))
+                                        }))
+    },
+    { "{(1), (1,2), (1,2,(3))};",       Node::Ptr(new ArrayPack({
+                                            new Value<int32_t>(1),
+                                            new CommaOperator({ new Value<int32_t>(1), new Value<int32_t>(2) }),
+                                            new CommaOperator({ new Value<int32_t>(1), new Value<int32_t>(2), new Value<int32_t>(3)
+                                            })
+                                        }))
+    },
+    { "{1,2,3,4,5,6,7,8,9};",           Node::Ptr(new ArrayPack({
+                                            new Value<int32_t>(1), new Value<int32_t>(2), new Value<int32_t>(3),
+                                            new Value<int32_t>(4), new Value<int32_t>(5), new Value<int32_t>(6),
+                                            new Value<int32_t>(7), new Value<int32_t>(8), new Value<int32_t>(9)
+                                        }))
     },
     { "{  1, 2, 3, 4,  \
           5, 6, 7, 8,  \
           9,10,11,12,  \
-         13,14,15,16 };",               Node::Ptr(new ArrayPack(
-                                            new ExpressionList({
-                                                new Value<int32_t>(1),  new Value<int32_t>(2),  new Value<int32_t>(3),  new Value<int32_t>(4),
-                                                new Value<int32_t>(5),  new Value<int32_t>(6),  new Value<int32_t>(7),  new Value<int32_t>(8),
-                                                new Value<int32_t>(9),  new Value<int32_t>(10), new Value<int32_t>(11), new Value<int32_t>(12),
-                                                new Value<int32_t>(13), new Value<int32_t>(14), new Value<int32_t>(15), new Value<int32_t>(16)
-                                            })))
+         13,14,15,16 };",               Node::Ptr(new ArrayPack({
+                                            new Value<int32_t>(1),  new Value<int32_t>(2),  new Value<int32_t>(3),  new Value<int32_t>(4),
+                                            new Value<int32_t>(5),  new Value<int32_t>(6),  new Value<int32_t>(7),  new Value<int32_t>(8),
+                                            new Value<int32_t>(9),  new Value<int32_t>(10), new Value<int32_t>(11), new Value<int32_t>(12),
+                                            new Value<int32_t>(13), new Value<int32_t>(14), new Value<int32_t>(15), new Value<int32_t>(16)
+                                        }))
     },
 };
 

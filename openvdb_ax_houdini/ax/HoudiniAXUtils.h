@@ -135,12 +135,11 @@ struct FindChannelExpressions :
     ~FindChannelExpressions() = default;
 
     static const std::string*
-    getChannelPath(const openvdb::ax::ast::ExpressionList* args)
+    getChannelPath(const openvdb::ax::ast::FunctionCall& call)
     {
-        assert(args);
-        if (args->empty()) return nullptr; // avoid dync if nullptr
+        if (call.empty()) return nullptr; // avoid dync if nullptr
         const openvdb::ax::ast::Value<std::string>* const path =
-            dynamic_cast<const openvdb::ax::ast::Value<std::string>*>(args->child(0));
+            dynamic_cast<const openvdb::ax::ast::Value<std::string>*>(call.child(0));
         if (!path) return nullptr;
         return &(path->value());
     }
@@ -172,7 +171,7 @@ struct FindChannelExpressions :
         // the compiler code generation function error system to report proper
         // errors later
 
-        const std::string* path = getChannelPath(node->args());
+        const std::string* path = getChannelPath(*node);
         if (path) mExpressions.emplace(type, *path);
 
         return true;
@@ -238,9 +237,11 @@ struct ConvertFromVEX :
         else if (name == "chs") identifier = "externals";
         else return true;
 
-        openvdb::ax::ast::ExpressionList::UniquePtr args(node->args()->copy());
         openvdb::ax::ast::FunctionCall::UniquePtr
-            replacement(new openvdb::ax::ast::FunctionCall(identifier, args.release()));
+            replacement(new openvdb::ax::ast::FunctionCall(identifier));
+        for (size_t i = 0; i < node->children(); ++i) {
+            replacement->append(node->child(i)->copy());
+        }
 
         if (!node->replace(replacement.get())) {
             throw std::runtime_error("Unable to convert AX snippet to VEX. Function \"" +
@@ -336,7 +337,7 @@ struct ConvertKnownExternalLookups :
         else return true;
 
         const std::string* path =
-            FindChannelExpressions::getChannelPath(node->args());
+            FindChannelExpressions::getChannelPath(*node);
 
         // If for any reason we couldn't validate or get the channel path from the
         // first argument, fall back to the internal lookup functions. These will

@@ -47,261 +47,273 @@ static const unittest_util::CodeTests tests =
 {
     { "a + b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "a - b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MINUS,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::MINUS
                                     )
                                 )
     },
     { "a * b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MULTIPLY,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::MULTIPLY
                                     )
                                 )
     },
     { "a / b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::DIVIDE,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::DIVIDE
                                     )
                                 )
     },
     { "a % b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MODULO,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::MODULO
                                     )
                                 )
     },
     { "a << b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::SHIFTLEFT,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::SHIFTLEFT
                                     )
                                 )
     },
     { "a >> b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::SHIFTRIGHT,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::SHIFTRIGHT
                                     )
                                 )
     },
     { "a & b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::BITAND,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::BITAND
                                     )
                                 )
     },
     { "a | b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::BITOR,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::BITOR
                                     )
                                 )
     },
     { "a ^ b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::BITXOR,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::BITXOR
                                     )
                                 )
     },
     { "a && b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::AND,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::AND
                                     )
                                 )
     },
     { "a || b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::OR,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::OR
                                     )
                                 )
     },
     { "a == b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::EQUALSEQUALS,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::EQUALSEQUALS
                                     )
                                 )
     },
     { "a != b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::NOTEQUALS,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::NOTEQUALS
                                     )
                                 )
     },
     { "a > b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MORETHAN,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::MORETHAN
                                     )
                                 )
     },
     { "a < b;",                 Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::LESSTHAN,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::LESSTHAN
                                     )
                                 )
     },
     { "a >= b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MORETHANOREQUAL,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::MORETHANOREQUAL
                                     )
                                 )
     },
     { "a <= b;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::LESSTHANOREQUAL,
                                         new Local("a"),
-                                        new Local("b")
+                                        new Local("b"),
+                                        OperatorToken::LESSTHANOREQUAL
                                     )
                                 )
     },
     { "(a) + (a);",             Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Local("a"),
-                                        new Local("a")
+                                        new Local("a"),
+                                        OperatorToken::PLUS
+                                    )
+                                )
+    },
+    { "(a,b,c) + (d,e,f);",     Node::Ptr(
+                                    new BinaryOperator(
+                                        new CommaOperator({
+                                            new Local("a"), new Local("b"), new Local("c")
+                                        }),
+                                        new CommaOperator({
+                                            new Local("d"), new Local("e"), new Local("f")
+                                        }),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "func1() + func2();",      Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new FunctionCall("func1"),
-                                        new FunctionCall("func2")
+                                        new FunctionCall("func2"),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "a + b - c;",             Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MINUS,
                                         new BinaryOperator(
-                                            OperatorToken::PLUS,
                                             new Local("a"),
-                                            new Local("b")
+                                            new Local("b"),
+                                            OperatorToken::PLUS
                                         ),
-                                        new Local("c")
+                                        new Local("c"),
+                                        OperatorToken::MINUS
                                     )
                                 )
     },
     { "~a + !b;",               Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
-                                        new UnaryOperator(OperatorToken::BITNOT, new Local("a")),
-                                        new UnaryOperator(OperatorToken::NOT, new Local("b"))
+                                        new UnaryOperator(new Local("a"), OperatorToken::BITNOT),
+                                        new UnaryOperator(new Local("b"), OperatorToken::NOT),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "++a - --b;",             Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::MINUS,
                                         new Crement(new Local("a"), Crement::Operation::Increment, false),
-                                        new Crement(new Local("b"), Crement::Operation::Decrement, false)
+                                        new Crement(new Local("b"), Crement::Operation::Decrement, false),
+                                        OperatorToken::MINUS
                                     )
                                 )
     },
     { "a-- + b++;",             Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Crement(new Local("a"), Crement::Operation::Decrement, true),
-                                        new Crement(new Local("b"), Crement::Operation::Increment, true)
+                                        new Crement(new Local("b"), Crement::Operation::Increment, true),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "int(a) + float(b);",     Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Cast(new Local("a"), CoreType::INT),
-                                        new Cast(new Local("b"), CoreType::FLOAT)
+                                        new Cast(new Local("b"), CoreType::FLOAT),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "{a,b,c} + {d,e,f};",     Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
-                                        new ArrayPack(new ExpressionList({
+                                        new ArrayPack({
                                             new Local("a"),
                                             new Local("b"),
                                             new Local("c")
-                                        })),
-                                        new ArrayPack(new ExpressionList({
+                                        }),
+                                        new ArrayPack({
                                             new Local("d"),
                                             new Local("e"),
                                             new Local("f")
-                                        }))
+                                        }),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "a.x + b.y;",             Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new ArrayUnpack(new Local("a"), new Value<int32_t>(0)),
-                                        new ArrayUnpack(new Local("b"), new Value<int32_t>(1))
+                                        new ArrayUnpack(new Local("b"), new Value<int32_t>(1)),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "0 + 1s;",                Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Value<int32_t>(0),
-                                        new Value<int16_t>(1)
+                                        new Value<int16_t>(1),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "0.0f + 1.0;",            Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Value<float>(0.0),
-                                        new Value<double>(1.0)
+                                        new Value<double>(1.0),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "@a + @b;",               Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Attribute("a", CoreType::FLOAT, true),
-                                        new Attribute("b", CoreType::FLOAT, true)
+                                        new Attribute("b", CoreType::FLOAT, true),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },
     { "\"a\" + \"b\";",         Node::Ptr(
                                     new BinaryOperator(
-                                        OperatorToken::PLUS,
                                         new Value<std::string>("a"),
-                                        new Value<std::string>("b")
+                                        new Value<std::string>("b"),
+                                        OperatorToken::PLUS
                                     )
                                 )
     },

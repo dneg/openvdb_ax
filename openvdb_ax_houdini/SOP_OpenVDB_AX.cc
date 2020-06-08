@@ -1185,8 +1185,27 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
             }
 
             if (createMissing) {
+
+                std::vector<openvdb::GridBase::Ptr> invalid;
                 for (size_t pos = size; pos < grids.size(); ++pos) {
-                    hvdb::createVdbPrimitive(*gdp, grids[pos]);
+                    auto& grid = grids[pos];
+                    // Call apply with a noop as createVdbPrimitive requires a grid ptr.
+                    // apply will return false if the grid is not one of the supported types
+                    if (!grid->apply<hvdb::AllGridTypes>([](auto&){})) {
+                        invalid.emplace_back(grid);
+                    }
+                    else {
+                        hvdb::createVdbPrimitive(*gdp, grid);
+                    }
+                }
+
+                if (!invalid.empty()) {
+                    std::ostringstream os;
+                    os << "Unable to create the following grid types as these are not supported by Houdini:\n";
+                    for (auto& grid : invalid) {
+                        os << "Grid Name: " << grid->getName() << ", Type: " << grid->valueType() << '\n';
+                    }
+                    addWarning(SOP_MESSAGE, os.str().c_str());
                 }
             }
         }

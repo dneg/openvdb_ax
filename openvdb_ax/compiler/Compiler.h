@@ -61,14 +61,9 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 
 namespace codegen {
-
 // forward
 class FunctionRegistry;
-
 }
-
-// forward
-class VolumeRegistry;
 
 /// @brief  Initializes llvm. Must be called before any AX compilation or execution is performed.
 void initialize();

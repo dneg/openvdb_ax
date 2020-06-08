@@ -30,6 +30,8 @@
 
 #include "TestHarness.h"
 
+#include <openvdb_ax/compiler/PointExecutable.h>
+
 #include <openvdb/points/AttributeArray.h>
 #include <openvdb/points/PointConversion.h>
 #include <openvdb/points/PointGroup.h>
@@ -166,8 +168,8 @@ TestVDBFunctions::deletepoint()
 {
     // NOTE: the "deletepoint" function doesn't actually directly delete points - it adds them
     // to the "dead" group which marks them for deletion afterwards
-
     mHarness.testVolumes(false);
+
     mHarness.addInputGroups({"dead"}, {false});
     mHarness.addExpectedGroups({"dead"}, {true});
 
@@ -264,13 +266,13 @@ TestVDBFunctions::ingroupOrder()
 {
     // Test that groups inserted in a different alphabetical order are inferred
     // correctly (a regression test for a previous issue)
-
     mHarness.testVolumes(false);
+
     mHarness.addExpectedAttributes<int>({"test", "groupTest", "groupTest2"}, {1,1,1});
     mHarness.addInputGroups({"b", "a"}, {false, true});
     mHarness.addExpectedGroups({"b", "a"}, {false, true});
 
-    mHarness.executeCode("test/snippets/vdb_functions/ingroup");
+    mHarness.executeCode("test/snippets/vdb_functions/ingroup", nullptr, nullptr, true);
     AXTESTS_STANDARD_ASSERT();
 }
 

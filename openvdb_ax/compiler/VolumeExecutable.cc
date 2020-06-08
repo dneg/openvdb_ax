@@ -53,9 +53,25 @@ namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
 
-using Vec4IGrid = BoolGrid::ValueConverter<math::Vec4<int32_t>>::Type;
-using Vec4fGrid = BoolGrid::ValueConverter<math::Vec4<float>>::Type;
-using Vec4dGrid = BoolGrid::ValueConverter<math::Vec4<double>>::Type;
+/// If no matrix support exists in the core library, enable these
+/// inline operators for this translation unit to allow AX to build
+/// the volume executable with matrix support
+#ifdef OPENVDB_AX_NO_MATRIX
+namespace math {
+#define MATRIX_OPS(TYPE) \
+inline TYPE operator+(const TYPE&, const float&) { throw std::runtime_error("Invalid Matrix op+ called."); } \
+inline bool operator<(const TYPE&, const TYPE&) { throw std::runtime_error("Invalid Matrix op< called."); } \
+inline bool operator>(const TYPE&, const TYPE&) { throw std::runtime_error("Invalid Matrix op> called."); } \
+inline TYPE Abs(const TYPE&) { throw std::runtime_error("Invalid Matrix op abs called."); }
+
+MATRIX_OPS(Mat3<double>)
+MATRIX_OPS(Mat3<float>)
+MATRIX_OPS(Mat4<double>)
+MATRIX_OPS(Mat4<float>)
+#undef MATRIX_OPS
+}
+#endif // OPENVDB_AX_NO_MATRIX
+
 
 namespace ax {
 
@@ -66,6 +82,30 @@ namespace {
 using KernelFunctionPtr = std::add_pointer<codegen::VolumeKernel::Signature>::type;
 using FunctionTraitsT = codegen::VolumeKernel::FunctionTraitsT;
 using ReturnT = FunctionTraitsT::ReturnType;
+
+template <typename ValueT>
+using ConverterT = typename openvdb::BoolGrid::ValueConverter<ValueT>::Type;
+using SupportedTypeList = openvdb::TypeList<
+    ConverterT<double>,
+    ConverterT<float>,
+    ConverterT<int64_t>,
+    ConverterT<int32_t>,
+    ConverterT<int16_t>,
+    ConverterT<bool>,
+    ConverterT<openvdb::math::Vec2<double>>,
+    ConverterT<openvdb::math::Vec2<float>>,
+    ConverterT<openvdb::math::Vec2<int32_t>>,
+    ConverterT<openvdb::math::Vec3<double>>,
+    ConverterT<openvdb::math::Vec3<float>>,
+    ConverterT<openvdb::math::Vec3<int32_t>>,
+    ConverterT<openvdb::math::Vec4<double>>,
+    ConverterT<openvdb::math::Vec4<float>>,
+    ConverterT<openvdb::math::Vec4<int32_t>>,
+    ConverterT<openvdb::math::Mat3<double>>,
+    ConverterT<openvdb::math::Mat3<float>>,
+    ConverterT<openvdb::math::Mat4<double>>,
+    ConverterT<openvdb::math::Mat4<float>>,
+    ConverterT<std::string>>;
 
 
 /// The arguments of the generated function
@@ -164,20 +204,27 @@ inline bool supported(const ast::tokens::CoreType type)
 {
     switch (type) {
         case ast::tokens::BOOL    : return true;
+        case ast::tokens::SHORT   : return true;
         case ast::tokens::INT     : return true;
         case ast::tokens::LONG    : return true;
         case ast::tokens::FLOAT   : return true;
         case ast::tokens::DOUBLE  : return true;
+        case ast::tokens::VEC2I   : return true;
+        case ast::tokens::VEC2F   : return true;
+        case ast::tokens::VEC2D   : return true;
         case ast::tokens::VEC3I   : return true;
         case ast::tokens::VEC3F   : return true;
         case ast::tokens::VEC3D   : return true;
         case ast::tokens::VEC4I   : return true;
         case ast::tokens::VEC4F   : return true;
         case ast::tokens::VEC4D   : return true;
+        case ast::tokens::MAT3F   : return true;
+        case ast::tokens::MAT3D   : return true;
+        case ast::tokens::MAT4F   : return true;
+        case ast::tokens::MAT4D   : return true;
         case ast::tokens::STRING  : return true;
         case ast::tokens::UNKNOWN :
-        default                   :
-            return false;
+        default                   : return false;
     }
 }
 
@@ -189,19 +236,26 @@ retrieveAccessor(VolumeFunctionArguments& args,
     // assert so the executer can be marked as noexcept (assuming nothing throws in compute)
     assert(supported(type) && "Could not retrieve accessor from unsupported type");
     switch (type) {
-        case ast::tokens::BOOL    : return retrieveAccessorTyped<BoolGrid>(args, grid);
-        case ast::tokens::INT     : return retrieveAccessorTyped<Int32Grid>(args, grid);
-        case ast::tokens::LONG    : return retrieveAccessorTyped<Int64Grid>(args, grid);
-        case ast::tokens::FLOAT   : return retrieveAccessorTyped<FloatGrid>(args, grid);
-        case ast::tokens::DOUBLE  : return retrieveAccessorTyped<DoubleGrid>(args, grid);
-        case ast::tokens::VEC3I   : return retrieveAccessorTyped<Vec3IGrid>(args, grid);
-        case ast::tokens::VEC3F   : return retrieveAccessorTyped<Vec3fGrid>(args, grid);
-        case ast::tokens::VEC3D   : return retrieveAccessorTyped<Vec3dGrid>(args, grid);
-        case ast::tokens::STRING  : return retrieveAccessorTyped<StringGrid>(args, grid);
-        // @note custom
-        case ast::tokens::VEC4I   : return retrieveAccessorTyped<Vec4IGrid>(args, grid);
-        case ast::tokens::VEC4F   : return retrieveAccessorTyped<Vec4fGrid>(args, grid);
-        case ast::tokens::VEC4D   : return retrieveAccessorTyped<Vec4dGrid>(args, grid);
+        case ast::tokens::BOOL    : return retrieveAccessorTyped<ConverterT<bool>>(args, grid);
+        case ast::tokens::SHORT   : return retrieveAccessorTyped<ConverterT<int16_t>>(args, grid);
+        case ast::tokens::INT     : return retrieveAccessorTyped<ConverterT<int32_t>>(args, grid);
+        case ast::tokens::LONG    : return retrieveAccessorTyped<ConverterT<int64_t>>(args, grid);
+        case ast::tokens::FLOAT   : return retrieveAccessorTyped<ConverterT<float>>(args, grid);
+        case ast::tokens::DOUBLE  : return retrieveAccessorTyped<ConverterT<double>>(args, grid);
+        case ast::tokens::VEC2D   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec2<double>>>(args, grid);
+        case ast::tokens::VEC2F   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec2<float>>>(args, grid);
+        case ast::tokens::VEC2I   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec2<int32_t>>>(args, grid);
+        case ast::tokens::VEC3D   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec3<double>>>(args, grid);
+        case ast::tokens::VEC3F   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec3<float>>>(args, grid);
+        case ast::tokens::VEC3I   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec3<int32_t>>>(args, grid);
+        case ast::tokens::VEC4D   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec4<double>>>(args, grid);
+        case ast::tokens::VEC4F   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec4<float>>>(args, grid);
+        case ast::tokens::VEC4I   : return retrieveAccessorTyped<ConverterT<openvdb::math::Vec4<int32_t>>>(args, grid);
+        case ast::tokens::MAT3D   : return retrieveAccessorTyped<ConverterT<openvdb::math::Mat3<double>>>(args, grid);
+        case ast::tokens::MAT3F   : return retrieveAccessorTyped<ConverterT<openvdb::math::Mat3<float>>>(args, grid);
+        case ast::tokens::MAT4D   : return retrieveAccessorTyped<ConverterT<openvdb::math::Mat4<double>>>(args, grid);
+        case ast::tokens::MAT4F   : return retrieveAccessorTyped<ConverterT<openvdb::math::Mat4<float>>>(args, grid);
+        case ast::tokens::STRING  : return retrieveAccessorTyped<ConverterT<std::string>>(args, grid);
         case ast::tokens::UNKNOWN :
         default                   : return;
     }
@@ -214,19 +268,26 @@ createGrid(const ast::tokens::CoreType& type)
     // assert so the executer can be marked as noexcept (assuming nothing throws in compute)
     assert(supported(type) && "Could not retrieve accessor from unsupported type");
     switch (type) {
-        case ast::tokens::BOOL    : return openvdb::BoolGrid::create();
-        case ast::tokens::INT     : return openvdb::Int32Grid::create();
-        case ast::tokens::LONG    : return openvdb::Int64Grid::create();
-        case ast::tokens::FLOAT   : return openvdb::FloatGrid::create();
-        case ast::tokens::DOUBLE  : return openvdb::DoubleGrid::create();
-        case ast::tokens::VEC3I   : return openvdb::Vec3IGrid::create();
-        case ast::tokens::VEC3F   : return openvdb::Vec3fGrid::create();
-        case ast::tokens::VEC3D   : return openvdb::Vec3dGrid::create();
-        case ast::tokens::STRING  : return openvdb::StringGrid::create();
-        // @note custom types
-        case ast::tokens::VEC4I   : return openvdb::Vec4IGrid::create();
-        case ast::tokens::VEC4F   : return openvdb::Vec4fGrid::create();
-        case ast::tokens::VEC4D   : return openvdb::Vec4dGrid::create();
+        case ast::tokens::BOOL    : return ConverterT<bool>::create();
+        case ast::tokens::SHORT   : return ConverterT<int16_t>::create();
+        case ast::tokens::INT     : return ConverterT<int32_t>::create();
+        case ast::tokens::LONG    : return ConverterT<int64_t>::create();
+        case ast::tokens::FLOAT   : return ConverterT<float>::create();
+        case ast::tokens::DOUBLE  : return ConverterT<double>::create();
+        case ast::tokens::VEC2D   : return ConverterT<openvdb::math::Vec2<double>>::create();
+        case ast::tokens::VEC2F   : return ConverterT<openvdb::math::Vec2<float>>::create();
+        case ast::tokens::VEC2I   : return ConverterT<openvdb::math::Vec2<int32_t>>::create();
+        case ast::tokens::VEC3D   : return ConverterT<openvdb::math::Vec3<double>>::create();
+        case ast::tokens::VEC3F   : return ConverterT<openvdb::math::Vec3<float>>::create();
+        case ast::tokens::VEC3I   : return ConverterT<openvdb::math::Vec3<int32_t>>::create();
+        case ast::tokens::VEC4D   : return ConverterT<openvdb::math::Vec4<double>>::create();
+        case ast::tokens::VEC4F   : return ConverterT<openvdb::math::Vec4<float>>::create();
+        case ast::tokens::VEC4I   : return ConverterT<openvdb::math::Vec4<int32_t>>::create();
+        case ast::tokens::MAT3D   : return ConverterT<openvdb::math::Mat3<double>>::create();
+        case ast::tokens::MAT3F   : return ConverterT<openvdb::math::Mat3<float>>::create();
+        case ast::tokens::MAT4D   : return ConverterT<openvdb::math::Mat4<double>>::create();
+        case ast::tokens::MAT4F   : return ConverterT<openvdb::math::Mat4<float>>::create();
+        case ast::tokens::STRING  : return ConverterT<std::string>::create();
         case ast::tokens::UNKNOWN :
         default                   : return nullptr;
     }
@@ -286,8 +347,6 @@ private:
     const math::Transform&      mTargetVolumeTransform;
     const size_t mIdx;
     openvdb::tree::ValueAccessor<TreeT> mAccessor;
-
-
 };
 
 void registerVolumes(GridPtrVec& grids,
@@ -406,46 +465,11 @@ inline void run(const openvdb::GridPtrVec& writeableGrids,
         // We execute over the topology of the grid currently being modified.  To do this, we need
         // a typed tree and leaf manager
 
-        if (grid->isType<BoolGrid>()) {
-            run<IterT, BoolGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Int32Grid>()) {
-            run<IterT, Int32Grid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Int64Grid>()) {
-            run<IterT, Int64Grid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<FloatGrid>()) {
-            run<IterT, FloatGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<DoubleGrid>()) {
-            run<IterT, DoubleGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Vec3IGrid>()) {
-            run<IterT, Vec3IGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Vec3fGrid>()) {
-            run<IterT, Vec3fGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Vec3dGrid>()) {
-            run<IterT, Vec3dGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Vec4IGrid>()) {
-            run<IterT, Vec4IGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Vec4fGrid>()) {
-            run<IterT, Vec4fGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<Vec4dGrid>()) {
-            run<IterT, Vec4dGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<MaskGrid>()) {
-            run<IterT, MaskGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else if (grid->isType<StringGrid>()) {
-            run<IterT, StringGrid>(*grid, readGrids, kernel, registry, custom);
-        }
-        else {
+        const bool success = grid->apply<SupportedTypeList>([&](auto& typed) {
+            using GridType = typename std::decay<decltype(typed)>::type;
+            run<IterT, GridType>(*grid, readGrids, kernel, registry, custom);
+        });
+        if (!success) {
             OPENVDB_THROW(TypeError, "Could not retrieve volume '" + grid->getName()
                 + "' as it has an unknown or unsupported value type '" + grid->valueType()
                 + "'");

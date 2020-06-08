@@ -54,17 +54,7 @@ addons:
 # OSX deps
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "osx" ]; then
-      brew update;
-      brew install ilmbase;
-      brew install openexr;
-      brew install cmake;
-      brew install doxygen;
-      brew install boost;
-      brew install cppunit;
-      brew install c-blosc;
-      brew install tbb;
-      brew install llvm@$LLVM_VERSION;
-      brew install zlib;
+      ci/install_deps_macos.sh $LLVM_VERSION;
     fi
 
 # Build matrix for linux which tests against llvm 5/6/7/8
@@ -208,6 +198,11 @@ matrix:
       env: LLVM_VERSION=6
 
 install:
-  - travis/install-openvdb.sh
+  - ci/install_openvdb.sh 6.2.1 $HOME/openvdb/install
 
-script: travis/install.sh
+script:
+  - LLVM_DIR="/usr/lib/llvm-$LLVM_VERSION/share/llvm/cmake";
+    if [ "$TRAVIS_OS_NAME" = "osx" ]; then
+      LLVM_DIR="/usr/local/opt/llvm@$LLVM_VERSION/lib/cmake/llvm";
+    fi;
+    ci/build.sh -DCMAKE_BUILD_TYPE=Release -DOPENVDB_ROOT=$HOME/openvdb/install -DLLVM_DIR=$LLVM_DIR

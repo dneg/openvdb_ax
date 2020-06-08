@@ -198,8 +198,8 @@ struct Visitor
         return this->defaultTraversal<ast::Block>(block);
     }
 
-    bool traverse(NodeType<ast::ExpressionList>* exprlist) {
-        return this->defaultTraversal<ast::ExpressionList>(exprlist);
+    bool traverse(NodeType<ast::CommaOperator>* comma) {
+        return this->defaultTraversal<ast::CommaOperator>(comma);
     }
 
     bool traverse(NodeType<ast::Loop>* loop) {
@@ -228,6 +228,10 @@ struct Visitor
 
     bool traverse(NodeType<ast::BinaryOperator>* bin) {
         return this->defaultTraversal<ast::BinaryOperator>(bin);
+    }
+
+    bool traverse(NodeType<ast::TernaryOperator>* tern) {
+        return this->defaultTraversal<ast::TernaryOperator>(tern);
     }
 
     bool traverse(NodeType<ast::Cast>* cast) {
@@ -300,7 +304,7 @@ struct Visitor
             case Node::TreeNode : return this->derived().traverse(static_cast<NodeType<ast::Tree>*>(node));
             case Node::StatementListNode : return this->derived().traverse(static_cast<NodeType<ast::StatementList>*>(node));
             case Node::BlockNode : return this->derived().traverse(static_cast<NodeType<ast::Block>*>(node));
-            case Node::ExpressionListNode : return this->derived().traverse(static_cast<NodeType<ast::ExpressionList>*>(node));
+            case Node::CommaOperatorNode : return this->derived().traverse(static_cast<NodeType<ast::CommaOperator>*>(node));
             case Node::LoopNode : return this->derived().traverse(static_cast<NodeType<ast::Loop>*>(node));
             case Node::KeywordNode : return this->derived().traverse(static_cast<NodeType<ast::Keyword>*>(node));
             case Node::ConditionalStatementNode : return this->derived().traverse(static_cast<NodeType<ast::ConditionalStatement>*>(node));
@@ -308,6 +312,7 @@ struct Visitor
             case Node::CrementNode : return this->derived().traverse(static_cast<NodeType<ast::Crement>*>(node));
             case Node::UnaryOperatorNode : return this->derived().traverse(static_cast<NodeType<ast::UnaryOperator>*>(node));
             case Node::BinaryOperatorNode : return this->derived().traverse(static_cast<NodeType<ast::BinaryOperator>*>(node));
+            case Node::TernaryOperatorNode : return this->derived().traverse(static_cast<NodeType<ast::TernaryOperator>*>(node));
             case Node::CastNode : return this->derived().traverse(static_cast<NodeType<ast::Cast>*>(node));
             case Node::AttributeNode : return this->derived().traverse(static_cast<NodeType<ast::Attribute>*>(node));
             case Node::FunctionCallNode : return this->derived().traverse(static_cast<NodeType<ast::FunctionCall>*>(node));
@@ -347,7 +352,7 @@ struct Visitor
     inline bool visit(NodeType<ast::Tree>*) { return true; }
     inline bool visit(NodeType<ast::StatementList>*) { return true; }
     inline bool visit(NodeType<ast::Block>*) { return true; }
-    inline bool visit(NodeType<ast::ExpressionList>*) { return true; }
+    inline bool visit(NodeType<ast::CommaOperator>*) { return true; }
     inline bool visit(NodeType<ast::Loop>*) { return true; }
     inline bool visit(NodeType<ast::Keyword>*) { return true; }
     inline bool visit(NodeType<ast::ConditionalStatement>*) { return true; }
@@ -355,6 +360,7 @@ struct Visitor
     inline bool visit(NodeType<ast::Crement>*) { return true; }
     inline bool visit(NodeType<ast::UnaryOperator>*) { return true; }
     inline bool visit(NodeType<ast::BinaryOperator>*) { return true; }
+    inline bool visit(NodeType<ast::TernaryOperator>*) { return true; }
     inline bool visit(NodeType<ast::Cast>*) { return true; }
     inline bool visit(NodeType<ast::FunctionCall>*) { return true; }
     inline bool visit(NodeType<ast::Attribute>*) { return true; }

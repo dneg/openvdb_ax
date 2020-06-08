@@ -41,7 +41,6 @@ class TestString : public unittest_util::AXTestCase
 public:
     void setUp() override {
         unittest_util::AXTestCase::setUp();
-        mHarness.testVolumes(false);
     }
 
     CPPUNIT_TEST_SUITE(TestString);
@@ -75,10 +74,14 @@ TestString::testAssignCompound()
 void
 TestString::testAssignFromAttributes()
 {
-    mHarness.addInputAttributes<std::string>({"string_test1"}, {"test"});
+    mHarness.addInputPtAttributes<std::string>({"string_test1"}, {"test"});
     mHarness.addExpectedAttributes<std::string>(unittest_util::nameSequence("string_test", 6),
         {"new value", "test", "new value", "new value", "", ""});
-    mHarness.executeCode("test/snippets/string/assignFromAttributes");
+    // Volume data needs to exist
+    mHarness.addInputVolumes<std::string>(unittest_util::nameSequence("string_test", 6),
+        {"test", "test", "new value", "new value", "", ""});
+
+    mHarness.executeCode("test/snippets/string/assignFromAttributes", nullptr, nullptr, true);
     AXTESTS_STANDARD_ASSERT();
 }
 
@@ -96,7 +99,11 @@ TestString::testAssignNewOverwrite()
 {
     mHarness.addExpectedAttributes<std::string>({"string_test1", "string_test2"},
         {"next_value", "new_value"});
-    mHarness.executeCode("test/snippets/string/assignNewOverwrite");
+    // Volume data needs to exist
+    mHarness.addInputVolumes<std::string>({"string_test1", "string_test2"},
+        {"next_value", "new_value"});
+
+    mHarness.executeCode("test/snippets/string/assignNewOverwrite", nullptr, nullptr, true);
     AXTESTS_STANDARD_ASSERT();
 }
 
@@ -105,7 +112,11 @@ TestString::testBinaryConcat()
 {
     mHarness.addExpectedAttributes<std::string>(unittest_util::nameSequence("string_test", 6),
         {"test new value", "test new value", "test new value", "test new value", "", "test new value"});
-    mHarness.executeCode("test/snippets/string/binaryConcat");
+    // Volume data needs to exist
+    mHarness.addInputVolumes<std::string>(unittest_util::nameSequence("string_test", 6),
+        {"test new value", "test new value", "test new value", "test new value", "", "test new value"});
+
+    mHarness.executeCode("test/snippets/string/binaryConcat", nullptr, nullptr, true);
     AXTESTS_STANDARD_ASSERT();
 }
 
