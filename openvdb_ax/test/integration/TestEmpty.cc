@@ -42,11 +42,8 @@ class TestEmpty : public unittest_util::AXTestCase
 public:
     CPPUNIT_TEST_SUITE(TestEmpty);
     CPPUNIT_TEST(testEmpty);
-    CPPUNIT_TEST(testInvalidCharacter);
     CPPUNIT_TEST_SUITE_END();
-
     void testEmpty();
-    void testInvalidCharacter();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestEmpty);
@@ -56,15 +53,7 @@ TestEmpty::testEmpty()
 {
     unittest_util::AXTestHarness harness;
     harness.executeCode("test/snippets/empty/empty");
-
     AXTESTS_STANDARD_ASSERT_HARNESS(harness);
-}
-
-void
-TestEmpty::testInvalidCharacter()
-{
-    std::string code = unittest_util::loadText("test/snippets/empty/invalidCharacter");
-    CPPUNIT_ASSERT_THROW(openvdb::ax::ast::parse(code.c_str()), openvdb::LLVMSyntaxError);
 }
 
 // Copyright (c) 2015-2020 DNEG

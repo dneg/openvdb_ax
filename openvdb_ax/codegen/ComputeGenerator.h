@@ -132,6 +132,16 @@ struct ComputeGenerator : public ast::Visitor<ComputeGenerator>
         return true;
     }
 
+    /// @brief  Custom traversal of ternary operators
+    /// @note   This overrides the default traversal to handle
+    ///         branching between different code paths
+    bool traverse(const ast::TernaryOperator* tern)
+    {
+        if (!tern) return true;
+        if (!this->visit(tern)) return false;
+        return true;
+    }
+
     /// @brief  Custom traversal of loops
     /// @note   This overrides the default traversal to handle
     ///         branching between different code paths and the
@@ -143,6 +153,18 @@ struct ComputeGenerator : public ast::Visitor<ComputeGenerator>
         return true;
     }
 
+    /// @brief  Custom traversal of declarations
+    /// @note   This overrides the default traversal to
+    ///         handle traversal of the local and
+    ///         assignment of initialiser, if it exists
+    bool traverse(const ast::DeclareLocal* decl)
+    {
+        if (!decl) return true;
+        if (!this->visit(decl)) return false;
+        return true;
+    }
+
+    virtual bool visit(const ast::CommaOperator*);
     virtual bool visit(const ast::AssignExpression*);
     virtual bool visit(const ast::Crement*);
     virtual bool visit(const ast::FunctionCall*);
@@ -154,6 +176,7 @@ struct ComputeGenerator : public ast::Visitor<ComputeGenerator>
     virtual bool visit(const ast::Keyword*);
     virtual bool visit(const ast::UnaryOperator*);
     virtual bool visit(const ast::BinaryOperator*);
+    virtual bool visit(const ast::TernaryOperator*);
     virtual bool visit(const ast::Cast*);
     virtual bool visit(const ast::DeclareLocal*);
     virtual bool visit(const ast::Local*);
@@ -180,6 +203,10 @@ protected:
 
     FunctionGroup::Ptr getFunction(const std::string& identifier,
             const bool allowInternal = false);
+
+    llvm::Value* binaryExpression(llvm::Value* lhs, llvm::Value* rhs,
+        const ast::tokens::OperatorToken op);
+    void assignExpression(llvm::Value* lhs, llvm::Value*& rhs);
 
     llvm::Module& mModule;
     llvm::LLVMContext& mContext;

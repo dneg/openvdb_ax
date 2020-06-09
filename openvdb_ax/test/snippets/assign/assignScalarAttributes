@@ -1,4 +1,0 @@
-
-@float_test2 = 0.5f;
-
-@float_test = @float_test2;

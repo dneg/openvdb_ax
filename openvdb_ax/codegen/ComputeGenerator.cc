@@ -124,6 +124,19 @@ bool ComputeGenerator::generate(const ast::Tree& tree)
     return this->traverse(&tree);
 }
 
+bool ComputeGenerator::visit(const ast::CommaOperator* comma)
+{
+    // only keep the last value
+    assert(mValues.size() >= comma->size());
+    if (comma->size() == 1) return true;
+    llvm::Value* cache = mValues.top();
+    for (size_t i = 0; i < comma->size(); ++i) {
+        mValues.pop();
+    }
+    mValues.push(cache);
+    return true;
+}
+
 bool ComputeGenerator::visit(const ast::Block* block)
 {
     mScopeIndex++;
@@ -147,14 +160,14 @@ bool ComputeGenerator::visit(const ast::ConditionalStatement* cond)
     llvm::BasicBlock* postIfBlock = llvm::BasicBlock::Create(mContext, "block", mFunction);
 
     // generate conditional
-    if (!this->traverse(cond->child(0))) return false;
+    if (!this->traverse(cond->condition())) return false;
     llvm::Value* condition = mValues.top(); mValues.pop();
     if (condition->getType()->isPointerTy()) {
         condition = mBuilder.CreateLoad(condition);
     }
     condition = boolComparison(condition, mBuilder);
 
-    const bool hasElse = cond->hasElseBranch();
+    const bool hasElse = cond->hasFalse();
     llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(mContext, "then", mFunction);
     llvm::BasicBlock* elseBlock = hasElse ? llvm::BasicBlock::Create(mContext, "else", mFunction) : postIfBlock;
 
@@ -162,18 +175,182 @@ bool ComputeGenerator::visit(const ast::ConditionalStatement* cond)
 
     // generate if-then branch
     mBuilder.SetInsertPoint(thenBlock);
-    if (!this->traverse(cond->thenBranch())) return false;
+    if (!this->traverse(cond->trueBranch())) return false;
     mBuilder.CreateBr(postIfBlock);
 
     if (hasElse) {
         // generate else-then branch
         mBuilder.SetInsertPoint(elseBlock);
-        if (!this->traverse(cond->elseBranch())) return false;
+        if (!this->traverse(cond->falseBranch())) return false;
         mBuilder.CreateBr(postIfBlock);
     }
 
     // reset to continue block
     mBuilder.SetInsertPoint(postIfBlock);
+    return true;
+}
+
+bool ComputeGenerator::visit(const ast::TernaryOperator* tern)
+{
+    // generate conditional
+    if (!this->traverse(tern->condition())) return false;
+
+    // get the condition
+    llvm::Value* trueValue = mValues.top(); mValues.pop();
+    assert(trueValue);
+
+    llvm::Type* trueType = trueValue->getType();
+    bool truePtr = trueType->isPointerTy();
+
+    llvm::Value* boolCondition = truePtr ?
+            boolComparison(mBuilder.CreateLoad(trueValue), mBuilder) : boolComparison(trueValue, mBuilder);
+
+    llvm::BasicBlock* trueBlock = llvm::BasicBlock::Create(mContext, "ternary_true", mFunction);
+    llvm::BasicBlock* falseBlock = llvm::BasicBlock::Create(mContext, "ternary_false", mFunction);
+    llvm::BasicBlock* returnBlock = llvm::BasicBlock::Create(mContext, "ternary_return", mFunction);
+
+    mBuilder.CreateCondBr(boolCondition, trueBlock, falseBlock);
+
+    // generate true branch, if it exists otherwise take condition as true value
+
+    mBuilder.SetInsertPoint(trueBlock);
+    if (tern->hasTrue()) {
+        if (!this->traverse(tern->trueBranch())) return false;
+        trueValue = mValues.top(); // get true value from true expression
+        mValues.pop();
+        // update true type details
+        trueType = trueValue->getType();
+    }
+
+    llvm::BranchInst* trueBranch = mBuilder.CreateBr(returnBlock);
+
+    // generate false branch
+
+    mBuilder.SetInsertPoint(falseBlock);
+    if (!this->traverse(tern->falseBranch())) return false;
+    llvm::BranchInst* falseBranch = mBuilder.CreateBr(returnBlock);
+
+    llvm::Value* falseValue = mValues.top(); mValues.pop();
+    llvm::Type* falseType = falseValue->getType();
+
+    // if both variables of same type do no casting or loading
+    if (trueType != falseType) {
+        // get the (contained) types of the expressions
+        truePtr = trueType->isPointerTy();
+        if (truePtr) trueType = trueType->getPointerElementType();
+
+        const bool falsePtr = falseType->isPointerTy();
+        if (falsePtr) falseType = falseType->getPointerElementType();
+
+        // if same contained type but one needs loading
+        // can only have one pointer, one not, for scalars right now, i.e. no loaded arrays or strings
+        if (trueType == falseType) {
+            assert(!(truePtr && falsePtr));
+            if (truePtr) {
+                mBuilder.SetInsertPoint(trueBranch);
+                trueValue = mBuilder.CreateLoad(trueValue);
+            }
+            else {
+                mBuilder.SetInsertPoint(falseBranch);
+                falseValue = mBuilder.CreateLoad(falseValue);
+            }
+        }
+        else { // needs casting
+
+            // get type for return
+            llvm::Type* returnType = nullptr;
+
+            const bool trueScalar = (trueType->isIntegerTy() || trueType->isFloatingPointTy());
+            if (trueScalar &&
+                 (falseType->isIntegerTy() || falseType->isFloatingPointTy())) {
+                assert(trueType != falseType);
+                // SCALAR_SCALAR
+                returnType = typePrecedence(trueType, falseType);
+                // always load scalars here, even if they are the correct type
+                mBuilder.SetInsertPoint(trueBranch);
+                if (truePtr) trueValue = mBuilder.CreateLoad(trueValue);
+                trueValue = arithmeticConversion(trueValue, returnType, mBuilder);
+                mBuilder.SetInsertPoint(falseBranch);
+                if (falsePtr) falseValue = mBuilder.CreateLoad(falseValue);
+                falseValue = arithmeticConversion(falseValue, returnType, mBuilder);
+            }
+            else if (trueType->isArrayTy() && falseType->isArrayTy()
+                 && (trueType->getArrayNumElements() == falseType->getArrayNumElements())) {
+                // ARRAY_ARRAY
+                trueType = trueType->getArrayElementType();
+                falseType = falseType->getArrayElementType();
+                returnType = typePrecedence(trueType, falseType);
+
+                if (trueType != returnType) {
+                    mBuilder.SetInsertPoint(trueBranch);
+                    trueValue = arrayCast(trueValue, returnType, mBuilder);
+                }
+                else if (falseType != returnType) {
+                    mBuilder.SetInsertPoint(falseBranch);
+                    falseValue = arrayCast(falseValue, returnType, mBuilder);
+                }
+            }
+            else if (trueScalar && falseType->isArrayTy()) {
+                // SCALAR_ARRAY
+                returnType = typePrecedence(trueType, falseType->getArrayElementType());
+                mBuilder.SetInsertPoint(trueBranch);
+                if (truePtr) trueValue = mBuilder.CreateLoad(trueValue);
+                trueValue = arithmeticConversion(trueValue, returnType, mBuilder);
+                const size_t arraySize = falseType->getArrayNumElements();
+                if (arraySize == 9 || arraySize == 16) {
+                    trueValue = scalarToMatrix(trueValue, mBuilder, arraySize == 9 ? 3 : 4);
+                }
+                else {
+                    trueValue = arrayPack(trueValue, mBuilder, arraySize);
+                }
+                if (falseType->getArrayElementType() != returnType) {
+                    mBuilder.SetInsertPoint(falseBranch);
+                    falseValue = arrayCast(falseValue, returnType, mBuilder);
+                }
+            }
+            else if (trueType->isArrayTy() &&
+                     (falseType->isIntegerTy() || falseType->isFloatingPointTy())) {
+                // ARRAY_SCALAR
+                returnType = typePrecedence(trueType->getArrayElementType(), falseType);
+                if (trueType->getArrayElementType() != returnType) {
+                    mBuilder.SetInsertPoint(trueBranch);
+                    trueValue = arrayCast(trueValue, returnType, mBuilder);
+                }
+                mBuilder.SetInsertPoint(falseBranch);
+                if (falsePtr) falseValue = mBuilder.CreateLoad(falseValue);
+                falseValue = arithmeticConversion(falseValue, returnType, mBuilder);
+                const size_t arraySize = trueType->getArrayNumElements();
+                if (arraySize == 9 || arraySize == 16) {
+                    falseValue = scalarToMatrix(falseValue, mBuilder, arraySize == 9 ? 3 : 4);
+                }
+                else {
+                    falseValue = arrayPack(falseValue, mBuilder, arraySize);
+                }
+            }
+            else {
+                OPENVDB_THROW(LLVMCastError,
+                    "Unsupported implicit cast in ternary operation.");
+            }
+        }
+    }
+    else if (trueType->isVoidTy() && falseType->isVoidTy()) {
+        // void type ternary acts like if-else statement
+        // push void value to stop use of return from this expression
+        mBuilder.SetInsertPoint(returnBlock);
+        mValues.push(falseValue);
+        return true;
+    }
+
+    // reset to continue block
+    mBuilder.SetInsertPoint(returnBlock);
+    llvm::PHINode* ternary = mBuilder.CreatePHI(trueValue->getType(), 2, "ternary");
+
+    // if nesting branches the blocks for true and false branches may have been updated
+    // so get these again rather than reusing trueBlock/falseBlock
+    ternary->addIncoming(trueValue, trueBranch->getParent());
+    ternary->addIncoming(falseValue, falseBranch->getParent());
+
+    mValues.push(ternary);
     return true;
 }
 
@@ -299,303 +476,9 @@ bool ComputeGenerator::visit(const ast::Keyword* node)
 
 bool ComputeGenerator::visit(const ast::BinaryOperator* node)
 {
-    // Enum of supported operations
-
-    enum OperandTypes
-    {
-        STRING_OP_STRING,
-        ARRAY_OP_ARRAY,
-        SCALAR_OP_ARRAY,
-        ARRAY_OP_SCALAR,
-        SCALAR_OP_SCALAR
-    };
-
     llvm::Value* rhs = mValues.top(); mValues.pop();
     llvm::Value* lhs = mValues.top(); mValues.pop();
-
-    llvm::Type* lhsType = lhs->getType();
-    llvm::Type* rhsType = rhs->getType();
-
-    if (lhsType->isPointerTy()) {
-        lhsType = lhsType->getPointerElementType();
-        if (lhsType->isIntegerTy() || lhsType->isFloatingPointTy()) {
-            lhs = mBuilder.CreateLoad(lhs);
-        }
-    }
-    if (rhsType->isPointerTy()) {
-        rhsType = rhsType->getPointerElementType();
-        if (rhsType->isIntegerTy() || rhsType->isFloatingPointTy()) {
-            rhs = mBuilder.CreateLoad(rhs);
-        }
-    }
-
-    // convert rhs to match lhs for all supported assignments:
-    // (scalar=scalar, vector=vector, scalar=vector, vector=scalar etc)
-
-    OperandTypes operandType;
-    if (lhsType == LLVMType<AXString>::get(mContext) &&
-        rhsType == LLVMType<AXString>::get(mContext)) {
-        operandType = STRING_OP_STRING;
-    }
-    else if (lhsType->isArrayTy() && rhsType->isArrayTy()) {
-        operandType = ARRAY_OP_ARRAY;
-    }
-    else if (lhsType->isArrayTy() &&
-        (rhsType->isIntegerTy() ||
-         rhsType->isFloatingPointTy())) {
-        operandType = ARRAY_OP_SCALAR;
-    }
-    else if (rhsType->isArrayTy() &&
-        (lhsType->isIntegerTy() ||
-         lhsType->isFloatingPointTy())) {
-        operandType = SCALAR_OP_ARRAY;
-    }
-    else if ((lhsType->isIntegerTy() || lhsType->isFloatingPointTy()) &&
-             (rhsType->isIntegerTy() || rhsType->isFloatingPointTy())) {
-        operandType = SCALAR_OP_SCALAR;
-    }
-    else {
-        OPENVDB_THROW(LLVMCastError,
-            "Unsupported implicit cast in binary operation.");
-    }
-
-    const ast::tokens::OperatorToken op = node->operation();
-    const ast::tokens::OperatorType opType = ast::tokens::operatorType(op);
-
-    llvm::Value* result = nullptr;
-
-    switch (operandType) {
-        case STRING_OP_STRING : {
-            if (op != ast::tokens::PLUS) {
-                OPENVDB_THROW(LLVMBinaryOperationError, "Unsupported string operation \""
-                    + ast::tokens::operatorNameFromToken(op) + "\"");
-            }
-
-            llvm::Type* strType = LLVMType<AXString>::get(mContext);
-
-            auto& B = mBuilder;
-            auto structToString = [&B, strType](llvm::Value*& str) -> llvm::Value*
-            {
-                llvm::Value* size = nullptr;
-                if (llvm::isa<llvm::Constant>(str)) {
-                    llvm::Constant* zero =
-                        llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(B.getContext(), 0));
-                    llvm::Constant* constant = llvm::cast<llvm::Constant>(str)->getAggregateElement(zero); // char*
-                    str = constant;
-                    constant = constant->stripPointerCasts();
-
-                    // array size should include the null terminator
-                    llvm::Type* arrayType = constant->getType()->getPointerElementType();
-                    assert(arrayType->getArrayNumElements() > 0);
-
-                    const size_t count = arrayType->getArrayNumElements() - 1;
-                    assert(count < static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
-
-                    size = LLVMType<AXString::SizeType>::get
-                        (B.getContext(), static_cast<AXString::SizeType>(count));
-                }
-                else {
-                    llvm::Value* rstrptr = B.CreateStructGEP(strType, str, 0); // char**
-                    rstrptr = B.CreateLoad(rstrptr);
-                    size = B.CreateStructGEP(strType, str, 1); // AXString::SizeType*
-                    size = B.CreateLoad(size);
-                    str = rstrptr;
-                }
-
-                return size;
-            };
-
-            // lhs and rhs get set to the char* arrays in structToString
-            llvm::Value* lhsSize = structToString(lhs);
-            llvm::Value* rhsSize = structToString(rhs);
-            // rhs with null terminator
-            llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
-            llvm::Value* rhsTermSize = binaryOperator(rhsSize, one, ast::tokens::PLUS, mBuilder);
-            // total and total with term
-            llvm::Value* total = binaryOperator(lhsSize, rhsSize, ast::tokens::PLUS, mBuilder);
-            llvm::Value* totalTerm = binaryOperator(lhsSize, rhsTermSize, ast::tokens::PLUS, mBuilder);
-
-            // get ptrs to the new structs values
-            result = insertStaticAlloca(mBuilder, strType);
-            llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), totalTerm);
-            llvm::Value* strptr = mBuilder.CreateStructGEP(strType, result, 0); // char**
-            llvm::Value* sizeptr = mBuilder.CreateStructGEP(strType, result, 1); // AXString::SizeType*
-
-            // get rhs offset
-            llvm::Value* stringRhsOffset = mBuilder.CreateGEP(string, lhsSize);
-
-            // memcpy
-#if LLVM_VERSION_MAJOR > 6
-            mBuilder.CreateMemCpy(string, /*dest-align*/0, lhs, /*src-align*/0, lhsSize);
-            mBuilder.CreateMemCpy(stringRhsOffset, /*dest-align*/0, rhs, /*src-align*/0, rhsTermSize);
-#else
-            mBuilder.CreateMemCpy(string, lhs, lhsSize, /*align*/0);
-            mBuilder.CreateMemCpy(stringRhsOffset, rhs, rhsTermSize, /*align*/0);
-#endif
-            mBuilder.CreateStore(string, strptr);
-            mBuilder.CreateStore(total, sizeptr);
-            break;
-        }
-        case ARRAY_OP_ARRAY  : {
-            if (op == ast::tokens::MORETHAN ||
-                op == ast::tokens::LESSTHAN ||
-                op == ast::tokens::MORETHANOREQUAL ||
-                op == ast::tokens::LESSTHANOREQUAL ||
-                opType == ast::tokens::LOGICAL ||
-                opType == ast::tokens::BITWISE) {
-                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
-                    + ast::tokens::operatorNameFromToken(op) +
-                    "\" with a vector/matrix argument");
-            }
-
-            // Array [+][-][*][/] etc Array (Array)
-            // Array [==][!=] Array (Scalar Bool)
-            // both lhs and rhs are arrays
-            const size_t lhsSize = lhsType->getArrayNumElements();
-            const size_t rhsSize = rhsType->getArrayNumElements();
-            assert(lhsSize != 0 && rhsSize != 0);
-
-            if (op == ast::tokens::MULTIPLY) {
-                FunctionGroup::Ptr function;
-                if (lhsSize > 4 && rhsSize > 4) {
-                    // matrix matrix multiplication all handled through mmmult
-                    function = this->getFunction("mmmult", /*internal*/true);
-                    assert(function);
-                }
-                else if (lhsSize > 4 && rhsSize <= 4) {
-                    // matrix vector multiplication all handled through pretransform
-                    function = this->getFunction("pretransform");
-                    assert(function);
-                }
-                else if (lhsSize <= 4 && rhsSize > 4) {
-                    // vector matrix multiplication all handled through transform
-                    function = this->getFunction("transform");
-                    assert(function);
-                }
-                if (function) {
-                    result = function->execute({lhs, rhs}, mBuilder);
-                    break;
-                }
-            }
-
-            if (lhsSize != rhsSize) {
-                OPENVDB_THROW(LLVMBinaryOperationError, "Unable to perform operation \""
-                    + ast::tokens::operatorNameFromToken(op) +
-                    "\" on arrays of mismatching sizes.");
-            }
-
-            std::vector<llvm::Value*> elements;
-            elements.reserve(lhsSize);
-            for (size_t i = 0; i < lhsSize; ++i) {
-                llvm::Value* relement = mBuilder.CreateConstGEP2_64(rhs, 0, i);
-                relement = mBuilder.CreateLoad(relement);
-                llvm::Value* lelement = mBuilder.CreateConstGEP2_64(lhs, 0, i);
-                lelement = mBuilder.CreateLoad(lelement);
-                arithmeticConversion(lelement, relement, mBuilder);
-                lelement = binaryOperator(lelement, relement, op, mBuilder);
-                elements.emplace_back(lelement);
-            }
-
-            if (op == ast::tokens::EQUALSEQUALS || op == ast::tokens::NOTEQUALS) {
-                const ast::tokens::OperatorToken reductionOp =
-                    op == ast::tokens::EQUALSEQUALS ?
-                        ast::tokens::AND :
-                        ast::tokens::OR;
-                // == and != operators create bool types
-                result = elements.front();
-                assert(result->getType() == LLVMType<bool>::get(mContext));
-                for (size_t i = 1; i < elements.size(); ++i) {
-                    result = binaryOperator(result, elements[i], reductionOp, mBuilder);
-                }
-            }
-            else {
-                llvm::Type* arrayType =
-                    llvm::ArrayType::get(elements.front()->getType(), elements.size());
-                // Create the allocation at the start of the function block
-                result = insertStaticAlloca(mBuilder, arrayType);
-                for (size_t i = 0; i < elements.size(); ++i) {
-                    llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
-                    mBuilder.CreateStore(elements[i], target);
-                }
-            }
-            break;
-        }
-        case ARRAY_OP_SCALAR :
-        case SCALAR_OP_ARRAY : {
-            if (op == ast::tokens::MORETHAN ||
-                op == ast::tokens::LESSTHAN ||
-                op == ast::tokens::MORETHANOREQUAL ||
-                op == ast::tokens::LESSTHANOREQUAL ||
-                opType == ast::tokens::LOGICAL ||
-                opType == ast::tokens::BITWISE) {
-                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
-                    + ast::tokens::operatorNameFromToken(op) +
-                    "\" with a vector/matrix argument");
-            }
-
-            std::vector<llvm::Value*> elements;
-
-            if (operandType == SCALAR_OP_ARRAY) {
-                // Scalar [+][-][*][/] etc Array (Array)
-                // Scalar [==][!=] Array (Scalar Bool)
-                // rhs is array
-                const size_t count = rhsType->getArrayNumElements();
-                elements.reserve(count);
-                for (size_t i = 0; i < count; ++i) {
-                    llvm::Value* element = mBuilder.CreateConstGEP2_64(rhs, 0, i);
-                    element = mBuilder.CreateLoad(element);
-                    arithmeticConversion(lhs, element, mBuilder);
-                    element = binaryOperator(lhs, element, op, mBuilder);
-                    elements.emplace_back(element);
-                }
-            }
-            else if (operandType == ARRAY_OP_SCALAR) {
-                // Array [+][-][*][/] etc Scalar (Array)
-                // Array [==][!=] Scalar (Scalar Bool)
-                // lhs is array
-                const size_t count = lhsType->getArrayNumElements();
-                elements.reserve(count);
-                for (size_t i = 0; i < count; ++i) {
-                    llvm::Value* element = mBuilder.CreateConstGEP2_64(lhs, 0, i);
-                    element = mBuilder.CreateLoad(element);
-                    arithmeticConversion(element, rhs, mBuilder);
-                    element = binaryOperator(element, rhs, op, mBuilder);
-                    elements.emplace_back(element);
-                }
-            }
-
-            // Scalar == Array or Scalar != Array
-            if (op == ast::tokens::EQUALSEQUALS || op == ast::tokens::NOTEQUALS) {
-                const ast::tokens::OperatorToken reductionOp =
-                    op == ast::tokens::EQUALSEQUALS ?
-                    ast::tokens::AND :
-                    ast::tokens::OR;
-                // == and != operators create bool types
-                result = elements.front();
-                assert(result->getType() == LLVMType<bool>::get(mContext));
-                for (size_t i = 1; i < elements.size(); ++i) {
-                    result = binaryOperator(result, elements[i], reductionOp, mBuilder);
-                }
-            }
-            else {
-                llvm::Type* arrayType =
-                    llvm::ArrayType::get(elements.front()->getType(), elements.size());
-                // Create the allocation at the start of the function block
-                result = insertStaticAlloca(mBuilder, arrayType);
-                for (size_t i = 0; i < elements.size(); ++i) {
-                    llvm::Value* target = mBuilder.CreateConstGEP2_64(result, 0, i);
-                    mBuilder.CreateStore(elements[i], target);
-                }
-            }
-            break;
-        }
-        case SCALAR_OP_SCALAR : {
-            // convert to highest type precision
-            arithmeticConversion(rhs, lhs, mBuilder);
-            result = binaryOperator(lhs, rhs, op, mBuilder);
-            break;
-        }
-    }
+    llvm::Value* result = this->binaryExpression(lhs, rhs, node->operation());
 
     assert(result);
     mValues.push(result);
@@ -628,11 +511,18 @@ bool ComputeGenerator::visit(const ast::UnaryOperator* node)
 
     llvm::Value* result = nullptr;
     if (type->isIntegerTy()) {
-        if (token == ast::tokens::MINUS)        result = mBuilder.CreateNeg(value);
-        else if (token == ast::tokens::BITNOT)  result = mBuilder.CreateNot(value);
-        else if (token == ast::tokens::NOT) {
-            if (type->isIntegerTy(1))           result = mBuilder.CreateICmpEQ(value, llvm::ConstantInt::get(type, 0));
-            else                                result = mBuilder.CreateICmpEQ(value, llvm::ConstantInt::getSigned(type, 0));
+        if (token == ast::tokens::NOT) {
+            if (type->isIntegerTy(1))  result = mBuilder.CreateICmpEQ(value, llvm::ConstantInt::get(type, 0));
+            else                       result = mBuilder.CreateICmpEQ(value, llvm::ConstantInt::getSigned(type, 0));
+        }
+        else {
+            // if bool, cast to int32 for unary minus and bitnot
+            if (type->isIntegerTy(1)) {
+                type = LLVMType<int32_t>::get(mContext);
+                value = arithmeticConversion(value, type, mBuilder);
+            }
+            if (token == ast::tokens::MINUS)        result = mBuilder.CreateNeg(value);
+            else if (token == ast::tokens::BITNOT)  result = mBuilder.CreateNot(value);
         }
     }
     else if (type->isFloatingPointTy()) {
@@ -697,162 +587,27 @@ bool ComputeGenerator::visit(const ast::UnaryOperator* node)
     return true;
 }
 
-bool ComputeGenerator::visit(const ast::AssignExpression*)
+bool ComputeGenerator::visit(const ast::AssignExpression* assign)
 {
-    // Enum of supported assignments within the ComputeGenerator
+    // leave LHS on stack
+    llvm::Value* rhs = mValues.top(); mValues.pop();
+    llvm::Value* lhs = mValues.top();
 
-    enum AssignmentType
-    {
-        UNSUPPORTED = 0,
-        STRING_EQ_STRING,
-        ARRAY_EQ_ARRAY,
-        SCALAR_EQ_ARRAY,
-        ARRAY_EQ_SCALAR,
-        SCALAR_EQ_SCALAR
-    };
-
-    llvm::Value* lhs = mValues.top(); mValues.pop();
-    if (!lhs->getType()->isPointerTy()) {
-        OPENVDB_THROW(LLVMBinaryOperationError, "Unable to assign to an rvalue");
+    llvm::Type* rhsType = rhs->getType();
+    if (assign->isCompound()) {
+        rhs = this->binaryExpression(lhs, rhs, assign->operation());
+        rhsType = rhs->getType();
     }
 
-    // Keep original RHS value back onto stack to allow for multiple
-    // assignment statements to be chained together, but make sure its
-    // only loaded once
-
-    llvm::Value* rhs = mValues.top();
-    llvm::Type* rhsType = rhs->getType();
-
+    // rhs must be loaded for assignExpression() if it's a scalar
     if (rhsType->isPointerTy()) {
         rhsType = rhsType->getPointerElementType();
         if (rhsType->isIntegerTy() || rhsType->isFloatingPointTy()) {
-            mValues.pop();
             rhs = mBuilder.CreateLoad(rhs);
-            mValues.push(rhs);
         }
     }
 
-    llvm::Type* lhsType = lhs->getType()->getPointerElementType();
-
-    // convert rhs to match lhs for all supported assignments:
-    // (scalar=scalar, vector=vector, scalar=vector, vector=scalar etc)
-
-    AssignmentType assignmentType = UNSUPPORTED;
-    if (lhsType == LLVMType<AXString>::get(mContext) &&
-        rhsType == LLVMType<AXString>::get(mContext)) {
-        assignmentType = STRING_EQ_STRING;
-    }
-    else if (lhsType->isArrayTy() && rhsType->isArrayTy()) {
-        assignmentType = ARRAY_EQ_ARRAY;
-    }
-    else if (lhsType->isArrayTy() &&
-        (rhsType->isIntegerTy() ||
-         rhsType->isFloatingPointTy())) {
-        assignmentType = ARRAY_EQ_SCALAR;
-    }
-    else if (rhsType->isArrayTy() &&
-        (lhsType->isIntegerTy() ||
-         lhsType->isFloatingPointTy())) {
-        assignmentType = SCALAR_EQ_ARRAY;
-    }
-    else if ((lhsType->isIntegerTy() || lhsType->isFloatingPointTy()) &&
-             (rhsType->isIntegerTy() || rhsType->isFloatingPointTy())) {
-        assignmentType = SCALAR_EQ_SCALAR;
-    }
-
-    switch (assignmentType) {
-        case STRING_EQ_STRING : {
-
-            // get the size of the rhs string
-            llvm::Type* strType = LLVMType<AXString>::get(mContext);
-            llvm::Value* rstrptr = nullptr;
-            llvm::Value* size = nullptr;
-
-            if (llvm::isa<llvm::Constant>(rhs)) {
-                llvm::Constant* zero =
-                    llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(mContext, 0));
-                llvm::Constant* constant = llvm::cast<llvm::Constant>(rhs)->getAggregateElement(zero); // char*
-                rstrptr = constant;
-                constant = constant->stripPointerCasts();
-                const size_t count = constant->getType()->getPointerElementType()->getArrayNumElements();
-                assert(count < static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
-
-                size = LLVMType<AXString::SizeType>::get
-                    (mContext, static_cast<AXString::SizeType>(count));
-            }
-            else {
-                rstrptr = mBuilder.CreateStructGEP(strType, rhs, 0); // char**
-                rstrptr = mBuilder.CreateLoad(rstrptr);
-                size = mBuilder.CreateStructGEP(strType, rhs, 1); // AXString::SizeType*
-                size = mBuilder.CreateLoad(size);
-            }
-
-            // total with term
-            llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
-            llvm::Value* totalTerm = binaryOperator(size, one, ast::tokens::PLUS, mBuilder);
-
-            // re-allocate the string array
-            llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), totalTerm);
-            llvm::Value* lstrptr = mBuilder.CreateStructGEP(strType, lhs, 0); // char**
-            llvm::Value* lsize = mBuilder.CreateStructGEP(strType, lhs, 1); // AXString::SizeType*
-
-#if LLVM_VERSION_MAJOR > 6
-            mBuilder.CreateMemCpy(string, /*dest-align*/0, rstrptr, /*src-align*/0, totalTerm);
-#else
-            mBuilder.CreateMemCpy(string, rstrptr, totalTerm, /*align*/0);
-#endif
-            mBuilder.CreateStore(string, lstrptr);
-            mBuilder.CreateStore(size, lsize);
-            break;
-        }
-        case ARRAY_EQ_ARRAY : {
-            // @note  This is technically possible, but we disallow it as a feature
-            // of the language (currently)
-            const size_t lhsSize = lhsType->getArrayNumElements();
-            const size_t rhsSize = rhsType->getArrayNumElements();
-            if (lhsSize != rhsSize) {
-                OPENVDB_THROW(LLVMArrayError, "Unable to assign vector/array "
-                    "attributes with mismatching sizes");
-            }
-
-            llvm::Type* lhsElementType = lhsType->getArrayElementType();
-            for (size_t i = 0; i < lhsSize; ++i) {
-                llvm::Value* lelement = mBuilder.CreateConstGEP2_64(lhs, 0, i);
-                llvm::Value* relement = mBuilder.CreateConstGEP2_64(rhs, 0, i);
-                relement = mBuilder.CreateLoad(relement);
-                relement = arithmeticConversion(relement, lhsElementType, mBuilder);
-                mBuilder.CreateStore(relement, lelement);
-            }
-            break;
-        }
-        case SCALAR_EQ_ARRAY : {
-            OPENVDB_THROW(LLVMArrayError, "Cannot assign a scalar value "
-                "from a vector or matrix. Consider using the [] operator to "
-                "get a particular element.");
-            break;
-        }
-        case ARRAY_EQ_SCALAR : {
-            // vector = scalar assignment - implicit cast and element store
-            llvm::Type* lhsElementType = lhsType->getArrayElementType();
-            rhs = arithmeticConversion(rhs, lhsElementType, mBuilder);
-
-            const size_t elements = lhsType->getArrayNumElements();
-            for (size_t i = 0; i < elements; ++i) {
-                llvm::Value* value = mBuilder.CreateConstGEP2_64(lhs, 0, i);
-                mBuilder.CreateStore(rhs, value);
-            }
-            break;
-        }
-        case SCALAR_EQ_SCALAR : {
-            // implicit conversion - scalars are already loaded
-            rhs = arithmeticConversion(rhs, lhsType, mBuilder);
-            mBuilder.CreateStore(rhs, lhs);
-            break;
-        }
-        default : {
-            OPENVDB_THROW(LLVMCastError, "Unsupported implicit cast in assignment.");
-        }
-    }
+    this->assignExpression(lhs, rhs);
     return true;
 }
 
@@ -867,9 +622,9 @@ bool ComputeGenerator::visit(const ast::Crement* node)
     llvm::Value* rvalue = mBuilder.CreateLoad(value);
     llvm::Type* type = rvalue->getType();
 
-    if (!type->isIntegerTy() && !type->isFloatingPointTy()) {
+    if (type->isIntegerTy(1) || (!type->isIntegerTy() && !type->isFloatingPointTy())) {
         OPENVDB_THROW(LLVMTypeError, "Variable is an unsupported type for "
-            "crement. Must be scalar.");
+            "crement. Must be a non-boolean scalar.");
     }
 
     llvm::Value* crement = nullptr;
@@ -886,14 +641,14 @@ bool ComputeGenerator::visit(const ast::Crement* node)
     // decide what to put on the expression stack
 
     if (node->post()) mValues.push(rvalue);
-    else             mValues.push(crement);
+    else              mValues.push(value);
     return true;
 }
 
 bool ComputeGenerator::visit(const ast::FunctionCall* node)
 {
     const FunctionGroup::Ptr function = this->getFunction(node->name());
-    const size_t args = node->numArgs();
+    const size_t args = node->children();
     assert(mValues.size() >= args);
 
     // initialize arguments. scalars are always passed by value, arrays
@@ -953,8 +708,15 @@ bool ComputeGenerator::visit(const ast::Cast* node)
     if (value->getType()->isPointerTy()) {
         value = mBuilder.CreateLoad(value);
     }
+    if (targetType->isIntegerTy(1)) {
+        // if target is bool, perform standard boolean conversion (*not* truncation).
+        value = boolComparison(value, mBuilder);
+        assert(value->getType()->isIntegerTy(1));
+    }
+    else {
+        value = arithmeticConversion(value, targetType, mBuilder);
+    }
 
-    value = arithmeticConversion(value, targetType, mBuilder);
     mValues.push(value);
     return true;
 }
@@ -977,19 +739,43 @@ bool ComputeGenerator::visit(const ast::DeclareLocal* node)
         mBuilder.CreateStore(constStr, value);
     }
 
-    mValues.push(value);
     SymbolTable* current = mSymbolTables.getOrInsert(mScopeIndex);
-    if (!current->insert(node->name(), value)) {
-        OPENVDB_THROW(LLVMDeclarationError, "Local variable \"" + node->name() +
+    const std::string& name = node->local()->name();
+    if (!current->insert(name, value)) {
+        OPENVDB_THROW(LLVMDeclarationError, "Local variable \"" + name +
             "\" has already been declared!");
     }
 
     if (mWarnings) {
-        if (mSymbolTables.find(node->name(), mScopeIndex - 1)) {
-            mWarnings->emplace_back("Declaration of variable \"" + node->name()
+        if (mSymbolTables.find(name, mScopeIndex - 1)) {
+            mWarnings->emplace_back("Declaration of variable \"" + name
                 + "\" shadows a previous declaration.");
         }
     }
+
+    // do this to ensure all AST nodes are visited
+    if (!this->traverse(node->local())) return false;
+    value = mValues.top(); mValues.pop();
+
+    if (node->hasInit()) {
+        if (!this->traverse(node->init())) return false;
+
+        llvm::Value* init = mValues.top(); mValues.pop();
+        llvm::Type* initType = init->getType();
+
+        if (initType->isPointerTy()) {
+            initType = initType->getPointerElementType();
+            if (initType->isIntegerTy() || initType->isFloatingPointTy()) {
+                init = mBuilder.CreateLoad(init);
+            }
+        }
+
+        this->assignExpression(value, init);
+        // note that loop conditions allow uses of initialized declarations
+        // and so require the value
+        mValues.push(value);
+    }
+
     return true;
 }
 
@@ -1099,7 +885,7 @@ bool ComputeGenerator::visit(const ast::ArrayUnpack* node)
 
 bool ComputeGenerator::visit(const ast::ArrayPack* node)
 {
-    const size_t num = node->numArgs();
+    const size_t num = node->children();
 
     // if there is only one element on the stack, leave it as a pointer to a scalar
     // or another array
@@ -1277,6 +1063,425 @@ bool ComputeGenerator::visit(const ast::Attribute*)
         "attribute accesses.");
     return false;
 }
+
+void ComputeGenerator::assignExpression(llvm::Value* lhs, llvm::Value*& rhs)
+{
+    llvm::Type* strtype = LLVMType<AXString>::get(mContext);
+
+    llvm::Type* ltype = lhs->getType();
+    llvm::Type* rtype = rhs->getType();
+
+    if (!ltype->isPointerTy()) {
+        OPENVDB_THROW(LLVMBinaryOperationError, "Unable to assign to an rvalue");
+    }
+
+    ltype = ltype->getPointerElementType();
+    if (rtype->isPointerTy()) rtype = rtype->getPointerElementType();
+
+    size_t lsize = ltype->isArrayTy() ? ltype->getArrayNumElements() : 1;
+    size_t rsize = rtype->isArrayTy() ? rtype->getArrayNumElements() : 1;
+
+    // Handle scalar->matrix promotion if necessary
+    // @todo promote all values (i.e. scalar to vectors) to make below branching
+    // easier. Need to verifier IR is able to optimise to the same logic
+
+    if (lsize == 9 || lsize == 16) {
+        if (rtype->isIntegerTy() || rtype->isFloatingPointTy()) {
+            if (rhs->getType()->isPointerTy()) {
+                rhs = mBuilder.CreateLoad(rhs);
+            }
+            rhs = arithmeticConversion(rhs, ltype->getArrayElementType(), mBuilder);
+            rhs = scalarToMatrix(rhs, mBuilder, lsize == 9 ? 3 : 4);
+            rtype = rhs->getType()->getPointerElementType();
+            rsize = lsize;
+        }
+    }
+
+    if (lsize != rsize) {
+        if (lsize > 1 && rsize > 1) {
+            OPENVDB_THROW(LLVMArrayError, "Unable to assign vector/array "
+                "attributes with mismatching sizes");
+        }
+        else if (lsize == 1) {
+            assert(rsize > 1);
+            OPENVDB_THROW(LLVMArrayError, "Cannot assign a scalar value "
+                "from a vector or matrix. Consider using the [] operator to "
+                "get a particular element.");
+        }
+    }
+
+    // All remaining operators are either componentwise, string or invalid implicit casts
+
+    const bool string =
+        (ltype == strtype && rtype == strtype);
+
+    const bool componentwise = !string &&
+        (rtype->isFloatingPointTy() || rtype->isIntegerTy() || rtype->isArrayTy()) &&
+        (ltype->isFloatingPointTy() || ltype->isIntegerTy() || ltype->isArrayTy());
+
+    if (componentwise) {
+        assert(rsize == lsize || (rsize == 1 || lsize == 1));
+        const size_t resultsize = std::max(lsize, rsize);
+
+        // compute the componentwise precision
+
+        llvm::Type* opprec = ltype->isArrayTy() ? ltype->getArrayElementType() : ltype;
+        // if target is bool, perform standard boolean conversion (*not* truncation).
+        // i.e. if rhs is anything but zero, lhs is true
+        // @todo zeroval should be at rhstype
+        if (opprec->isIntegerTy(1)) {
+            rhs = this->binaryExpression(rhs,
+                    LLVMType<int32_t>::get(mContext, 0),
+                    ast::tokens::NOTEQUALS);
+            assert(rhs->getType()->isIntegerTy(1));
+        }
+
+        for (size_t i = 0; i < resultsize; ++i) {
+            llvm::Value* lelement = lsize == 1 ? lhs : mBuilder.CreateConstGEP2_64(lhs, 0, i);
+            llvm::Value* relement = rsize == 1 ? rhs : mBuilder.CreateLoad(mBuilder.CreateConstGEP2_64(rhs, 0, i));
+            relement = arithmeticConversion(relement, opprec, mBuilder);
+            mBuilder.CreateStore(relement, lelement);
+        }
+    }
+    else if (string) {
+        // get the size of the rhs string
+        llvm::Type* strType = LLVMType<AXString>::get(mContext);
+        llvm::Value* rstrptr = nullptr;
+        llvm::Value* size = nullptr;
+
+        if (llvm::isa<llvm::Constant>(rhs)) {
+            llvm::Constant* zero =
+                llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(mContext, 0));
+            llvm::Constant* constant = llvm::cast<llvm::Constant>(rhs)->getAggregateElement(zero); // char*
+            rstrptr = constant;
+            constant = constant->stripPointerCasts();
+            const size_t count = constant->getType()->getPointerElementType()->getArrayNumElements();
+            assert(count < static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
+
+            size = LLVMType<AXString::SizeType>::get
+                (mContext, static_cast<AXString::SizeType>(count));
+        }
+        else {
+            rstrptr = mBuilder.CreateStructGEP(strType, rhs, 0); // char**
+            rstrptr = mBuilder.CreateLoad(rstrptr);
+            size = mBuilder.CreateStructGEP(strType, rhs, 1); // AXString::SizeType*
+            size = mBuilder.CreateLoad(size);
+        }
+
+        // total with term
+        llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
+        llvm::Value* totalTerm = binaryOperator(size, one, ast::tokens::PLUS, mBuilder);
+
+        // re-allocate the string array
+        llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), totalTerm);
+        llvm::Value* lstrptr = mBuilder.CreateStructGEP(strType, lhs, 0); // char**
+        llvm::Value* lsize = mBuilder.CreateStructGEP(strType, lhs, 1); // AXString::SizeType*
+
+#if LLVM_VERSION_MAJOR >= 10
+        mBuilder.CreateMemCpy(string, /*dest-align*/llvm::MaybeAlign(0),
+            rstrptr, /*src-align*/llvm::MaybeAlign(0), totalTerm);
+#elif LLVM_VERSION_MAJOR > 6
+        mBuilder.CreateMemCpy(string, /*dest-align*/0, rstrptr, /*src-align*/0, totalTerm);
+#else
+        mBuilder.CreateMemCpy(string, rstrptr, totalTerm, /*align*/0);
+#endif
+        mBuilder.CreateStore(string, lstrptr);
+        mBuilder.CreateStore(size, lsize);
+    }
+    else {
+        OPENVDB_THROW(LLVMCastError, "Unsupported implicit cast in assignment.");
+    }
+}
+
+llvm::Value* ComputeGenerator::binaryExpression(llvm::Value* lhs, llvm::Value* rhs,
+    const ast::tokens::OperatorToken op)
+{
+    llvm::Type* strtype = LLVMType<AXString>::get(mContext);
+
+    llvm::Type* ltype = lhs->getType();
+    llvm::Type* rtype = rhs->getType();
+
+    if (ltype->isPointerTy()) ltype = ltype->getPointerElementType();
+    if (rtype->isPointerTy()) rtype = rtype->getPointerElementType();
+
+    size_t lsize = ltype->isArrayTy() ? ltype->getArrayNumElements() : 1;
+    size_t rsize = rtype->isArrayTy() ? rtype->getArrayNumElements() : 1;
+
+    // Handle scalar->matrix promotion if necessary
+    // @todo promote all values (i.e. scalar to vectors) to make below branching
+    // easier. Need to verifier IR is able to optimise to the same logic
+
+    if (lsize == 9 || lsize == 16) {
+        if (rtype->isIntegerTy() || rtype->isFloatingPointTy()) {
+            if (rhs->getType()->isPointerTy()) {
+                rhs = mBuilder.CreateLoad(rhs);
+            }
+            rhs = arithmeticConversion(rhs, ltype->getArrayElementType(), mBuilder);
+            rhs = scalarToMatrix(rhs, mBuilder, lsize == 9 ? 3 : 4);
+            rtype = rhs->getType()->getPointerElementType();
+            rsize = lsize;
+        }
+    }
+    if (rsize == 9 || rsize == 16) {
+        if (ltype->isIntegerTy() || ltype->isFloatingPointTy()) {
+            if (lhs->getType()->isPointerTy()) {
+                lhs = mBuilder.CreateLoad(lhs);
+            }
+            lhs = arithmeticConversion(lhs, rtype->getArrayElementType(), mBuilder);
+            lhs = scalarToMatrix(lhs, mBuilder, rsize == 9 ? 3 : 4);
+            ltype = lhs->getType()->getPointerElementType();
+            lsize = rsize;
+        }
+    }
+
+    //
+
+    const ast::tokens::OperatorType opType = ast::tokens::operatorType(op);
+    llvm::Value* result = nullptr;
+
+    // Handle custom matrix operators
+
+    if (lsize >= 9 || rsize >= 9)
+    {
+        if (op == ast::tokens::MULTIPLY) {
+            if ((lsize == 9 && rsize == 9) ||
+                (lsize == 16 && rsize == 16)) {
+                // matrix matrix multiplication all handled through mmmult
+                result = this->getFunction("mmmult", /*internal*/true)->execute({lhs, rhs}, mBuilder);
+            }
+            else if ((lsize ==  9 && rsize == 3) ||
+                     (lsize == 16 && rsize == 3) ||
+                     (lsize == 16 && rsize == 4)) {
+                // matrix vector multiplication all handled through pretransform
+                result = this->getFunction("pretransform")->execute({lhs, rhs}, mBuilder);
+            }
+            else if ((lsize == 3 && rsize ==  9) ||
+                     (lsize == 4 && rsize == 16) ||
+                     (lsize == 4 && rsize == 16)) {
+                // vector matrix multiplication all handled through transform
+                result = this->getFunction("transform")->execute({lhs, rhs}, mBuilder);
+            }
+            else {
+                OPENVDB_THROW(LLVMBinaryOperationError, "Unsupported * operator on "
+                    "vector/matrix sizes");
+            }
+        }
+        else if (op == ast::tokens::MORETHAN ||
+                 op == ast::tokens::LESSTHAN ||
+                 op == ast::tokens::MORETHANOREQUAL ||
+                 op == ast::tokens::LESSTHANOREQUAL ||
+                 op == ast::tokens::DIVIDE || // no / support for mats
+                 op == ast::tokens::MODULO || // no % support for mats
+                 opType == ast::tokens::LOGICAL ||
+                 opType == ast::tokens::BITWISE) {
+            OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
+                + ast::tokens::operatorNameFromToken(op) +
+                "\" with a vector/matrix argument");
+        }
+    }
+
+    if (!result) {
+        // Handle matrix/vector ops of mismatching sizes
+        if (lsize > 1 || rsize > 1) {
+            if (lsize != rsize && (lsize > 1 && rsize > 1)) {
+                OPENVDB_THROW(LLVMArrayError, "Unsupported binary operator on vector/matrix "
+                    "arguments of mismatching sizes.");
+            }
+            if (op == ast::tokens::MORETHAN ||
+                op == ast::tokens::LESSTHAN ||
+                op == ast::tokens::MORETHANOREQUAL ||
+                op == ast::tokens::LESSTHANOREQUAL ||
+                opType == ast::tokens::LOGICAL ||
+                opType == ast::tokens::BITWISE) {
+                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
+                    + ast::tokens::operatorNameFromToken(op) +
+                    "\" with a vector/matrix argument");
+            }
+        }
+
+        // Handle invalid floating point ops
+        if (rtype->isFloatingPointTy() || ltype->isFloatingPointTy()) {
+            if (opType == ast::tokens::BITWISE) {
+                OPENVDB_THROW(LLVMBinaryOperationError, "Call to unsupported operator \""
+                    + ast::tokens::operatorNameFromToken(op) +
+                    "\" with a floating point argument");
+            }
+        }
+    }
+
+    // All remaining operators are either componentwise, string or invalid implicit casts
+
+    const bool componentwise = !result &&
+        (rtype->isFloatingPointTy() || rtype->isIntegerTy() || rtype->isArrayTy()) &&
+        (ltype->isFloatingPointTy() || ltype->isIntegerTy() || ltype->isArrayTy());
+
+    if (componentwise)
+    {
+        assert(ltype->isArrayTy() || ltype->isFloatingPointTy() || ltype->isIntegerTy());
+        assert(rtype->isArrayTy() || rtype->isFloatingPointTy() || rtype->isIntegerTy());
+        assert(rsize == lsize || (rsize == 1 || lsize == 1));
+
+        // compute the componentwise precision
+
+        llvm::Type* opprec = ltype->isArrayTy() ? ltype->getArrayElementType() : ltype;
+        opprec = rtype->isArrayTy() ?
+            typePrecedence(opprec, rtype->getArrayElementType()) :
+            typePrecedence(opprec, rtype);
+        // if bool, the lowest precision and subsequent result should be int32
+        // for arithmetic, bitwise and certain other ops
+        // @note - no bool containers, so if the type is a container, it can't
+        // contain booleans
+        if (opprec->isIntegerTy(1)) {
+            if (opType == ast::tokens::ARITHMETIC ||
+                opType == ast::tokens::BITWISE ||
+                op == ast::tokens::MORETHAN ||
+                op == ast::tokens::LESSTHAN ||
+                op == ast::tokens::MORETHANOREQUAL ||
+                op == ast::tokens::LESSTHANOREQUAL) {
+                opprec = LLVMType<int32_t>::get(mContext);
+            }
+        }
+
+        // load scalars once
+
+        if (!ltype->isArrayTy()) {
+            if (lhs->getType()->isPointerTy()) {
+                lhs = mBuilder.CreateLoad(lhs);
+            }
+        }
+        if (!rtype->isArrayTy()) {
+            if (rhs->getType()->isPointerTy()) {
+                rhs = mBuilder.CreateLoad(rhs);
+            }
+        }
+
+        const size_t resultsize = std::max(lsize, rsize);
+        std::vector<llvm::Value*> elements;
+        elements.reserve(resultsize);
+
+        // perform op
+
+        for (size_t i = 0; i < resultsize; ++i) {
+            llvm::Value* lelement = lsize == 1 ? lhs : mBuilder.CreateLoad(mBuilder.CreateConstGEP2_64(lhs, 0, i));
+            llvm::Value* relement = rsize == 1 ? rhs : mBuilder.CreateLoad(mBuilder.CreateConstGEP2_64(rhs, 0, i));
+            lelement = arithmeticConversion(lelement, opprec, mBuilder);
+            relement = arithmeticConversion(relement, opprec, mBuilder);
+            elements.emplace_back(binaryOperator(lelement, relement, op, mBuilder));
+        }
+
+        // handle vec/mat results
+
+        if (resultsize > 1) {
+            if (op == ast::tokens::EQUALSEQUALS || op == ast::tokens::NOTEQUALS) {
+                const ast::tokens::OperatorToken reductionOp =
+                    op == ast::tokens::EQUALSEQUALS ? ast::tokens::AND : ast::tokens::OR;
+                result = elements.front();
+                assert(result->getType() == LLVMType<bool>::get(mContext));
+                for (size_t i = 1; i < resultsize; ++i) {
+                    result = binaryOperator(result, elements[i], reductionOp, mBuilder);
+                }
+            }
+            else {
+                // Create the allocation at the start of the function block
+                result = insertStaticAlloca(mBuilder,
+                    llvm::ArrayType::get(opprec, resultsize));
+                for (size_t i = 0; i < resultsize; ++i) {
+                    mBuilder.CreateStore(elements[i], mBuilder.CreateConstGEP2_64(result, 0, i));
+                }
+            }
+        }
+        else {
+            result = elements.front();
+        }
+    }
+
+    const bool string = !result &&
+        (ltype == strtype && rtype == strtype);
+
+    if (string)
+    {
+        if (op != ast::tokens::PLUS) {
+            OPENVDB_THROW(LLVMBinaryOperationError, "Unsupported string operation \""
+                + ast::tokens::operatorNameFromToken(op) + "\"");
+        }
+
+        auto& B = mBuilder;
+        auto structToString = [&B, strtype](llvm::Value*& str) -> llvm::Value*
+        {
+            llvm::Value* size = nullptr;
+            if (llvm::isa<llvm::Constant>(str)) {
+                llvm::Constant* zero =
+                    llvm::cast<llvm::Constant>(LLVMType<int32_t>::get(B.getContext(), 0));
+                llvm::Constant* constant = llvm::cast<llvm::Constant>(str)->getAggregateElement(zero); // char*
+                str = constant;
+                constant = constant->stripPointerCasts();
+
+                // array size should include the null terminator
+                llvm::Type* arrayType = constant->getType()->getPointerElementType();
+                assert(arrayType->getArrayNumElements() > 0);
+
+                const size_t count = arrayType->getArrayNumElements() - 1;
+                assert(count < static_cast<size_t>(std::numeric_limits<AXString::SizeType>::max()));
+
+                size = LLVMType<AXString::SizeType>::get
+                    (B.getContext(), static_cast<AXString::SizeType>(count));
+            }
+            else {
+                llvm::Value* rstrptr = B.CreateStructGEP(strtype, str, 0); // char**
+                rstrptr = B.CreateLoad(rstrptr);
+                size = B.CreateStructGEP(strtype, str, 1); // AXString::SizeType*
+                size = B.CreateLoad(size);
+                str = rstrptr;
+            }
+
+            return size;
+        };
+
+        // lhs and rhs get set to the char* arrays in structToString
+        llvm::Value* lhsSize = structToString(lhs);
+        llvm::Value* rhsSize = structToString(rhs);
+        // rhs with null terminator
+        llvm::Value* one = LLVMType<AXString::SizeType>::get(mContext, 1);
+        llvm::Value* rhsTermSize = binaryOperator(rhsSize, one, ast::tokens::PLUS, mBuilder);
+        // total and total with term
+        llvm::Value* total = binaryOperator(lhsSize, rhsSize, ast::tokens::PLUS, mBuilder);
+        llvm::Value* totalTerm = binaryOperator(lhsSize, rhsTermSize, ast::tokens::PLUS, mBuilder);
+
+        // get ptrs to the new structs values
+        result = insertStaticAlloca(mBuilder, strtype);
+        llvm::Value* string = mBuilder.CreateAlloca(LLVMType<char>::get(mContext), totalTerm);
+        llvm::Value* strptr = mBuilder.CreateStructGEP(strtype, result, 0); // char**
+        llvm::Value* sizeptr = mBuilder.CreateStructGEP(strtype, result, 1); // AXString::SizeType*
+
+        // get rhs offset
+        llvm::Value* stringRhsOffset = mBuilder.CreateGEP(string, lhsSize);
+
+        // memcpy
+#if LLVM_VERSION_MAJOR >= 10
+        mBuilder.CreateMemCpy(string, /*dest-align*/llvm::MaybeAlign(0),
+            lhs, /*src-align*/llvm::MaybeAlign(0), lhsSize);
+        mBuilder.CreateMemCpy(stringRhsOffset, /*dest-align*/llvm::MaybeAlign(0),
+            rhs, /*src-align*/llvm::MaybeAlign(0), rhsTermSize);
+#elif LLVM_VERSION_MAJOR > 6
+        mBuilder.CreateMemCpy(string, /*dest-align*/0, lhs, /*src-align*/0, lhsSize);
+        mBuilder.CreateMemCpy(stringRhsOffset, /*dest-align*/0, rhs, /*src-align*/0, rhsTermSize);
+#else
+        mBuilder.CreateMemCpy(string, lhs, lhsSize, /*align*/0);
+        mBuilder.CreateMemCpy(stringRhsOffset, rhs, rhsTermSize, /*align*/0);
+#endif
+
+        mBuilder.CreateStore(string, strptr);
+        mBuilder.CreateStore(total, sizeptr);
+    }
+
+    if (!result) {
+        OPENVDB_THROW(LLVMBinaryOperationError,
+            "Unsupported implicit cast in binary op.");
+    }
+
+    return result;
+}
+
 
 }
 }

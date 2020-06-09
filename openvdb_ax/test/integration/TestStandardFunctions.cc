@@ -37,6 +37,9 @@
 #include <openvdb_ax/test/util.h>
 #include <openvdb_ax/compiler/CustomData.h>
 #include <openvdb_ax/math/OpenSimplexNoise.h>
+#include <openvdb_ax/compiler/PointExecutable.h>
+#include <openvdb_ax/compiler/VolumeExecutable.h>
+
 #include <openvdb/points/PointConversion.h>
 #include <openvdb/util/CpuTimer.h>
 
@@ -217,7 +220,9 @@ inline void testFunctionOptions(unittest_util::AXTestHarness& harness,
     std::cerr << "  C Bindings" << std::endl;
     profile(opts, harness.mInputPointGrids, harness.mInputVolumeGrids);
 #else
-    harness.executeCode(file, nullptr, nullptr, data, opts);
+    harness.mOpts = opts;
+    harness.mCustomData = data;
+    harness.executeCode(file);
     AXTESTS_STANDARD_ASSERT_HARNESS(harness);
 #endif
 
@@ -229,7 +234,9 @@ inline void testFunctionOptions(unittest_util::AXTestHarness& harness,
     std::cerr << "  IR Functions " << std::endl;
     profile(opts, harness.mInputPointGrids, harness.mInputVolumeGrids);
 #else
-    harness.executeCode(file, nullptr, nullptr, data, opts);
+    harness.mOpts = opts;
+    harness.mCustomData = data;
+    harness.executeCode(file);
     AXTESTS_STANDARD_ASSERT_HARNESS(harness);
 #endif
 
@@ -241,7 +248,9 @@ inline void testFunctionOptions(unittest_util::AXTestHarness& harness,
     std::cerr << "  C Folding   " << std::endl;
     profile(opts, harness.mInputPointGrids, harness.mInputVolumeGrids);
 #else
-    harness.executeCode(file, nullptr, nullptr, data, opts);
+    harness.mOpts = opts;
+    harness.mCustomData = data;
+    harness.executeCode(file);
     AXTESTS_STANDARD_ASSERT_HARNESS(harness);
 #endif
 }
@@ -411,7 +420,6 @@ TestStandardFunctions::determinant()
 void
 TestStandardFunctions::diag()
 {
-    mHarness.testVolumes(false); // no Mat volume support
     mHarness.addAttribute<openvdb::math::Mat3<double>>
         ("test1", openvdb::math::Mat3<double>(-1,0,0, 0,-2,0, 0,0,-3));
     mHarness.addAttribute<openvdb::math::Mat3<float>>
@@ -512,7 +520,6 @@ TestStandardFunctions::hash()
 void
 TestStandardFunctions::identity3()
 {
-    mHarness.testVolumes(false);
     mHarness.addAttribute<openvdb::Mat3d>("test", openvdb::Mat3d::identity());
     testFunctionOptions(mHarness, "identity3");
 }
@@ -520,7 +527,6 @@ TestStandardFunctions::identity3()
 void
 TestStandardFunctions::identity4()
 {
-    mHarness.testVolumes(false);
     mHarness.addAttribute<openvdb::Mat4d>("test", openvdb::Mat4d::identity());
     testFunctionOptions(mHarness, "identity4");
 }
@@ -649,7 +655,6 @@ TestStandardFunctions::polardecompose()
     openvdb::Mat3d rot, symm;
     openvdb::math::polarDecomposition(composite, rot, symm);
 
-    mHarness.testVolumes(false);
     mHarness.addAttribute<openvdb::Mat3d>("rotation", rot);
     mHarness.addAttribute<openvdb::Mat3d>("symm", symm);
     testFunctionOptions(mHarness, "polardecompose");
@@ -658,7 +663,6 @@ TestStandardFunctions::polardecompose()
 void
 TestStandardFunctions::postscale()
 {
-    mHarness.testVolumes(false);
 
     mHarness.addAttributes<openvdb::math::Mat4<float>>
         ({"mat1", "mat3", "mat5"}, {
@@ -719,7 +723,6 @@ TestStandardFunctions::pow()
 void
 TestStandardFunctions::prescale()
 {
-    mHarness.testVolumes(false);
 
     mHarness.addAttributes<openvdb::math::Mat4<float>>
         ({"mat1", "mat3", "mat5"}, {
@@ -945,7 +948,6 @@ TestStandardFunctions::transform()
 void
 TestStandardFunctions::transpose()
 {
-    mHarness.testVolumes(false);
 
     mHarness.addAttribute("test1",
         openvdb::math::Mat3<double>(

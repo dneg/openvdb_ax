@@ -98,22 +98,17 @@ TestKeyword::testKeywordConditionalReturn()
 void
 TestKeyword::testKeywordForLoopKeywords()
 {
-    mHarness.testVolumes(false);
-
-    mHarness.addAttribute<openvdb::Vec3f>("loop_test4",  openvdb::Vec3f(1.0,0.0,0.0));
-    mHarness.addAttribute<openvdb::Vec3f>("loop_test5",  openvdb::Vec3f(1.0,0.0,3.0));
-    mHarness.addAttribute<openvdb::Vec3f>("loop_test6",  openvdb::Vec3f(1.0,2.0,3.0));
-    mHarness.addAttribute<openvdb::Vec3f>("loop_test7",  openvdb::Vec3f(1.0,2.0,3.0));
-    mHarness.addAttribute<openvdb::Vec3f>("loop_test8",  openvdb::Vec3f(1.0,2.0,3.0));
-    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test19", openvdb::math::Mat3s(1.0,2.0,3.0,
-                                                                                    0.0,0.0,0.0,
-                                                                                    7.0,8.0,9.0));
-    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test20", openvdb::math::Mat3s(1.0,0.0,0.0,
-                                                                                    0.0,0.0,0.0,
-                                                                                    7.0,0.0,0.0));
-    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test21", openvdb::math::Mat3s(1.0,0.0,3.0,
-                                                                                    0.0,0.0,0.0,
-                                                                                    7.0,0.0,9.0));
+    mHarness.addAttribute<openvdb::Vec3f>("loop_test4", openvdb::Vec3f(1.0,0.0,0.0));
+    mHarness.addAttribute<openvdb::Vec3f>("loop_test5", openvdb::Vec3f(1.0,0.0,3.0));
+    mHarness.addAttribute<openvdb::Vec3f>("loop_test6", openvdb::Vec3f(1.0,2.0,3.0));
+    mHarness.addAttribute<openvdb::Vec3f>("loop_test7", openvdb::Vec3f(1.0,2.0,3.0));
+    mHarness.addAttribute<openvdb::Vec3f>("loop_test8", openvdb::Vec3f(1.0,2.0,3.0));
+    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test19",
+        openvdb::math::Mat3s(1.0,2.0,3.0, 0.0,0.0,0.0, 7.0,8.0,9.0));
+    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test20",
+        openvdb::math::Mat3s(1.0,0.0,0.0, 0.0,0.0,0.0, 7.0,0.0,0.0));
+    mHarness.addAttribute<openvdb::math::Mat3s>("loop_test21",
+        openvdb::math::Mat3s(1.0,0.0,3.0, 0.0,0.0,0.0, 7.0,0.0,9.0));
     mHarness.addAttribute<openvdb::Vec3f>("return_test4", openvdb::Vec3f(10,10,10));
     mHarness.executeCode("test/snippets/keyword/forLoopKeywords");
 

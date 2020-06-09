@@ -29,8 +29,11 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include "TestHarness.h"
+#include "util.h"
 
 #include <openvdb/points/PointConversion.h>
+#include <openvdb_ax/compiler/PointExecutable.h>
+#include <openvdb_ax/compiler/VolumeExecutable.h>
 
 namespace unittest_util
 {
@@ -53,7 +56,8 @@ void wrapExecution(openvdb::points::PointDataGrid& grid,
                    const std::string * const group,
                    std::vector<std::string>* warnings,
                    const openvdb::ax::CustomData::Ptr& data,
-                   const openvdb::ax::CompilerOptions& opts)
+                   const openvdb::ax::CompilerOptions& opts,
+                   const bool createMissing)
 {
     using namespace openvdb::ax;
 
@@ -61,14 +65,15 @@ void wrapExecution(openvdb::points::PointDataGrid& grid,
     const std::string code = loadText(codeFileName);
     ast::Tree::Ptr syntaxTree = ast::parse(code.c_str());
     PointExecutable::Ptr executable = compiler.compile<PointExecutable>(*syntaxTree, data, warnings);
-    executable->execute(grid, group);
+    executable->execute(grid, group, createMissing);
 }
 
 void wrapExecution(openvdb::GridPtrVec& grids,
                    const std::string& codeFileName,
                    std::vector<std::string>* warnings,
                    const openvdb::ax::CustomData::Ptr& data,
-                   const openvdb::ax::CompilerOptions& opts)
+                   const openvdb::ax::CompilerOptions& opts,
+                   const bool createMissing)
 {
     using namespace openvdb::ax;
 
@@ -76,7 +81,7 @@ void wrapExecution(openvdb::GridPtrVec& grids,
     const std::string code = loadText(codeFileName);
     ast::Tree::Ptr syntaxTree = ast::parse(code.c_str());
     VolumeExecutable::Ptr executable = compiler.compile<VolumeExecutable>(*syntaxTree, data, warnings);
-    executable->execute(grids);
+    executable->execute(grids, VolumeExecutable::IterType::ON, createMissing);
 }
 
 void AXTestHarness::addInputGroups(const std::vector<std::string> &names,
@@ -104,18 +109,66 @@ void AXTestHarness::addExpectedGroups(const std::vector<std::string> &names,
 void AXTestHarness::executeCode(const std::string& codeFile,
                                 const std::string * const group,
                                 std::vector<std::string>* warnings,
-                                const openvdb::ax::CustomData::Ptr& data,
-                                const openvdb::ax::CompilerOptions& opts)
+                                const bool createMissing)
 {
     if (mUsePoints) {
         for (auto& grid : mInputPointGrids) {
-            wrapExecution(*grid, codeFile, group, warnings, data, opts);
+            wrapExecution(*grid, codeFile, group, warnings, mCustomData, mOpts, createMissing);
         }
     }
 
-    if (mUseVolumes)
-    {
-        wrapExecution(mInputVolumeGrids, codeFile, warnings, data, opts);
+    if (mUseVolumes) {
+        wrapExecution(mInputVolumeGrids, codeFile, warnings, mCustomData, mOpts, createMissing);
+    }
+}
+
+template <typename T>
+void AXTestHarness::addInputPtAttributes(const std::vector<std::string>& names,
+                          const std::vector<T>& values)
+{
+    for (size_t i = 0; i < names.size(); i++) {
+        for (auto& grid : mInputPointGrids) {
+            openvdb::points::appendAttribute<T>(grid->tree(), names[i], values[i]);
+       }
+    }
+}
+
+template <typename T>
+void AXTestHarness::addInputVolumes(const std::vector<std::string>& names,
+                     const std::vector<T>& values)
+{
+    using GridType = typename openvdb::BoolGrid::ValueConverter<T>::Type;
+
+    for (size_t i = 0; i < names.size(); i++) {
+        typename GridType::Ptr grid = GridType::create();
+        grid->denseFill(mVolumeBounds, values[i], true/*active*/);
+        grid->setName(names[i]);
+        mInputVolumeGrids.emplace_back(grid);
+    }
+}
+
+template <typename T>
+void AXTestHarness::addExpectedPtAttributes(const std::vector<std::string>& names,
+                             const std::vector<T>& values)
+{
+    for (size_t i = 0; i < names.size(); i++) {
+        for (auto& grid : mOutputPointGrids) {
+            openvdb::points::appendAttribute<T>(grid->tree(), names[i], values[i]);
+       }
+    }
+}
+
+template <typename T>
+void AXTestHarness::addExpectedVolumes(const std::vector<std::string>& names,
+                        const std::vector<T>& values)
+{
+    using GridType = typename openvdb::BoolGrid::ValueConverter<T>::Type;
+
+    for (size_t i = 0; i < names.size(); i++) {
+        typename GridType::Ptr grid = GridType::create();
+        grid->denseFill(mVolumeBounds, values[i], true/*active*/);
+        grid->setName(names[i] + "_expected");
+        mOutputVolumeGrids.emplace_back(grid);
     }
 }
 
@@ -250,28 +303,36 @@ void AXTestHarness::resetInputsToZero()
         });
     }
 
-    using AllowedGridTypes =
-        openvdb::TypeList<
-            openvdb::BoolGrid,
-            openvdb::DoubleGrid,
-            openvdb::FloatGrid,
-            openvdb::Int32Grid,
-            openvdb::Int64Grid,
-            openvdb::MaskGrid,
-            openvdb::StringGrid,
-            openvdb::Vec3IGrid,
-            openvdb::Vec3dGrid,
-            openvdb::Vec3fGrid,
-            ConverterT<openvdb::math::Vec4<int32_t>>,
-            ConverterT<openvdb::math::Vec4<float>>,
-            ConverterT<openvdb::math::Vec4<double>>>;
+    /// @todo: share with volume executable when the move to header files is made
+    ///        for customization of grid types.
+    using SupportedTypeList = openvdb::TypeList<
+        ConverterT<double>,
+        ConverterT<float>,
+        ConverterT<int64_t>,
+        ConverterT<int32_t>,
+        ConverterT<int16_t>,
+        ConverterT<bool>,
+        ConverterT<openvdb::math::Vec2<double>>,
+        ConverterT<openvdb::math::Vec2<float>>,
+        ConverterT<openvdb::math::Vec2<int32_t>>,
+        ConverterT<openvdb::math::Vec3<double>>,
+        ConverterT<openvdb::math::Vec3<float>>,
+        ConverterT<openvdb::math::Vec3<int32_t>>,
+        ConverterT<openvdb::math::Vec4<double>>,
+        ConverterT<openvdb::math::Vec4<float>>,
+        ConverterT<openvdb::math::Vec4<int32_t>>,
+        ConverterT<openvdb::math::Mat3<double>>,
+        ConverterT<openvdb::math::Mat3<float>>,
+        ConverterT<openvdb::math::Mat4<double>>,
+        ConverterT<openvdb::math::Mat4<float>>,
+        ConverterT<std::string>>;
 
     for (auto& grid : mInputVolumeGrids) {
-        const bool success = grid->apply<AllowedGridTypes>([](auto& typed) {
+        const bool success = grid->apply<SupportedTypeList>([](auto& typed) {
             using GridType = typename std::decay<decltype(typed)>::type;
             openvdb::tree::LeafManager<typename GridType::TreeType> manager(typed.tree());
             manager.foreach([](typename GridType::TreeType::LeafNodeType& leaf, size_t) {
-                leaf.fill(typename GridType::ValueType(0));
+                leaf.fill(openvdb::zeroVal<typename GridType::ValueType>());
             });
         });
         if (!success) {
@@ -281,10 +342,32 @@ void AXTestHarness::resetInputsToZero()
 }
 
 
-void AXTestCase::setUp()
-{
-    mHarness.reset();
-}
+#define REGISTER_HARNESS_METHODS(T) \
+template void AXTestHarness::addInputPtAttributes<T>(const std::vector<std::string>&, const std::vector<T>&); \
+template void AXTestHarness::addInputVolumes<T>(const std::vector<std::string>&, const std::vector<T>&); \
+template void AXTestHarness::addExpectedPtAttributes<T>(const std::vector<std::string>&, const std::vector<T>&); \
+template void AXTestHarness::addExpectedVolumes<T>(const std::vector<std::string>&, const std::vector<T>&);
+
+REGISTER_HARNESS_METHODS(double)
+REGISTER_HARNESS_METHODS(float)
+REGISTER_HARNESS_METHODS(int64_t)
+REGISTER_HARNESS_METHODS(int32_t)
+REGISTER_HARNESS_METHODS(int16_t)
+REGISTER_HARNESS_METHODS(bool)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec2<double>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec2<float>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec2<int32_t>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec3<double>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec3<float>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec3<int32_t>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec4<double>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec4<float>)
+REGISTER_HARNESS_METHODS(openvdb::math::Vec4<int32_t>)
+REGISTER_HARNESS_METHODS(openvdb::math::Mat3<double>)
+REGISTER_HARNESS_METHODS(openvdb::math::Mat3<float>)
+REGISTER_HARNESS_METHODS(openvdb::math::Mat4<double>)
+REGISTER_HARNESS_METHODS(openvdb::math::Mat4<float>)
+REGISTER_HARNESS_METHODS(std::string)
 
 }
 

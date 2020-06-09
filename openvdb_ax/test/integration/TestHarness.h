@@ -38,10 +38,9 @@
 
 #include "CompareGrids.h"
 
+#include <openvdb_ax/ast/Tokens.h>
 #include <openvdb_ax/compiler/Compiler.h>
 #include <openvdb_ax/compiler/CustomData.h>
-#include <openvdb_ax/compiler/PointExecutable.h>
-#include <openvdb_ax/compiler/VolumeExecutable.h>
 
 #include <openvdb/points/PointAttribute.h>
 #include <openvdb/points/PointScatter.h>
@@ -49,6 +48,8 @@
 #include <cppunit/TestCase.h>
 
 #include <unordered_map>
+
+extern int sGenerateAX;
 
 namespace unittest_util
 {
@@ -62,7 +63,8 @@ void wrapExecution(openvdb::points::PointDataGrid& grid,
                    const openvdb::ax::CustomData::Ptr& data =
                        openvdb::ax::CustomData::create(),
                    const openvdb::ax::CompilerOptions& opts =
-                       openvdb::ax::CompilerOptions());
+                       openvdb::ax::CompilerOptions(),
+                   const bool createMissing = true);
 
 void wrapExecution(openvdb::GridPtrVec& grids,
                    const std::string& codeFileName,
@@ -70,7 +72,8 @@ void wrapExecution(openvdb::GridPtrVec& grids,
                    const openvdb::ax::CustomData::Ptr& data =
                        openvdb::ax::CustomData::create(),
                    const openvdb::ax::CompilerOptions& opts =
-                       openvdb::ax::CompilerOptions());
+                       openvdb::ax::CompilerOptions(),
+                   const bool createMissing = false);
 
 /// @brief Structure for wrapping up most of the existing integration
 ///        tests with a simple interface
@@ -84,6 +87,8 @@ struct AXTestHarness
       , mUseVolumes(true)
       , mUsePoints(true)
       , mVolumeBounds({0,0,0},{0,0,0})
+      , mOpts(openvdb::ax::CompilerOptions())
+      , mCustomData(openvdb::ax::CustomData::create())
     {
         reset();
     }
@@ -93,25 +98,13 @@ struct AXTestHarness
 
     /// @brief adds attributes to input data set
     template <typename T>
-    typename std::enable_if<!openvdb::ValueTraits<T>::IsMat>::type
-    addInputAttributes(const std::vector<std::string>& names,
-                       const std::vector<T>& values)
+    void addInputAttributes(const std::vector<std::string>& names,
+                            const std::vector<T>& values)
     {
         if (mUsePoints)  addInputPtAttributes<T>(names, values);
         if (mUseVolumes) addInputVolumes(names, values);
     }
 
-    /// @brief override of addInputAttributes for Matrix types which won't add to volumes
-    ///        necessary since there are no matrix volumes
-    template <typename T>
-    typename std::enable_if<openvdb::ValueTraits<T>::IsMat>::type
-    addInputAttributes(const std::vector<std::string>& names,
-                       const std::vector<T>& values)
-    {
-        if (mUsePoints) {
-            addInputPtAttributes<T>(names, values);
-        }
-    }
 
     template <typename T>
     void addInputAttribute(const std::string& name, const T& inputVal)
@@ -121,25 +114,11 @@ struct AXTestHarness
 
     /// @brief adds attributes to expected output data sets
     template <typename T>
-    typename std::enable_if<!openvdb::ValueTraits<T>::IsMat>::type
-    addExpectedAttributes(const std::vector<std::string>& names,
-                          const std::vector<T>& values)
+    void addExpectedAttributes(const std::vector<std::string>& names,
+                               const std::vector<T>& values)
     {
         if (mUsePoints)  addExpectedPtAttributes<T>(names, values);
         if (mUseVolumes) addExpectedVolumes<T>(names, values);
-    }
-
-    /// @brief adds attributes to expected output data sets
-    /// @brief override of addExpectedAttributes for Matrix types which won't add to
-    ///        volumes necessary since there are no matrix volumes
-    template <typename T>
-    typename std::enable_if<openvdb::ValueTraits<T>::IsMat>::type
-    addExpectedAttributes(const std::vector<std::string>& names,
-                          const std::vector<T>& values)
-    {
-        if (mUsePoints) {
-            addExpectedPtAttributes<T>(names, values);
-        }
     }
 
     /// @brief adds attributes to both input and expected data
@@ -148,8 +127,12 @@ struct AXTestHarness
                        const std::vector<T>& inputValues,
                        const std::vector<T>& expectedValues)
     {
-       addInputAttributes(names, inputValues);
-       addExpectedAttributes(names, expectedValues);
+        if (inputValues.size() != expectedValues.size() ||
+            inputValues.size() != names.size()) {
+            throw std::runtime_error("bad unittest setup - input/expected value counts don't match");
+        }
+        addInputAttributes(names, inputValues);
+        addExpectedAttributes(names, expectedValues);
     }
 
     /// @brief adds attributes to both input and expected data, with input data set to 0 values
@@ -183,10 +166,7 @@ struct AXTestHarness
     void executeCode(const std::string& codeFile,
                      const std::string * const group = nullptr,
                      std::vector<std::string>* warnings = nullptr,
-                     const openvdb::ax::CustomData::Ptr& data =
-                        openvdb::ax::CustomData::create(),
-                     const openvdb::ax::CompilerOptions& opts =
-                        openvdb::ax::CompilerOptions());
+                     const bool createMissing = false);
 
     /// @brief rebuilds the input and output data sets to their default harness states. This
     ///        sets the bounds of volumes to a single voxel, with a single and four point grid
@@ -211,6 +191,18 @@ struct AXTestHarness
     void testVolumes(const bool);
     void testPoints(const bool);
 
+    template <typename T>
+    void addInputPtAttributes(const std::vector<std::string>& names, const std::vector<T>& values);
+
+    template <typename T>
+    void addInputVolumes(const std::vector<std::string>& names, const std::vector<T>& values);
+
+    template <typename T>
+    void addExpectedPtAttributes(const std::vector<std::string>& names, const std::vector<T>& values);
+
+    template <typename T>
+    void addExpectedVolumes(const std::vector<std::string>& names, const std::vector<T>& values);
+
     std::vector<openvdb::points::PointDataGrid::Ptr> mInputPointGrids;
     std::vector<openvdb::points::PointDataGrid::Ptr> mOutputPointGrids;
 
@@ -221,77 +213,81 @@ struct AXTestHarness
     bool mUsePoints;
     openvdb::CoordBBox mVolumeBounds;
 
-private:
-    template <typename T>
-    void addInputPtAttributes(const std::vector<std::string>& names,
-                              const std::vector<T>& values)
-    {
-        for (size_t i = 0; i < names.size(); i++) {
-            for (auto& grid : mInputPointGrids) {
-                openvdb::points::appendAttribute<T>(grid->tree(), names[i], values[i]);
-           }
-        }
-    }
-
-    template <typename T>
-    void addInputVolumes(const std::vector<std::string>& names,
-                         const std::vector<T>& values)
-    {
-        using GridType = typename openvdb::BoolGrid::ValueConverter<T>::Type;
-        if (!GridType::isRegistered()) {
-            throw std::runtime_error("Attempted to insert a volume of type \"" +
-                std::string(openvdb::typeNameAsString<T>()) + "\" which is not registered.");
-        }
-
-        for (size_t i = 0; i < names.size(); i++) {
-            typename GridType::Ptr grid = GridType::create();
-            grid->denseFill(mVolumeBounds, values[i], true/*active*/);
-            grid->setName(names[i]);
-            mInputVolumeGrids.emplace_back(grid);
-        }
-    }
-
-    template <typename T>
-    void addExpectedPtAttributes(const std::vector<std::string>& names,
-                                 const std::vector<T>& values)
-    {
-        for (size_t i = 0; i < names.size(); i++) {
-            for (auto& grid : mOutputPointGrids) {
-                openvdb::points::appendAttribute<T>(grid->tree(), names[i], values[i]);
-           }
-        }
-    }
-
-    template <typename T>
-    void addExpectedVolumes(const std::vector<std::string>& names,
-                            const std::vector<T>& values)
-    {
-        using GridType = typename openvdb::BoolGrid::ValueConverter<T>::Type;
-        if (!GridType::isRegistered()) {
-            throw std::runtime_error("Attempted to insert a volume of type \"" +
-                std::string(openvdb::typeNameAsString<T>()) + "\" which is not registered.");
-        }
-
-        for (size_t i = 0; i < names.size(); i++) {
-            typename GridType::Ptr grid = GridType::create();
-            grid->denseFill(mVolumeBounds, values[i], true/*active*/);
-            grid->setName(names[i] + "_expected");
-            mOutputVolumeGrids.emplace_back(grid);
-        }
-    }
+    openvdb::ax::CompilerOptions mOpts;
+    openvdb::ax::CustomData::Ptr mCustomData;
 
 };
 
 class AXTestCase : public CppUnit::TestCase
 {
 public:
-    void setUp() override;
+    void tearDown() override
+    {
+        std::string out;
+        for (auto& test : mTestFiles) {
+            if (!test.second) out += test.first + "\n";
+        }
+        CPPUNIT_ASSERT_MESSAGE("unused tests left in test case:\n" + out,
+            out.empty());
+    }
+
+    // @todo make pure
+    virtual std::string dir() const { return ""; }
+
+    /// @brief  Register an AX code snippet with this test. If the tests
+    ///         have been launched with -g, the code is also serialized
+    ///         into the test directory
+    void registerTest(const std::string& code,
+            const std::string& filename,
+            const std::ios_base::openmode flags = std::ios_base::out)
+    {
+        if (flags & std::ios_base::out) {
+            CPPUNIT_ASSERT_MESSAGE(
+                "duplicate test file found during test setup:\n" + filename,
+                mTestFiles.find(filename) == mTestFiles.end());
+            mTestFiles[filename] = false;
+        }
+        if (flags & std::ios_base::app) {
+            CPPUNIT_ASSERT_MESSAGE(
+                "test not found during ofstream append:\n" + filename,
+                mTestFiles.find(filename) != mTestFiles.end());
+        }
+
+        if (sGenerateAX) {
+            std::ofstream outfile;
+            outfile.open(this->dir() + "/" + filename, flags);
+            outfile << code << std::endl;
+            outfile.close();
+        }
+    }
+
+    template <typename ...Args>
+    void execute(const std::string& filename, Args&&... args)
+    {
+        CPPUNIT_ASSERT_MESSAGE(
+            "test not found during execution:\n" + this->dir() + "/" + filename,
+            mTestFiles.find(filename) != mTestFiles.end());
+        mTestFiles[filename] = true; // has been used
+
+          // execute
+        mHarness.executeCode(this->dir() + "/" + filename, args...);
+
+        // check
+        std::stringstream out;
+        const bool correct = mHarness.checkAgainstExpected(out);
+        CPPUNIT_ASSERT_MESSAGE(out.str(), correct);
+    }
 
 protected:
     AXTestHarness mHarness;
+    std::unordered_map<std::string, bool> mTestFiles;
 };
 
 } // namespace unittest_util
+
+
+#define GET_TEST_DIRECTORY() \
+        std::string(__FILE__).substr(0, std::string(__FILE__).find_last_of('.')); \
 
 #define AXTESTS_STANDARD_ASSERT_HARNESS(harness) \
     {   std::stringstream out; \

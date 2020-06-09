@@ -110,9 +110,9 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
         return true;
     }
 
-    bool traverse(NodeType<ast::ExpressionList>* exprl) {
-        this->visit(exprl);
-        const size_t children = exprl->children();
+    bool traverse(NodeType<ast::CommaOperator>* comma) {
+        this->visit(comma);
+        const size_t children = comma->children();
         ++mLevel;
         if (children == 0) {
             indent();
@@ -121,7 +121,7 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
         else {
             for (size_t i = 0; i < children; ++i) {
                 indent();
-                this->derived().traverse(exprl->child(i));
+                this->derived().traverse(comma->child(i));
             }
         }
         --mLevel;
@@ -141,19 +141,52 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
         --mLevel;
 
         indent();
-        mOs << "branch [then]:\n";
+        mOs << "branch [true]:\n";
 
-        this->traverse(cond->thenBranch());
+        this->traverse(cond->trueBranch());
 
-        if (cond->hasElseBranch()) {
+        if (cond->hasFalse()) {
             indent();
-            mOs << "branch [else]:\n";
+            mOs << "branch [false]:\n";
 
-            this->traverse(cond->elseBranch());
+            this->traverse(cond->falseBranch());
         }
         --mLevel;
         return true;
     }
+
+    bool traverse(NodeType<ast::TernaryOperator>* tern) {
+        this->visit(tern);
+        ++mLevel;
+
+        indent();
+        mOs << "condition:\n";
+
+        ++mLevel;
+        indent();
+        this->traverse(tern->condition());
+        --mLevel;
+
+        indent();
+        mOs << "true:\n";
+        if (tern->hasTrue()) {
+            ++mLevel;
+            indent();
+            this->traverse(tern->trueBranch());
+            --mLevel;
+        }
+
+        indent();
+        mOs << "false:\n";
+        ++mLevel;
+        indent();
+        this->traverse(tern->falseBranch());
+        --mLevel;
+
+        --mLevel;
+        return true;
+    }
+
 
     bool traverse(NodeType<ast::Loop>* loop) {
         this->visit(loop);
@@ -194,13 +227,30 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
         return true;
     }
 
-    bool traverse(const ast::AssignExpression* asgn) {
+    bool traverse(NodeType<ast::AssignExpression>* asgn) {
         this->visit(asgn);
         ++mLevel;
         indent();
         this->traverse(asgn->lhs());
         indent();
         this->traverse(asgn->rhs());
+        --mLevel;
+        return true;
+    }
+
+    bool traverse(NodeType<ast::DeclareLocal>* asgn) {
+        this->visit(asgn);
+        ++mLevel;
+        indent();
+        this->traverse(asgn->local());
+        if(asgn->hasInit()) {
+            indent();
+            mOs << "init:\n";
+            ++mLevel;
+            indent();
+            this->traverse(asgn->init());
+            --mLevel;
+        }
         --mLevel;
         return true;
     }
@@ -223,7 +273,7 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
         return true;
     }
 
-    bool traverse(const ast::BinaryOperator* bin) {
+    bool traverse(NodeType<ast::BinaryOperator>* bin) {
         this->visit(bin);
         ++mLevel;
         indent();
@@ -245,18 +295,36 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
 
     bool traverse(NodeType<ast::FunctionCall>* call) {
         this->visit(call);
+        const size_t children = call->children();
         ++mLevel;
-        indent();
-        this->traverse(call->args());
+        if (children == 0) {
+            indent();
+            mOs << "<empty>\n";
+        }
+        else {
+            for (size_t i = 0; i < children; ++i) {
+                indent();
+                this->derived().traverse(call->child(i));
+            }
+        }
         --mLevel;
         return true;
     }
 
     bool traverse(NodeType<ast::ArrayPack>* pack) {
         this->visit(pack);
+        const size_t children = pack->children();
         ++mLevel;
-        indent();
-        this->derived().traverse(pack->args());
+        if (children == 0) {
+            indent();
+            mOs << "<empty>\n";
+        }
+        else {
+            for (size_t i = 0; i < children; ++i) {
+                indent();
+                this->derived().traverse(pack->child(i));
+            }
+        }
         --mLevel;
         return true;
     }
@@ -269,7 +337,8 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
         this->traverse(pack->expression());
         indent();
         mOs << "component(s) : ";
-        this->traverse(pack->components());
+        this->traverse(pack->component0());
+        this->traverse(pack->component1());
         --mLevel;
         return true;
     }
@@ -281,9 +350,10 @@ struct PrintVisitor : public ast::Visitor<PrintVisitor>
     bool visit(const ast::Keyword* node);
     bool visit(const ast::AssignExpression* node);
     bool visit(const ast::Crement* node);
-    bool visit(const ast::ExpressionList* node);
+    bool visit(const ast::CommaOperator* node);
     bool visit(const ast::UnaryOperator* node);
     bool visit(const ast::BinaryOperator* node);
+    bool visit(const ast::TernaryOperator* node);
     bool visit(const ast::Cast* node);
     bool visit(const ast::FunctionCall* node);
     bool visit(const ast::Attribute* node);
@@ -341,13 +411,15 @@ bool PrintVisitor::visit(const ast::Block* node)
 
 bool PrintVisitor::visit(const ast::ConditionalStatement* node)
 {
-    mOs << node->nodename() << ": " << (node->hasElseBranch() ? "two branches " : "one branch") << '\n';
+    mOs << node->nodename() << ": " << (node->hasFalse() ? "two branches " : "one branch") << '\n';
     return true;
 }
 
 bool PrintVisitor::visit(const ast::AssignExpression* node)
 {
-    mOs << node->nodename() << ": " << tokens::operatorNameFromToken(node->operation()) << '\n';
+    mOs << node->nodename() << ": " << tokens::operatorNameFromToken(node->operation());
+    if (node->isCompound()) mOs << '=';
+    mOs << '\n';
     return true;
 }
 
@@ -374,7 +446,7 @@ bool PrintVisitor::visit(const ast::Crement* node)
     return true;
 }
 
-bool PrintVisitor::visit(const ast::ExpressionList* node)
+bool PrintVisitor::visit(const ast::CommaOperator* node)
 {
     mOs << node->nodename() << ": " << node->size() << " element(s)" << '\n';
     return true;
@@ -389,6 +461,12 @@ bool PrintVisitor::visit(const ast::UnaryOperator* node)
 bool PrintVisitor::visit(const ast::BinaryOperator* node)
 {
     mOs << node->nodename() << ": " <<  tokens::operatorNameFromToken(node->operation()) << '\n';
+    return true;
+}
+
+bool PrintVisitor::visit(const ast::TernaryOperator* node)
+{
+    mOs << node->nodename() << ":\n";
     return true;
 }
 
@@ -414,7 +492,7 @@ bool PrintVisitor::visit(const ast::Attribute* node)
 
 bool PrintVisitor::visit(const ast::DeclareLocal* node)
 {
-    mOs << node->nodename() << ": (" <<  node->typestr() << ") " << node->name() << '\n';
+    mOs << node->nodename() << ": "<<  node->typestr() << '\n';
     return true;
 }
 
@@ -432,7 +510,7 @@ bool PrintVisitor::visit(const ast::ArrayUnpack* node)
 
 bool PrintVisitor::visit(const ast::ArrayPack* node)
 {
-    mOs << node->nodename() << ": " << node->numArgs() << " element(s)" << '\n';
+    mOs << node->nodename() << ": " << node->children() << " element(s)" << '\n';
     return true;
 }
 
@@ -486,15 +564,15 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
 
     bool traverse(NodeType<ast::Block>* block) {
         const size_t children = block->children();
-        mOs << '\n';
         indent();
         mOs << '{' << '\n';
         ++mLevel;
         for (size_t i = 0; i < children; ++i) {
             indent();
             this->derived().traverse(block->child(i));
-            if (block->child(i)->nodetype() !=
-                ast::Node::ConditionalStatementNode) {
+            const auto type = block->child(i)->nodetype();
+            if (type != ast::Node::ConditionalStatementNode &&
+                type != ast::Node::LoopNode) {
                 mOs << ';' << '\n';
             }
         }
@@ -506,6 +584,42 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
 
     bool traverse(NodeType<ast::StatementList>* stmtl) {
         const size_t children = stmtl->children();
+        if (children == 0) return true;
+        if (children == 1) {
+            this->derived().traverse(stmtl->child(0));
+            mOs << ';';
+            return true;
+        }
+
+        // multiple statments
+
+        if (stmtl->child(0)->nodetype() == ast::Node::DeclareLocalNode) {
+            // it's a declaration list, manually handle the child nodes.
+            // This is to handle declarations within loop inits such as
+            // "for (int a = 0, b = 1;;)". Without this, it would be
+            // reprinted as "for (int a=0; int b=1; ;;)"
+
+            // visit the first child completely
+            this->derived().traverse(stmtl->child(0));
+
+            for (size_t i = 1; i < children; ++i) {
+                // all child statements should be declare locals
+                assert(stmtl->child(i)->nodetype() ==
+                    ast::Node::DeclareLocalNode);
+
+                mOs << ", ";
+                this->derived().traverse(stmtl->child(i)->child(0)); // local
+                auto* init = stmtl->child(i)->child(1); // init
+                if (init) {
+                    mOs << " = ";
+                    this->derived().traverse(init);
+                }
+            }
+            return true;
+        }
+
+        // otherwise traverse as normal
+
         for (size_t i = 0; i < children; ++i) {
             this->derived().traverse(stmtl->child(i));
             if (i != children-1) mOs << ';' << ' ';
@@ -513,25 +627,27 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
         return true;
     }
 
-    bool traverse(NodeType<ast::ExpressionList>* exprl) {
+    bool traverse(NodeType<ast::CommaOperator>* exprl) {
+        mOs << '(';
         const size_t children = exprl->children();
         for (size_t i = 0; i < children; ++i) {
             this->derived().traverse(exprl->child(i));
             if (i != children-1) mOs << ',' << ' ';
         }
+        mOs << ')';
         return true;
     }
 
     bool traverse(NodeType<ast::ConditionalStatement>* cond) {
         mOs << "if (";
         this->traverse(cond->condition());
-        mOs << ')';
-        this->traverse(cond->thenBranch());
-        indent();
+        mOs << ")\n";
+        this->traverse(cond->trueBranch());
 
-        if (cond->hasElseBranch()) {
-            mOs << "else";
-            this->traverse(cond->elseBranch());
+        if (cond->hasFalse()) {
+            indent();
+            mOs << "else\n";
+            this->traverse(cond->falseBranch());
         }
         return true;
     }
@@ -541,43 +657,43 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
         if (loopType == ast::tokens::LoopToken::FOR) {
             mOs << "for (";
             if (loop->hasInit()) this->traverse(loop->initial());
-            mOs <<"; ";
+            mOs << "; ";
             this->traverse(loop->condition());
-            mOs <<"; ";
+            mOs << "; ";
             if (loop->hasIter()) this->traverse(loop->iteration());
-            mOs<<")";
+            mOs << ")\n";
             this->traverse(loop->body());
         }
         else if (loopType == ast::tokens::LoopToken::DO) {
-            mOs << "do";
+            mOs << "do\n";
             this->traverse(loop->body());
             indent();
-            mOs <<"while (";
+            mOs << "while (";
             this->traverse(loop->condition());
-            mOs <<")";
+            mOs << ")\n";
         }
         else  {
-            mOs <<"while (";
+            mOs << "while (";
             this->traverse(loop->condition());
-            mOs <<")";
+            mOs << ")\n";
             this->traverse(loop->body());
         }
         return true;
     }
 
-    bool traverse(const ast::AssignExpression* asgn) {
+    bool traverse(NodeType<ast::AssignExpression>* asgn) {
         this->traverse(asgn->lhs());
         this->visit(asgn);
-        if (!asgn->isCompound()) {
-            this->traverse(asgn->rhs());
-        }
-        else {
-            // For compound assignments, don't traverse the left hand side
-            // of the right hand side of the binary expression. i.e:
-            // a += 5;  ->  a = a + 5;  ->  traverse(a) = <ignore> + traverse(5)
-            const ast::BinaryOperator* rhs =
-                static_cast<const ast::BinaryOperator*>(asgn->rhs());
-            this->traverse(rhs->rhs());
+        this->traverse(asgn->rhs());
+        return true;
+    }
+
+    bool traverse(NodeType<ast::DeclareLocal>* decl) {
+        this->visit(decl);
+        this->visit(decl->local());
+        if (decl->hasInit()) {
+            mOs <<" = ";
+            this->traverse(decl->init());
         }
         return true;
     }
@@ -595,7 +711,7 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
         return true;
     }
 
-    bool traverse(const ast::BinaryOperator* bin) {
+    bool traverse(NodeType<ast::BinaryOperator>* bin) {
         // The AST currently doesn't store what expressions were encapsulated
         // by parenthesis and instead infers precedences from the token order
         // set out in the parser. This means that traversal determines precedence.
@@ -611,6 +727,19 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
         return true;
     }
 
+    bool traverse(NodeType<ast::TernaryOperator>* tern) {
+        this->traverse(tern->condition());
+        mOs << " ?";
+        if (tern->hasTrue()) {
+            mOs << ' ';
+            this->traverse(tern->trueBranch());
+            mOs << ' ';
+        }
+        mOs << ": ";
+        this->traverse(tern->falseBranch());
+        return true;
+    }
+
     bool traverse(NodeType<ast::Cast>* cast) {
         this->visit(cast);
         mOs << '(';
@@ -622,14 +751,22 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
     bool traverse(NodeType<ast::FunctionCall>* call) {
         this->visit(call);
         mOs << '(';
-        this->traverse(call->args());
+        const size_t children = call->children();
+        for (size_t i = 0; i < children; ++i) {
+            this->derived().traverse(call->child(i));
+            if (i != children-1) mOs << ',' << ' ';
+        }
         mOs << ')';
         return true;
     }
 
     bool traverse(NodeType<ast::ArrayPack>* pack) {
         mOs << '{';
-        this->traverse(pack->args());
+        const size_t children = pack->children();
+        for (size_t i = 0; i < children; ++i) {
+            this->derived().traverse(pack->child(i));
+            if (i != children-1) mOs << ',' << ' ';
+        }
         mOs << '}';
         return true;
     }
@@ -637,7 +774,11 @@ struct ReprintVisitor : public ast::Visitor<ReprintVisitor>
     bool traverse(NodeType<ast::ArrayUnpack>* pack) {
         this->traverse(pack->expression());
         mOs << '[';
-        this->traverse(pack->components());
+        this->traverse(pack->component0());
+        if (pack->component1()) {
+            mOs << ',' << ' ';
+            this->traverse(pack->component1());
+        }
         mOs << ']';
         return true;
     }
@@ -688,7 +829,9 @@ private:
 
 bool ReprintVisitor::visit(const ast::AssignExpression* node)
 {
-    mOs << ' ' << tokens::operatorNameFromToken(node->operation()) << ' ';
+    mOs << ' ' << tokens::operatorNameFromToken(node->operation());
+    if (node->isCompound()) mOs << '=';
+    mOs << ' ';
     return true;
 }
 
@@ -731,7 +874,7 @@ bool ReprintVisitor::visit(const ast::Attribute* node)
 
 bool ReprintVisitor::visit(const ast::DeclareLocal* node)
 {
-    mOs << node->typestr() << ' ' << node->name();
+    mOs << node->typestr() << " ";
     return true;
 }
 

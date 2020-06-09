@@ -45,17 +45,55 @@ namespace {
 
 static const unittest_util::CodeTests tests =
 {
-    { "bool a_;",    Node::Ptr(new DeclareLocal("a_", CoreType::BOOL)) },
-    { "short _a;",   Node::Ptr(new DeclareLocal("_a", CoreType::SHORT)) },
-    { "int _;",      Node::Ptr(new DeclareLocal("_", CoreType::INT)) },
-    { "long aa;",    Node::Ptr(new DeclareLocal("aa", CoreType::LONG)) },
-    { "float A;",    Node::Ptr(new DeclareLocal("A", CoreType::FLOAT)) },
-    { "double _A;",  Node::Ptr(new DeclareLocal("_A", CoreType::DOUBLE)) },
-    { "vec3i a1;",   Node::Ptr(new DeclareLocal("a1", CoreType::VEC3I)) },
-    { "vec3f _1;",   Node::Ptr(new DeclareLocal("_1", CoreType::VEC3F)) },
-    { "vec3d abc;",  Node::Ptr(new DeclareLocal("abc", CoreType::VEC3D)) },
-    { "string D1f;", Node::Ptr(new DeclareLocal("D1f", CoreType::STRING)) },
+    { "bool a_;",    Node::Ptr(new DeclareLocal(CoreType::BOOL, new Local("a_"))) },
+    { "short _a;",   Node::Ptr(new DeclareLocal(CoreType::SHORT, new Local("_a"))) },
+    { "int _;",      Node::Ptr(new DeclareLocal(CoreType::INT, new Local("_"))) },
+    { "long aa;",    Node::Ptr(new DeclareLocal(CoreType::LONG, new Local("aa"))) },
+    { "float A;",    Node::Ptr(new DeclareLocal(CoreType::FLOAT, new Local("A"))) },
+    { "double _A;",  Node::Ptr(new DeclareLocal(CoreType::DOUBLE, new Local("_A"))) },
+    { "vec2i a1;",   Node::Ptr(new DeclareLocal(CoreType::VEC2I, new Local("a1"))) },
+    { "vec2f _1;",   Node::Ptr(new DeclareLocal(CoreType::VEC2F, new Local("_1"))) },
+    { "vec2d abc;",  Node::Ptr(new DeclareLocal(CoreType::VEC2D, new Local("abc"))) },
+    { "vec3i a1;",   Node::Ptr(new DeclareLocal(CoreType::VEC3I, new Local("a1"))) },
+    { "vec3f _1;",   Node::Ptr(new DeclareLocal(CoreType::VEC3F, new Local("_1"))) },
+    { "vec3d abc;",  Node::Ptr(new DeclareLocal(CoreType::VEC3D, new Local("abc"))) },
+    { "vec4i a1;",   Node::Ptr(new DeclareLocal(CoreType::VEC4I, new Local("a1"))) },
+    { "vec4f _1;",   Node::Ptr(new DeclareLocal(CoreType::VEC4F, new Local("_1"))) },
+    { "vec4d abc;",  Node::Ptr(new DeclareLocal(CoreType::VEC4D, new Local("abc"))) },
+    { "mat3f _1;",   Node::Ptr(new DeclareLocal(CoreType::MAT3F, new Local("_1"))) },
+    { "mat3d abc;",  Node::Ptr(new DeclareLocal(CoreType::MAT3D, new Local("abc"))) },
+    { "mat4f _1;",   Node::Ptr(new DeclareLocal(CoreType::MAT4F, new Local("_1"))) },
+    { "mat4d abc;",  Node::Ptr(new DeclareLocal(CoreType::MAT4D, new Local("abc"))) },
+    { "string D1f;", Node::Ptr(new DeclareLocal(CoreType::STRING, new Local("D1f"))) },
+    { "float a = 1.0f;",  Node::Ptr(new DeclareLocal(CoreType::FLOAT, new Local("a"), new Value<float>(1.0f))) },
+    { "float a = 1;",     Node::Ptr(new DeclareLocal(CoreType::FLOAT, new Local("a"), new Value<int32_t>(1))) },
+    { "float a = a + 1;", Node::Ptr(new DeclareLocal(CoreType::FLOAT, new Local("a"),
+                            new BinaryOperator(new Local("a"), new Value<int32_t>(1), OperatorToken::PLUS)))
+    },
+    { "float a = v.x;",   Node::Ptr(new DeclareLocal(CoreType::FLOAT, new Local("a"),
+                            new ArrayUnpack(new Local("v"), new Value<int32_t>(0))))
+    },
+    { "vec3f v = {1, 2, 3};", Node::Ptr(new DeclareLocal(CoreType::VEC3F, new Local("v"),
+                                new ArrayPack({
+                                    new Value<int32_t>(1),
+                                    new Value<int32_t>(2),
+                                    new Value<int32_t>(3),
+                                })))
+    },
+    { "mat3f m = 1;", Node::Ptr(new DeclareLocal(CoreType::MAT3F,
+                            new Local("m"),
+                            new Value<int32_t>(1)))
+    },
+    { "string s = \"foo\";", Node::Ptr(new DeclareLocal(CoreType::STRING,
+                                new Local("s"),
+                                new Value<std::string>("foo")))
+    },
+    { "float a = b = c;", Node::Ptr(new DeclareLocal(CoreType::FLOAT,
+                            new Local("a"),
+                            new AssignExpression(new Local("b"), new Local("c"))))
+    },
 };
+
 }
 
 class TestDeclareLocalNode : public CppUnit::TestCase

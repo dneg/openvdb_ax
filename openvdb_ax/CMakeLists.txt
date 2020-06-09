@@ -65,13 +65,13 @@ if(OPENVDB_BUILD_AX_GRAMMAR)
   find_package(FLEX REQUIRED)
   find_package(BISON 3.0 REQUIRED)
 
-  SET(FLEX_COMPILE_FLAGS "")
-  SET(BISON_COMPILE_FLAGS "")
+  # @note CMake lists don't seem to work with these options
+  SET(BISON_COMPILE_FLAGS "${BISON_COMPILE_FLAGS} -Werror")
 
   if(OPENVDB_AX_GRAMMAR_NO_LINES)
     # Suppress #line directives
-    SET(FLEX_COMPILE_FLAGS "-L")
-    SET(BISON_COMPILE_FLAGS "-l")
+    SET(FLEX_COMPILE_FLAGS "${FLEX_COMPILE_FLAGS} -L")
+    SET(BISON_COMPILE_FLAGS "${BISON_COMPILE_FLAGS} -l")
   endif()
 
   FLEX_TARGET(openvdb_ax_lexer grammar/axlexer.l ${OPENVDB_AX_GRAMMAR_DIR}/axlexer.cc
@@ -111,7 +111,8 @@ find_library(found_LLVM LLVM HINTS ${LLVM_LIBRARY_DIRS})
 if(found_LLVM)
   set(LLVM_LIBS "LLVM")
 else()
-  llvm_map_components_to_libnames(_llvm_libs all)
+  llvm_map_components_to_libnames(_llvm_libs
+    native core executionengine support mcjit passes objcarcopts)
   set(LLVM_LIBS "${_llvm_libs}")
 endif()
 
@@ -237,6 +238,10 @@ set(OPENVDB_AX_CORE_DEPENDENT_LIBS
 
 if(OPENVDB_AX_STATIC)
   target_compile_definitions(openvdb_ax_static PUBLIC ${LLVM_DEFINITIONS})
+  if(NOT MATRIX_SUPPORT)
+    target_compile_definitions(openvdb_ax_static PRIVATE -DOPENVDB_AX_NO_MATRIX)
+  endif()
+
   target_include_directories(openvdb_ax_static
     PUBLIC ../
     PRIVATE . ${CMAKE_CURRENT_BINARY_DIR}
@@ -265,6 +270,10 @@ endif()
 
 if(OPENVDB_AX_SHARED)
   target_compile_definitions(openvdb_ax_shared PUBLIC ${LLVM_DEFINITIONS})
+  if(NOT MATRIX_SUPPORT)
+    target_compile_definitions(openvdb_ax_shared PRIVATE -DOPENVDB_AX_NO_MATRIX)
+  endif()
+
   target_include_directories(openvdb_ax_shared
     PUBLIC ../
     PRIVATE . ${CMAKE_CURRENT_BINARY_DIR}

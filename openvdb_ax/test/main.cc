@@ -54,6 +54,12 @@
 #include <vector>
 
 
+/// @note  Global unit test flag enabled with -g which symbolises the integration
+///        tests to auto-generate their AX tests. Any previous tests will be
+///        overwritten.
+int sGenerateAX = false;
+
+
 namespace {
 
 using StringVec = std::vector<std::string>;
@@ -72,7 +78,8 @@ usage(const char* progName, std::ostream& ostrm)
 "    -shuffle  run tests in random order\n" <<
 "    -t test   specific suite or test to run, e.g., \"-t TestGrid\"\n" <<
 "              or \"-t TestGrid::testGetGrid\" (default: run all tests)\n" <<
-"    -v        verbose output\n";
+"    -v        verbose output\n" <<
+"    -g        As well as testing, auto-generate any integration tests\n";
 #ifdef OPENVDB_USE_LOG4CPLUS
     ostrm <<
 "\n" <<
@@ -158,6 +165,8 @@ run(int argc, char* argv[])
             shuffle = true;
         } else if (arg == "-v") {
             verbose = true;
+        } else if (arg == "-g") {
+            sGenerateAX = true;
         } else if (arg == "-t") {
             if (i + 1 < argc) {
                 ++i;
@@ -269,13 +278,8 @@ run(int argc, char* argv[])
 template <typename T>
 static inline void registerType()
 {
-    using ConverterT =
-        typename openvdb::BoolGrid::ValueConverter<T>::Type;
-
     if (!openvdb::points::TypedAttributeArray<T>::isRegistered())
         openvdb::points::TypedAttributeArray<T>::registerType();
-    if (!ConverterT::isRegistered())
-        ConverterT::registerGrid();
 }
 
 int
@@ -285,9 +289,11 @@ main(int argc, char *argv[])
     openvdb::ax::initialize();
     openvdb::logging::initialize(argc, argv);
 
-    // Also intialize Vec4 point attributes and grids as these
-    // are supported in the compoilers
+    // Also intialize Vec2/4 point attributes
 
+    registerType<openvdb::math::Vec2<int32_t>>();
+    registerType<openvdb::math::Vec2<float>>();
+    registerType<openvdb::math::Vec2<double>>();
     registerType<openvdb::math::Vec4<int32_t>>();
     registerType<openvdb::math::Vec4<float>>();
     registerType<openvdb::math::Vec4<double>>();

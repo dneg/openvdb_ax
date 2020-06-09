@@ -53,6 +53,8 @@ find_package(CppUnit REQUIRED)
 
 set(TEST_SOURCE_FILES
   ast/TestScanners.cc
+  ast/TestPrinters.cc
+  backend/TestComputeGeneratorFailures.cc
   backend/TestFunctionGroup.cc
   backend/TestFunctionRegistry.cc
   backend/TestFunctionTypes.cc
@@ -61,11 +63,12 @@ set(TEST_SOURCE_FILES
   compiler/TestPointExecutable.cc
   compiler/TestVolumeExecutable.cc
   frontend/TestArrayPack.cc
-  frontend/TestArrayUnpack.cc
+  frontend/TestArrayUnpackNode.cc
   frontend/TestAssignExpressionNode.cc
   frontend/TestAttributeNode.cc
   frontend/TestBinaryOperatorNode.cc
   frontend/TestCastNode.cc
+  frontend/TestCommaOperator.cc
   frontend/TestConditionalStatementNode.cc
   frontend/TestCrementNode.cc
   frontend/TestDeclareLocalNode.cc
@@ -74,21 +77,27 @@ set(TEST_SOURCE_FILES
   frontend/TestKeywordNode.cc
   frontend/TestLocalNode.cc
   frontend/TestLoopNode.cc
+  frontend/TestStatementListNode.cc
   frontend/TestSyntaxFailures.cc
+  frontend/TestTernaryOperatorNode.cc
   frontend/TestUnaryOperatorNode.cc
   frontend/TestValueNode.cc
   integration/CompareGrids.cc
+  integration/TestArrayUnpack.cc
   integration/TestAssign.cc
   integration/TestBinary.cc
   integration/TestCast.cc
   integration/TestConditional.cc
+  integration/TestCrement.cc
   integration/TestDeclare.cc
   integration/TestEmpty.cc
+  integration/TestExternals.cc
   integration/TestHarness.cc
   integration/TestKeyword.cc
   integration/TestLoop.cc
   integration/TestStandardFunctions.cc
   integration/TestString.cc
+  integration/TestTernary.cc
   integration/TestUnary.cc
   integration/TestVDBFunctions.cc
   integration/TestWorldSpaceAccessors.cc
@@ -109,6 +118,9 @@ target_include_directories(vdb_ax_test
 
 if(OPENVDB_AX_TEST_PROFILE)
   target_compile_definitions(vdb_ax_test PRIVATE "-DPROFILE")
+endif()
+if(NOT MATRIX_SUPPORT)
+  target_compile_definitions(vdb_ax_test PRIVATE -DOPENVDB_AX_NO_MATRIX)
 endif()
 
 add_test(NAME vdb_ax_unit_test COMMAND vdb_ax_test -v WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/../)

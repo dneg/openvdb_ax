@@ -112,42 +112,44 @@ extern int axdebug;
     L_STRING = 314,
     IDENTIFIER = 315,
     COMMA = 316,
-    EQUALS = 317,
-    PLUSEQUALS = 318,
-    MINUSEQUALS = 319,
-    MULTIPLYEQUALS = 320,
-    DIVIDEEQUALS = 321,
-    MODULOEQUALS = 322,
-    BITANDEQUALS = 323,
-    BITXOREQUALS = 324,
-    BITOREQUALS = 325,
-    SHIFTLEFTEQUALS = 326,
-    SHIFTRIGHTEQUALS = 327,
-    OR = 328,
-    AND = 329,
-    BITOR = 330,
-    BITXOR = 331,
-    BITAND = 332,
-    EQUALSEQUALS = 333,
-    NOTEQUALS = 334,
-    MORETHAN = 335,
-    LESSTHAN = 336,
-    MORETHANOREQUAL = 337,
-    LESSTHANOREQUAL = 338,
-    SHIFTLEFT = 339,
-    SHIFTRIGHT = 340,
-    PLUS = 341,
-    MINUS = 342,
-    MULTIPLY = 343,
-    DIVIDE = 344,
-    MODULO = 345,
-    NOT = 346,
-    BITNOT = 347,
-    PLUSPLUS = 348,
-    MINUSMINUS = 349,
-    LPARENS = 350,
-    RPARENS = 351,
-    LOWER_THAN_ELSE = 352
+    QUESTION = 317,
+    COLON = 318,
+    EQUALS = 319,
+    PLUSEQUALS = 320,
+    MINUSEQUALS = 321,
+    MULTIPLYEQUALS = 322,
+    DIVIDEEQUALS = 323,
+    MODULOEQUALS = 324,
+    BITANDEQUALS = 325,
+    BITXOREQUALS = 326,
+    BITOREQUALS = 327,
+    SHIFTLEFTEQUALS = 328,
+    SHIFTRIGHTEQUALS = 329,
+    OR = 330,
+    AND = 331,
+    BITOR = 332,
+    BITXOR = 333,
+    BITAND = 334,
+    EQUALSEQUALS = 335,
+    NOTEQUALS = 336,
+    MORETHAN = 337,
+    LESSTHAN = 338,
+    MORETHANOREQUAL = 339,
+    LESSTHANOREQUAL = 340,
+    SHIFTLEFT = 341,
+    SHIFTRIGHT = 342,
+    PLUS = 343,
+    MINUS = 344,
+    MULTIPLY = 345,
+    DIVIDE = 346,
+    MODULO = 347,
+    NOT = 348,
+    BITNOT = 349,
+    PLUSPLUS = 350,
+    MINUSMINUS = 351,
+    LPARENS = 352,
+    RPARENS = 353,
+    LOWER_THAN_ELSE = 354
   };
 #endif
 
@@ -158,6 +160,9 @@ union AXSTYPE
 {
 
 
+    /// @brief Temporary storage for comma separated expressions
+    using ExpList = std::vector<openvdb::ax::ast::Expression*>;
+
     const char* string;
     uint64_t index;
 
@@ -167,12 +172,15 @@ union AXSTYPE
     openvdb::ax::ast::StatementList* statementlist;
     openvdb::ax::ast::Block* block;
     openvdb::ax::ast::Expression* expression;
-    openvdb::ax::ast::ExpressionList* expressionlist;
+    openvdb::ax::ast::FunctionCall* function;
+    openvdb::ax::ast::ArrayPack* arraypack;
+    openvdb::ax::ast::CommaOperator* comma;
     openvdb::ax::ast::Variable* variable;
     openvdb::ax::ast::ExternalVariable* external;
     openvdb::ax::ast::Attribute* attribute;
     openvdb::ax::ast::DeclareLocal* declare_local;
     openvdb::ax::ast::Local* local;
+    ExpList* explist;
 
 
 };

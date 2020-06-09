@@ -27,6 +27,13 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
+///
+/// @file unittest/CompareGrids.h
+///
+/// @authors Nick Avramoussis
+///
+/// @brief Functions for comparing entire VDB grids and generating reports on their
+/// differences
 
 #ifndef OPENVDB_POINTS_UNITTEST_COMPARE_GRIDS_INCLUDED
 #define OPENVDB_POINTS_UNITTEST_COMPARE_GRIDS_INCLUDED
@@ -36,13 +43,26 @@
 #include <openvdb/tree/LeafManager.h>
 #include <openvdb/tools/Prune.h>
 
-/// @file unittest/CompareGrids.h
-///
-/// @authors Nick Avramoussis
-///
-/// @brief Functions for comparing entire VDB grids and generating reports on their
-/// differences
+#ifdef OPENVDB_AX_NO_MATRIX
+namespace openvdb {
+OPENVDB_USE_VERSION_NAMESPACE
+namespace OPENVDB_VERSION_NAME {
+namespace math {
+#define MATRIX_OPS(TYPE) \
+inline TYPE operator+(const TYPE&, const float&) { throw std::runtime_error("Invalid Matrix op+ called."); } \
+inline bool operator<(const TYPE&, const TYPE&) { throw std::runtime_error("Invalid Matrix op< called."); } \
+inline bool operator>(const TYPE&, const TYPE&) { throw std::runtime_error("Invalid Matrix op> called."); } \
+inline TYPE Abs(const TYPE&) { throw std::runtime_error("Invalid Matrix op abs called."); }
 
+MATRIX_OPS(Mat3<double>)
+MATRIX_OPS(Mat3<float>)
+MATRIX_OPS(Mat4<double>)
+MATRIX_OPS(Mat4<float>)
+#undef MATRIX_OPS
+}
+}
+}
+#endif // OPENVDB_AX_NO_MATRIX
 
 namespace unittest_util
 {

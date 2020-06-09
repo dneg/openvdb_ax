@@ -92,7 +92,6 @@ TestDeclare::testLocalVectorVariables()
 void
 TestDeclare::testAttributes()
 {
-    mHarness.testVolumes(false);
     mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 4),
         {0.0f, 0.2f, 10.0f, 10.0f});
     mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3),
@@ -110,7 +109,6 @@ TestDeclare::testAttributes()
 void
 TestDeclare::testAttributesVolume()
 {
-    mHarness.testPoints(false);
     mHarness.addAttributes<float>(unittest_util::nameSequence("float_test", 4),
         {0.0f, 0.2f, 10.0f, 10.0f});
     mHarness.addAttributes<int>(unittest_util::nameSequence("int_test", 3),
@@ -127,7 +125,6 @@ TestDeclare::testAttributesVolume()
 void
 TestDeclare::testNewAttributes()
 {
-    mHarness.testVolumes(false);
     mHarness.addExpectedAttributes<float>(unittest_util::nameSequence("float_test", 4),
         {0.0f, 0.2f, 10.0f, 10.0f});
     mHarness.addExpectedAttributes<int>(unittest_util::nameSequence("int_test", 3),
@@ -137,7 +134,16 @@ TestDeclare::testNewAttributes()
     mHarness.addExpectedAttribute("long_test", int64_t(3));
     mHarness.addExpectedAttribute("double_test", 0.3);
 
-    mHarness.executeCode("test/snippets/declare/declareAttributes");
+    // Volume data needs to exist to be tested
+    mHarness.addInputVolumes<float>(unittest_util::nameSequence("float_test", 4),
+        {0.0f, 0.2f, 10.0f, 10.0f});
+    mHarness.addInputVolumes<int>(unittest_util::nameSequence("int_test", 3),
+        {0, 5, 10});
+    mHarness.addInputVolumes<int16_t>({"short_test"}, {int16_t(1)});
+    mHarness.addInputVolumes<int64_t>({"long_test"}, {int64_t(3)});
+    mHarness.addInputVolumes<double>({"double_test"}, {0.3});
+
+    mHarness.executeCode("test/snippets/declare/declareAttributes", nullptr, nullptr, true);
 
     AXTESTS_STANDARD_ASSERT();
 }
@@ -145,14 +151,20 @@ TestDeclare::testNewAttributes()
 void
 TestDeclare::testNewVectorAttributes()
 {
-    mHarness.testVolumes(false);
     mHarness.addExpectedAttributes<openvdb::Vec3f>({"vec_float_test", "vec_float_test2"},
         {openvdb::Vec3f::zero(), openvdb::Vec3f(0.2f, 0.3f, 0.4f)});
     mHarness.addExpectedAttributes<openvdb::Vec3i>({"vec_int_test", "vec_int_test2"},
         {openvdb::Vec3i::zero(), openvdb::Vec3i(5, 6, 7)});
     mHarness.addExpectedAttribute<openvdb::Vec3d>("vec_double_test", openvdb::Vec3d(0.3, 0.4, 0.5));
 
-    mHarness.executeCode("test/snippets/declare/declareNewVectorAttributes");
+    // Volume data needs to exist to be tested
+    mHarness.addInputVolumes<openvdb::Vec3f>({"vec_float_test", "vec_float_test2"},
+        {openvdb::Vec3f::zero(), openvdb::Vec3f(0.2f, 0.3f, 0.4f)});
+    mHarness.addInputVolumes<openvdb::Vec3i>({"vec_int_test", "vec_int_test2"},
+        {openvdb::Vec3i::zero(), openvdb::Vec3i(5, 6, 7)});
+    mHarness.addInputVolumes<openvdb::Vec3d>({"vec_double_test"}, {openvdb::Vec3d(0.3, 0.4, 0.5)});
+
+    mHarness.executeCode("test/snippets/declare/declareNewVectorAttributes", nullptr, nullptr, true);
 
     AXTESTS_STANDARD_ASSERT();
 }
@@ -160,7 +172,6 @@ TestDeclare::testNewVectorAttributes()
 void
 TestDeclare::testVectorAttributes()
 {
-    mHarness.testVolumes(false);
     mHarness.addAttribute<openvdb::Vec3d>("vec_double_test", openvdb::Vec3d(0.3, 0.4, 0.5));
     mHarness.addAttributes<openvdb::Vec3f>({"vec_float_test", "vec_float_test2"},
         {openvdb::Vec3f::zero(), openvdb::Vec3f(0.2f, 0.3f, 0.4f)});
@@ -175,7 +186,6 @@ TestDeclare::testVectorAttributes()
 void
 TestDeclare::testVectorAttributeImplicit()
 {
-    mHarness.testVolumes(false);
     mHarness.addAttribute<openvdb::Vec3d>("vec_double_test", openvdb::Vec3d(1.0, 0.3, 0.4));
     mHarness.executeCode("test/snippets/declare/declareVectorAttributeImplicit");
 

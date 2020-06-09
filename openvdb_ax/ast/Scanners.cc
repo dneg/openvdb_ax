@@ -41,6 +41,253 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace ast {
 
+namespace {
+
+template <typename NodeT, typename OpT>
+struct VariableDependencyVisitor :
+    public ast::VisitNodeType<NodeT, OpT,
+        VariableDependencyVisitor<NodeT, OpT>>
+{
+    using BaseT = ast::VisitNodeType<NodeT, OpT,
+        VariableDependencyVisitor<NodeT, OpT>>;
+    using BaseT::traverse;
+    using BaseT::visit;
+
+    VariableDependencyVisitor(const OpT& op) : BaseT(op) {}
+    ~VariableDependencyVisitor() = default;
+
+    bool traverse(const ast::Loop* loop)
+    {
+        if (!loop) return true;
+        if (!this->traverse(loop->initial())) return false;
+        if (!this->traverse(loop->condition())) return false;
+        if (!this->traverse(loop->iteration())) return false;
+        if (!this->traverse(loop->body())) return false;
+        if (!this->visit(loop)) return false;
+        return true;
+    }
+};
+
+/// @brief  For a given variable at a particular position in an AST, find all
+///   attributes, locals and external variables which it depends on (i.e. any
+///   Attribute, Local or ExternalVariable AST nodes which impacts the given
+///   variables value) by recursively traversing through all connected  paths.
+///   This includes both direct and indirect influences; for example, a direct
+///   assignment "@b = @a;" and an indirect code branch "if (@a) @b = 1";
+/// @note  This is position dependent in regards to the given variables location.
+///   Any code which writes to this variable after the given usage will not be
+///   cataloged in the output dependency vector.
+/// @warning  This does not currently handle scoped local variable re-declarations
+///   and instead will end up adding matching names as extra dependencies
+/// @todo: fix this for scoped variables, capturing of all instances, and not adding
+///   dependencies between different branches of conditionals
+void variableDependencies(const ast::Variable& var,
+        std::vector<const ast::Variable*>& dependencies)
+{
+    // external variables are read-only i.e. have no dependencies
+    if (var.nodetype() == ast::Node::ExternalVariableNode) return;
+
+    // Get the root node
+    const ast::Node* root = &var;
+    while (const ast::Node* parent = root->parent()) {
+        root = parent;
+    }
+
+    // collect all occurrences of this var up to and including
+    // it's current usage, terminating traversal afterwards
+    const bool attributeVisit =
+        (var.nodetype() == ast::Node::AttributeNode);
+
+    std::vector<const ast::Variable*> usage;
+
+    auto collect =
+        [&var, &usage, attributeVisit]
+        (const ast::Variable& use) -> bool
+    {
+        if (attributeVisit) {
+            if (use.nodetype() != ast::Node::AttributeNode) return true;
+            const auto& attrib = static_cast<const ast::Attribute&>(var);
+            const auto& useAttrib = static_cast<const ast::Attribute&>(use);
+            if (attrib.tokenname() != useAttrib.tokenname()) return true;
+        }
+        else {
+            if (use.nodetype() != ast::Node::LocalNode) return true;
+            if (use.name() != var.name()) return true;
+        }
+        usage.emplace_back(&use);
+        return &use != &var;
+    };
+
+    VariableDependencyVisitor<ast::Variable, decltype(collect)>
+        depVisitor(collect);
+    depVisitor.traverse(root);
+
+    // The list of nodes which can be considered dependencies to collect
+    using ListT = openvdb::TypeList<
+        ast::Attribute,
+        ast::Local,
+        ast::ExternalVariable>;
+
+    // small lambda to check to see if a dep is already being tracked
+    auto hasDep = [&](const ast::Variable* dep) -> bool {
+        return (std::find(dependencies.cbegin(), dependencies.cend(), dep) !=
+            dependencies.cend());
+    };
+    // recursively traverse all usages and resolve dependencies
+    for (const auto& use : usage)
+    {
+        const ast::Node* child = use;
+        // track writable for conditionals
+        bool written = false;
+        while (const ast::Node* parent = child->parent()) {
+            const ast::Node::NodeType type = parent->nodetype();
+            if (type == ast::Node::CrementNode) {
+                written = true;
+                if (!hasDep(use)) {
+                    dependencies.emplace_back(use);
+                }
+            }
+            else if (type == ast::Node::ConditionalStatementNode) {
+                const ast::ConditionalStatement* conditional =
+                    static_cast<const ast::ConditionalStatement*>(parent);
+                const ast::Expression* condition = conditional->condition();
+                // traverse down and collect variables
+                if (child != condition){
+                    std::vector<const ast::Variable*> vars;
+                    collectNodeTypes<ListT>(*condition, vars);
+                    // find next deps
+                    for (const ast::Variable* dep : vars) {
+                        // don't add this dep if it's not being written to. Unlike
+                        // all other visits, the conditionals dictate program flow.
+                        // Values in the conditional expression only link to the
+                        // current usage if the current usage is being modified
+                        if (!written || hasDep(dep)) continue;
+                        dependencies.emplace_back(dep);
+                        variableDependencies(*dep, dependencies);
+                    }
+                }
+            }
+            else if (type == ast::Node::TernaryOperatorNode) {
+                const ast::TernaryOperator* ternary =
+                    static_cast<const ast::TernaryOperator*>(parent);
+                const ast::Expression* condition = ternary->condition();
+                // traverse down and collect variables
+                if (child != condition) {
+                    std::vector<const ast::Variable*> vars;
+                    collectNodeTypes<ListT>(*condition, vars);
+                    // find next deps
+                    for (const ast::Variable* dep : vars) {
+                        // don't add this dep if it's not being written to. Unlike
+                        // all other visits, the conditionals dictate program flow.
+                        // Values in the conditional expression only link to the
+                        // current usage if the current usage is being modified
+                        if (!written || hasDep(dep)) continue;
+                        dependencies.emplace_back(dep);
+                        variableDependencies(*dep, dependencies);
+                    }
+                }
+            }
+            else if (type == ast::Node::LoopNode) {
+                const ast::Loop* loop =
+                    static_cast<const ast::Loop*>(parent);
+                const ast::Statement* condition = loop->condition();
+                // traverse down and collect variables
+                if (child != condition) {
+                    std::vector<const ast::Variable*> vars;
+                    // if the condition is a comma operator the last element determines flow
+                    if (condition->nodetype() == ast::Node::NodeType::CommaOperatorNode) {
+                        const ast::CommaOperator*
+                            comma = static_cast<const ast::CommaOperator*>(condition);
+                        if (!comma->empty()) {
+                            const ast::Expression* lastExpression = comma->child(comma->size()-1);
+                            collectNodeTypes<ListT>(*lastExpression, vars);
+                        }
+                    }
+                    else {
+                        collectNodeTypes<ListT>(*condition, vars);
+                    }
+                    // find next deps
+                    for (const ast::Variable* dep : vars) {
+                        // don't add this dep if it's not being written to. Unlike
+                        // all other visits, the conditionals dictate program flow.
+                        // Values in the conditional expression only link to the
+                        // current usage if the current usage is being modified
+                        if (!written || hasDep(dep)) continue;
+                        dependencies.emplace_back(dep);
+                        variableDependencies(*dep, dependencies);
+                    }
+                }
+
+            }
+            else if (type == ast::Node::AssignExpressionNode) {
+                const ast::AssignExpression* assignment =
+                    static_cast<const ast::AssignExpression*>(parent);
+                if (assignment->lhs() == child) {
+                    written = true;
+                    // add self dependency if compound
+                    if (assignment->isCompound()) {
+                        if (!hasDep(use)) {
+                            dependencies.emplace_back(use);
+                        }
+                    }
+                    // traverse down and collect variables
+                    std::vector<const ast::Variable*> vars;
+                    collectNodeTypes<ListT>(*assignment->rhs(), vars);
+                    // find next deps
+                    for (const ast::Variable* dep : vars) {
+                        if (hasDep(dep)) continue;
+                        dependencies.emplace_back(dep);
+                        variableDependencies(*dep, dependencies);
+                    }
+                }
+            }
+            else if (type == ast::Node::DeclareLocalNode) {
+                const ast::DeclareLocal* declareLocal =
+                    static_cast<const ast::DeclareLocal*>(parent);
+                if (declareLocal->local() == child && declareLocal->hasInit()) {
+                    std::vector<const ast::Variable*> vars;
+                    written = true;
+                    // traverse down and collect variables
+                    collectNodeTypes<ListT>(*declareLocal->init(), vars);
+                    for (const ast::Variable* dep : vars) {
+                        if (hasDep(dep)) continue;
+                        dependencies.emplace_back(dep);
+                        variableDependencies(*dep, dependencies);
+                    }
+                }
+            }
+            else if (type == ast::Node::FunctionCallNode) {
+                written = true;
+                // @todo  We currently can't detect if attributes are being passed by
+                //   pointer and being modified automatically. We have to link this
+                //   attribute to any other attribute passes into the function
+                const ast::FunctionCall* call =
+                    static_cast<const ast::FunctionCall*>(parent);
+                // traverse down and collect variables
+                std::vector<const ast::Variable*> vars;
+                for (size_t i = 0; i < call->children(); ++i) {
+                    collectNodeTypes<ListT>(*call->child(i), vars);
+                }
+                // only append dependencies here if they havent already been visited
+                // due to recursion issues
+                for (const ast::Variable* dep : vars) {
+                    // make sure the dep doesn't already exist in the container, otherwise
+                    // we can get into issues where functions with multiple arguments
+                    // constantly try to check themselves
+                    // @note  should be removed with function refactoring
+                    if (hasDep(dep)) continue;
+                    dependencies.emplace_back(dep);
+                    variableDependencies(*dep, dependencies);
+                }
+            }
+            child = parent;
+        }
+    }
+}
+
+
+} // anonymous namespace
+
 bool usesAttribute(const ast::Node& node,
     const std::string& name,
     const tokens::CoreType type)
@@ -91,8 +338,7 @@ void catalogueVariables(const ast::Node& node,
     std::vector<const ast::Variable*> vars;
 
     if (locals) {
-        using ListT = openvdb::TypeList<ast::Local, ast::DeclareLocal>;
-        collectNodeTypes<ListT>(node, vars);
+        collectNodeTypes<ast::Local>(node, vars);
     }
     if (attributes) {
         collectNodeType<ast::Attribute>(node, vars);
@@ -124,6 +370,15 @@ void catalogueVariables(const ast::Node& node,
                 }
                 else {
                     read = true;
+                }
+            }
+            else if (type == ast::Node::DeclareLocalNode) {
+                const ast::DeclareLocal* declareLocal =
+                    static_cast<const ast::DeclareLocal*>(parent);
+                if (declareLocal->local() == child) {
+                    if (declareLocal->hasInit()) {
+                        write = true;
+                    }
                 }
             }
             else if (type == ast::Node::FunctionCallNode) {
@@ -198,189 +453,6 @@ void catalogueAttributeTokens(const ast::Node& node,
     }
 }
 
-void variableDependencies(const ast::Variable& var,
-        std::vector<const ast::Variable*>& dependencies)
-{
-    // Get the root node
-    const ast::Node* root = &var;
-    while (const ast::Node* parent = root->parent()) {
-        root = parent;
-    }
-
-    // collect all occurrences of this var up to and including
-    // it's current usage, terminating traversal afterwards
-    std::vector<const ast::Variable*> usage;
-    const bool attributeVisit =
-        (var.nodetype() == ast::Node::AttributeNode);
-    const ast::Attribute* asAttrib = attributeVisit ?
-        static_cast<const ast::Attribute*>(&var) : nullptr;
-
-    if (attributeVisit) {
-        visitNodeType<ast::Attribute>(*root,
-            [&](const ast::Attribute& attrib) -> bool {
-                if (attrib.tokenname() == asAttrib->tokenname()) {
-                    usage.emplace_back(&attrib);
-                }
-                return &attrib != &var;
-            });
-    }
-    else {
-        visitNodeType<ast::Local>(*root,
-            [&](const ast::Local& local) -> bool {
-                if (local.name() == var.name()) {
-                    usage.emplace_back(&local);
-                }
-                return &local != &var;
-            });
-        // also visit declarations
-        visitNodeType<ast::DeclareLocal>(*root,
-            [&](const ast::DeclareLocal& dcl) -> bool {
-                if (dcl.name() == var.name()) {
-                    usage.emplace_back(&dcl);
-                }
-                return &dcl != &var;
-            });
-    }
-
-    // The list of nodes which can be considered dependencies to collect
-    using ListT = openvdb::TypeList<
-        ast::Attribute,
-        ast::Local,
-        ast::ExternalVariable>;
-
-    // small lambda to check to see if a dep is already being tracked
-    auto hasDep = [&](const ast::Variable* dep) -> bool {
-        return (std::find(dependencies.cbegin(), dependencies.cend(), dep) !=
-            dependencies.cend());
-    };
-
-    // recursively traverse all usages and resolve dependencies
-    for (const auto& use : usage)
-    {
-        const ast::Node* child = use;
-        // track writable for conditionals
-        bool written = false;
-        while (const ast::Node* parent = child->parent()) {
-            const ast::Node::NodeType type = parent->nodetype();
-            if (type == ast::Node::CrementNode) {
-                written = true;
-                if (!hasDep(use)) {
-                    dependencies.emplace_back(use);
-                }
-            }
-            else if (type == ast::Node::ConditionalStatementNode) {
-                const ast::ConditionalStatement* conditional =
-                    static_cast<const ast::ConditionalStatement*>(parent);
-                // traverse down and collect variables
-                std::vector<const ast::Variable*> vars;
-                collectNodeTypes<ListT>(*conditional->condition(), vars);
-                // find next deps
-                for (const ast::Variable* dep : vars) {
-                    // don't add this dep if it's not being written to. Unlike
-                    // all other visits, the conditionals dictate program flow.
-                    // Values in the conditional expression only link to the
-                    // current usage if the current usage is being modified
-                    if (!written || hasDep(dep)) continue;
-                    dependencies.emplace_back(dep);
-                    variableDependencies(*dep, dependencies);
-                }
-            }
-            else if (type == ast::Node::LoopNode) {
-                const ast::Loop* loop =
-                    static_cast<const ast::Loop*>(parent);
-                // traverse down and collect variables
-                std::vector<const ast::Variable*> vars;
-
-                const ast::Statement* condition = loop->condition();
-                // if the condition is an expression list the last element determines flow
-                if (condition->nodetype() == ast::Node::NodeType::ExpressionListNode) {
-                    const ast::ExpressionList*
-                        exprList = static_cast<const ast::ExpressionList*>(condition);
-                    if (!exprList->empty()) {
-                        const ast::Expression* lastExpression = exprList->child(exprList->size()-1);
-                        collectNodeTypes<ListT>(*lastExpression, vars);
-                    }
-                }
-                else {
-                    collectNodeTypes<ListT>(*condition, vars);
-                }
-                // find next deps
-                for (const ast::Variable* dep : vars) {
-                    // don't add this dep if it's not being written to. Unlike
-                    // all other visits, the conditionals dictate program flow.
-                    // Values in the conditional expression only link to the
-                    // current usage if the current usage is being modified
-                    if (!written || hasDep(dep)) continue;
-                    dependencies.emplace_back(dep);
-                    variableDependencies(*dep, dependencies);
-                }
-            }
-            else if (type == ast::Node::AssignExpressionNode) {
-                const ast::AssignExpression* assignment =
-                    static_cast<const ast::AssignExpression*>(parent);
-                if (assignment->lhs() == child) {
-                    written = true;
-                    // traverse down and collect variables
-                    std::vector<const ast::Variable*> vars;
-                    collectNodeTypes<ListT>(*assignment->rhs(), vars);
-                    // find next deps
-                    for (const ast::Variable* dep : vars) {
-                        if (hasDep(dep)) continue;
-                        dependencies.emplace_back(dep);
-                        variableDependencies(*dep, dependencies);
-                    }
-                }
-            }
-            else if (type == ast::Node::FunctionCallNode) {
-                written = true;
-                // @todo  We currently can't detect if attributes are being passed by
-                //   pointer and being modified automatically. We have to link this
-                //   attribute to any other attribute passes into the function
-                const ast::FunctionCall* call =
-                    static_cast<const ast::FunctionCall*>(parent);
-                // traverse down and collect variables
-                std::vector<const ast::Variable*> vars;
-                collectNodeTypes<ListT>(*call->args(), vars);
-                // only append dependencies here if they havent already been visited
-                // due to recursion issues
-                for (const ast::Variable* dep : vars) {
-                    // make sure the dep doesn't already exist in the container, otherwise
-                    // we can get into issues where functions with multiple arguments
-                    // constantly try to check themselves
-                    // @note  should be removed with function refactoring
-                    if (hasDep(dep)) continue;
-                    dependencies.emplace_back(dep);
-                    variableDependencies(*dep, dependencies);
-                }
-            }
-            child = parent;
-        }
-    }
-}
-
-void attributeDependencyTokens(const ast::Tree& tree,
-        const std::string& name,
-        const tokens::CoreType type,
-        std::vector<std::string>& dependencies)
-{
-    const std::string token = ast::Attribute::tokenFromNameType(name, type);
-    const ast::Variable* var = lastUse(tree, token);
-    if (!var) return;
-    assert(var->isType<ast::Attribute>());
-
-    std::vector<const ast::Variable*> deps;
-    variableDependencies(*var, deps);
-
-    for (const auto& dep : deps) {
-        if (dep->nodetype() != ast::Node::AttributeNode) continue;
-        dependencies.emplace_back(static_cast<const ast::Attribute*>(dep)->tokenname());
-    }
-
-    std::sort(dependencies.begin(), dependencies.end());
-    auto iter = std::unique(dependencies.begin(), dependencies.end());
-    dependencies.erase(iter, dependencies.end());
-}
-
 template <bool First>
 struct UseVisitor :
     public ast::Visitor<UseVisitor<First>>
@@ -404,6 +476,41 @@ struct UseVisitor :
         }
     ~UseVisitor() = default;
 
+    bool traverse(const ast::Loop* loop)
+    {
+        if (!loop) return true;
+        const ast::tokens::LoopToken type = loop->loopType();
+        if (type == ast::tokens::DO) {
+            if (!this->reverseChildVisits()) {
+                if (!this->traverse(loop->body())) return false;
+                if (!this->traverse(loop->condition())) return false;
+            }
+            else {
+                if (!this->traverse(loop->condition())) return false;
+                if (!this->traverse(loop->body())) return false;
+            }
+            assert(!loop->initial());
+            assert(!loop->iteration());
+        }
+        else {
+            if (!this->reverseChildVisits()) {
+                if (!this->traverse(loop->initial())) return false;
+                if (!this->traverse(loop->condition())) return false;
+                if (!this->traverse(loop->iteration())) return false;
+                if (!this->traverse(loop->body())) return false;
+            }
+            else {
+                if (!this->traverse(loop->body())) return false;
+                if (!this->traverse(loop->iteration())) return false;
+                if (!this->traverse(loop->condition())) return false;
+                if (!this->traverse(loop->initial())) return false;
+            }
+        }
+
+        if (!this->visit(loop)) return false;
+        return true;
+    }
+
     inline bool visit(const ast::Attribute* node) {
         if (!mAttribute) return true;
         if (node->tokenname() != mToken) return true;
@@ -416,12 +523,6 @@ struct UseVisitor :
         mVar = node;
         return false;
     }
-    inline bool visit(const ast::DeclareLocal* node) {
-        if (mAttribute) return true;
-        if (node->name() != mToken) return true;
-        mVar = node;
-        return false;
-    }
 
     const ast::Variable* var() const { return mVar; }
 private:
@@ -429,6 +530,29 @@ private:
     bool mAttribute;
     const ast::Variable* mVar;
 };
+
+void attributeDependencyTokens(const ast::Tree& tree,
+        const std::string& name,
+        const tokens::CoreType type,
+        std::vector<std::string>& dependencies)
+{
+    const std::string token = ast::Attribute::tokenFromNameType(name, type);
+    const ast::Variable* var = lastUse(tree, token);
+    if (!var) return;
+    assert(var->isType<ast::Attribute>());
+
+    std::vector<const ast::Variable*> deps;
+    variableDependencies(*var, deps);
+
+    for (const auto& dep : deps) {
+        if (dep->nodetype() != ast::Node::AttributeNode) continue;
+        dependencies.emplace_back(static_cast<const ast::Attribute*>(dep)->tokenname());
+    }
+
+    std::sort(dependencies.begin(), dependencies.end());
+    auto iter = std::unique(dependencies.begin(), dependencies.end());
+    dependencies.erase(iter, dependencies.end());
+}
 
 const ast::Variable* firstUse(const ast::Node& node, const std::string& tokenOrName)
 {

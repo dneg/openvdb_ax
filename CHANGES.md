@@ -7,24 +7,114 @@ Version 1.0.0 - In Development
     - New and improved doxygen and language reference material. NOTE: Work on
       this is still in progress. Incremental changes will continue to be made
       up to release.
+    - Added ternary conditional operator 'a ? b : c' (and "Elvis" operator
+      'a ?: c') support
+    - Added full AX type support for matching VDB Point/Volume types which may
+      or may not be registered. Registration of these types still depends on
+      on downstream software.
 
     Improvements:
+    - Updated scalar to matrix promotion rules. When a scalar is promoted to a
+      matrix (either through direct/indirect assignments, binary or ternary
+      operators) it now produces the diagonal matrix with an equivalent
+      dimension with components equal to the scalar. For example "mat3d@a = 2.0;"
+      produces { 2.0,0.0,0.0  0.0,2.0,0.0  0.0,0.0,2.0 }
     - polardecompose() no longer throws on unsuccessful inversion and will now
       return false if it fails.
     - Removed the ability to compare vectors or matrices with the following
       relation operators: <= >= < >
     - Removed support for implicit narrowing of vector/matrices to scalars
       i.e. vec3f a; int b = a;
+    - Removed support for incrementing or decrementing boolean values.
     - Added support for unary logical/bitwise not on integer vector types
       e.g. vec3i a; a = !a;
+    - Implemented complete support for the comma operator e.g. int a = (1,2,3);
+      which evaluates all expressions in order, returning the last expression's
+      value.
+    - Compound assignments no longer evaluate the left hand side twice.
+    - Added the ability to assign to precremented values i.e. ++a = 1;
+    - Added API support for VDB 7.1.0.
 
     Bug Fixes:
     - Fixed a bug which would cause a crash if a vector/matrix was accessed
       with a single index consisting of an invalid type. e.g. mat[{1,1,1}];
+    - Fixed parser issues related to parenthesized comma operators. This
+      primarily caused a parser failure when calling a function with a
+      parenthesized expression e.g. print((1,2));
+    - Fixed some attribute dependency detections that would miss dependencies
+      in conditions of loops.
+    - Fixed a variety of boolean conversion logic in binary, unary, crement
+      and direct/indirect assignments. Boolean conversion from scalars now
+      adheres to C/C++ standard.
+    - Fixed a potential bug which could cause a crash if the target machine type
+      could not be inferred by LLVM.
+    - Fixed a small memory leak which would occur when invalid code was parsed
+    - Fixed issues with the way declaration lists were being printed with
+      ast::reprint in loop initializers
+
+    Houdini:
+    - The AX SOP automatically drops unsupported grid types with a warning.
+
+    AST:
+    - New AST Nodes for Comma and Ternary operators and corresponding visitor
+      patterns.
+    - Removed the ExpressionList AST node which didn't represent a
+      syntactical structure within AX. Such expressions are now either
+      arguments or Comma operators
+    - Renamed the then and else branch methods on the CondtionalStatement AST
+      node to true and false respectively. This matches the new Ternary AST
+      node.
+    - Reordered the Binary and Unary Operator AST node constructors to always
+      take the AST node operands first. This better matches other AST nodes.
+    - Restructured the Assign AST node to better handle compound assignments.
+      The node no longer necessarily stores a binary expression on the right
+      hand side to represent the compound assignment and instead takes an
+      optional binary token.
+    - Swapped the right and left order of operands on the Assign AST node
+      to better match other AST nodes. This also changes default traversal
+      order.
+    - FunctionCall, ArrayUnpack and ArrayPack AST nodes no longer store
+      ExpressionList nodes and instead directly store the AST nodes
+      representing their arguments.
+    - Restructured Declaration AST nodes. These are no longer derived
+      variables and are instead Statements with Local AST composition.
+      Optional initializer expressions can also be stored on declarations
+      instead of the previous nesting within AssignExpressions.
+    - Improved the result of ast::reprint in regards to scoped blocks
+      consistency.
+    - Removed the ast::variableDependencies method from the public API.
+
+    Grammar:
+    - Changes to array packs where arguments are stored in a temporary vector
+      of nodes until the parsing context can be inferred. This avoid conflicts
+      with scopes.
+    - Split function call grammar into two rules which append arguments.
+    - Changes to declarations to support their new context as statements.
+    - Changes to assign expressions such that compound expressions directly
+      store the right hand side instead of building additional binary
+      expressions.
+    - Constructor changes in binary and unary grammar rules to match AST.
+    - New ternary grammar rules. Support for ? and : tokens in the lexer.
+    - Added destructor directives to handle cleanup of bad symbols.
 
     Code Generation:
     - Converted static methods on the ArgumentIterator class to a generic
       apply method
+    - Support for Comma and Ternary Operator code generation.
+    - Split out the assignment and binary logic into protected methods. Declare
+      visits use the assignment logic, compound assignments use the binary
+      logic.
+
+    CMake / Build / Testing:
+    - Added github actions CI for VFX platforms 2019 and 2020 which match
+      existing travis functionality
+    - Bison now errors on any warnings during grammar generation.
+    - Updated CMake use of llvm_map_components_to_libnames to support LLVM 10.
+    - Added matrix grid detection during the CMake build step.
+    - Fixed TestLoopNode tests which were not being executed
+    - Started re-factor of auto-generated integration tests and considerably
+      improved test coverage. AX tests can be regenerated with the -g argument
+      to the unit test binary.
 
 Version 0.2.0 - March 5, 2020
 

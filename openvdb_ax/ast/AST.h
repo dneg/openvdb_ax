@@ -104,11 +104,12 @@ std::shared_ptr<Tree> parse(const char* code);
 ///  - Tree
 ///  - StatementList
 ///  - Block
-///  - ExpressionList
 ///  - Loop
 ///  - Keyword
 ///  - ConditionalStatement
+///  - CommaOperator
 ///  - BinaryOperator
+///  - TernaryOperator
 ///  - AssignExpression
 ///  - Crement
 ///  - UnaryOperator
@@ -145,6 +146,10 @@ struct Node
     ///         These can be used for faster evaluation of a given concrete node
     ///         using the virtual function table via Node::nodetype() rather
     ///         than performing a dynamic_cast/calling Node::isType.
+    /// @note   This is sometimes referred to as "manual RTTI". We use this
+    ///         technique combine with single dispatch due to opting for CRTP on
+    ///         the main visitor and no templated virtual method support in C++.
+    ///         i.e. no way to double dispatch: visit<template T>(Visitor<T>*)
     /// @note   Abstract (pure-virtual) nodes are not listed here. Node::isType
     ///         should be used to determine if a node is of a given abstract
     ///         type.
@@ -152,14 +157,15 @@ struct Node
         TreeNode,
         StatementListNode,
         BlockNode,
-        ExpressionListNode,
         ConditionalStatementNode,
+        CommaOperatorNode,
         LoopNode,
         KeywordNode,
         AssignExpressionNode,
         CrementNode,
         UnaryOperatorNode,
         BinaryOperatorNode,
+        TernaryOperatorNode,
         CastNode,
         AttributeNode,
         FunctionCallNode,
@@ -636,60 +642,56 @@ private:
     Block::UniquePtr mBlock;
 };
 
-/// @brief  An ExpressionList is comprises of multiple expressions. These
-///         expressions are typically separated by ',' tokens to form argument
-///         lists for functions or single line declarations. This node is
-///         similar to a Block and StatementList, except that it does not
-///         represent an additional scope and holds Expressions rather than
-///         Statements.
-struct ExpressionList : public Expression
+struct CommaOperator : public Expression
 {
-    using UniquePtr = std::unique_ptr<ExpressionList>;
+    using UniquePtr = std::unique_ptr<CommaOperator>;
 
-    /// @brief  Construct a new ExpressionList with an empty list
-    ExpressionList() : mList() {}
-    /// @brief  Construct a new ExpressionList with a single expression,
-    ///         transferring ownership of the expression to the ExpressionList
+    /// @brief  Construct a new CommaOperator with an expr set
+    CommaOperator() : mExpressions() {}
+    /// @brief  Construct a new CommaOperator with a single expression,
+    ///         transferring ownership of the expression to the CommaOperator
     ///         and updating parent data on the expression. If the expression is
     ///         a nullptr, it is ignored.
     /// @param  expression  The Expression to construct from
-    ExpressionList(Expression* expression)
-        : mList() {
-        this->addExpression(expression);
-    }
-    /// @brief Construct a new ExpressionList from a vector of expression,
+    CommaOperator(Expression* expression)
+        : mExpressions() {
+            this->append(expression);
+        }
+    /// @brief Construct a new CommaOperator from a vector of expression,
     ///        transferring ownership of all valid expression to the
-    ///        ExpressionList and updating parent data on the statement. Only
+    ///        CommaOperator and updating parent data on the statement. Only
     ///        valid (non null) expression are added to the block.
     /// @param  expressions  The vector of expressions to construct from
-    ExpressionList(const std::vector<Expression*>& expressions)
-        : mList() {
-        for (Expression* expression : expressions) {
-            this->addExpression(expression);
+    CommaOperator(const std::vector<Expression*>& expressions)
+        : mExpressions() {
+            mExpressions.reserve(expressions.size());
+            for (Expression* expression : expressions) {
+                this->append(expression);
+            }
         }
-    }
-    /// @brief  Deep copy constructor for an ExpressionList, performing a deep
+    /// @brief  Deep copy constructor for an CommaOperator, performing a deep
     ///         copy on every held expression, ensuring parent information is
     ///         updated.
-    /// @param  other  A const reference to another ExpressionList to deep copy
-    ExpressionList(const ExpressionList& other)
-        : mList() {
-        for (const Expression::UniquePtr& expr : other.mList) {
-            this->addExpression(expr->copy());
+    /// @param  other  A const reference to another CommaOperator to deep copy
+    CommaOperator(const CommaOperator& other)
+        : mExpressions() {
+            mExpressions.reserve(other.mExpressions.size());
+            for (const Expression::UniquePtr& expr : other.mExpressions) {
+                this->append(expr->copy());
+            }
         }
-    }
-    ~ExpressionList() override = default;
+    ~CommaOperator() override = default;
 
     /// @copybrief Node::copy()
-    ExpressionList* copy() const override final {
-        return new ExpressionList(*this);
+    CommaOperator* copy() const override final {
+        return new CommaOperator(*this);
     }
     /// @copybrief Node::nodetype()
-    NodeType nodetype() const override { return Node::ExpressionListNode; }
+    NodeType nodetype() const override { return Node::CommaOperatorNode; }
     /// @copybrief Node::nodename()
-    const char* nodename() const override { return "expression list"; }
+    const char* nodename() const override { return "comma"; }
     /// @copybrief Node::subname()
-    const char* subname() const override { return "expl"; }
+    const char* subname() const override { return "comma"; }
     /// @copybrief Node::basetype()
     const Expression* basetype() const override { return this; }
 
@@ -697,34 +699,34 @@ struct ExpressionList : public Expression
     size_t children() const override final { return this->size(); }
     /// @copybrief Node::child()
     const Expression* child(const size_t i) const override final {
-        if (i >= mList.size()) return nullptr;
-        return mList[i].get();
+        if (i >= mExpressions.size()) return nullptr;
+        return mExpressions[i].get();
     }
     /// @copybrief Node::replacechild()
     inline bool replacechild(const size_t i, Node* node) override final {
-        if (mList.size() <= i) return false;
+        if (mExpressions.size() <= i) return false;
         Expression* expr = dynamic_cast<Expression*>(node);
-        mList[i].reset(expr);
-        mList[i]->setParent(this);
+        mExpressions[i].reset(expr);
+        mExpressions[i]->setParent(this);
         return true;
     }
 
-    /// @brief  Alias for ExpressionList::children
-    inline size_t size() const { return mList.size(); }
+    /// @brief  Alias for CommaOperator::children
+    inline size_t size() const { return mExpressions.size(); }
     /// @brief  Query whether this Expression list holds any valid expressions
     /// @return True if this node if empty, false otherwise
-    inline bool empty() const { return mList.empty(); }
-    /// @brief  Adds an expression to this ExpressionList, transferring
-    ///         ownership to the ExpressionList and updating parent data on the
+    inline bool empty() const { return mExpressions.empty(); }
+    /// @brief  Append an expression to this CommaOperator, transferring
+    ///         ownership to the CommaOperator and updating parent data on the
     ///         expression. If the expression is a nullptr, it is ignored.
-    inline void addExpression(Expression* expr) {
+    inline void append(Expression* expr) {
         if (expr) {
-            mList.emplace_back(expr);
+            mExpressions.emplace_back(expr);
             expr->setParent(this);
         }
     }
 private:
-    std::vector<Expression::UniquePtr> mList;
+    std::vector<Expression::UniquePtr> mExpressions;
 };
 
 /// @brief  Loops represent for, while and do-while loop constructs.
@@ -736,9 +738,8 @@ private:
 ///         between iterations after the body and before the condition.
 ///         Both conditions and initial statements can be declarations or
 ///         expressions, so are Statements, and iteration expressions can
-///         consist of multiple expressions so are stored as an ExpressionList.
-///         The loop body is a Block defining its own scope (encapsulated by
-///         initial statement scope for for-loops).
+///         consist of multiple expressions. The loop body is a Block defining
+///         its own scope (encapsulated by initial statement scope for for-loops).
 /// @note   Only for-loops should have initial statements and/or iteration
 ///         expressions. Also for-loops allow empty conditions to be given by
 ///         the user, this is replaced with a 'true' expression in the parser.
@@ -882,47 +883,47 @@ struct Loop : public Statement
     const Expression* iteration() const { return mIteration.get(); }
 
 private:
-    const tokens::LoopToken       mLoopType;
-    Statement::UniquePtr          mConditional;
-    Block::UniquePtr              mBody;
-    Statement::UniquePtr          mInitial;
-    Expression::UniquePtr     mIteration;
+    const tokens::LoopToken mLoopType;
+    Statement::UniquePtr    mConditional;
+    Block::UniquePtr        mBody;
+    Statement::UniquePtr    mInitial;
+    Expression::UniquePtr   mIteration;
 };
 
 /// @brief  ConditionalStatements represents all combinations of 'if', 'else'
 ///         and 'else if' syntax and semantics. A single ConditionalStatement
-///         only ever represents up to two branches; an 'if' (then) and an
-///         optional 'else'. Multiple ConditionalStatements are nested within
+///         only ever represents up to two branches; an 'if' (true) and an
+///         optional 'else' (false). ConditionalStatements are nested within
 ///         the second 'else' branch to support 'else if' logic. As well as both
 ///         'if' and 'else' branches, a ConditionalStatement also holds an
 ///         Expression related to its primary condition.
-/// @note   The first 'if' branch is referred to as the 'then' branch. The
-///         second 'else' branch is referred to as the 'else' branch.
+/// @note   The first 'if' branch is referred to as the 'true' branch. The
+///         second 'else' branch is referred to as the 'false' branch.
 struct ConditionalStatement : public Statement
 {
     using UniquePtr = std::unique_ptr<ConditionalStatement>;
 
     /// @brief  Construct a new ConditionalStatement with an Expression
     ///         representing the primary condition, a Block representing the
-    ///         'then' branch and an optional Block representing the 'else'
+    ///         'true' branch and an optional Block representing the 'false'
     ///         branch. Ownership of all arguments is transferred to the
     ///         ConditionalStatement. All arguments have their parent data
     ///         updated.
     /// @param  conditional The Expression to construct the condition from
-    /// @param  thenBranch  The Block to construct the then branch from
-    /// @param  elseBranch  The (optional) Block to construct the else branch
+    /// @param  trueBlock   The Block to construct the true branch from
+    /// @param  falseBlock  The (optional) Block to construct the false branch
     ///                     from
     ConditionalStatement(Expression* conditional,
-                         Block* thenBranch,
-                         Block* elseBranch = nullptr)
+                         Block* trueBlock,
+                         Block* falseBlock = nullptr)
         : mConditional(conditional)
-        , mThenBranch(thenBranch)
-        , mElseBranch(elseBranch) {
+        , mTrueBranch(trueBlock)
+        , mFalseBranch(falseBlock) {
             assert(mConditional);
-            assert(mThenBranch);
+            assert(mTrueBranch);
             mConditional->setParent(this);
-            mThenBranch->setParent(this);
-            if (mElseBranch) mElseBranch->setParent(this);
+            mTrueBranch->setParent(this);
+            if (mFalseBranch) mFalseBranch->setParent(this);
         }
     /// @brief  Deep copy constructor for an ConditionalStatement, performing a
     ///         deep copy on the condition and both held branches (Blocks),
@@ -931,11 +932,11 @@ struct ConditionalStatement : public Statement
     ///         copy
     ConditionalStatement(const ConditionalStatement& other)
         : mConditional(other.mConditional->copy())
-        , mThenBranch(other.mThenBranch->copy())
-        , mElseBranch(other.hasElseBranch() ? other.mElseBranch->copy() : nullptr) {
+        , mTrueBranch(other.mTrueBranch->copy())
+        , mFalseBranch(other.hasFalse() ? other.mFalseBranch->copy() : nullptr) {
             mConditional->setParent(this);
-            mThenBranch->setParent(this);
-            if (mElseBranch) mElseBranch->setParent(this);
+            mTrueBranch->setParent(this);
+            if (mFalseBranch) mFalseBranch->setParent(this);
         }
     ~ConditionalStatement() override = default;
 
@@ -957,8 +958,8 @@ struct ConditionalStatement : public Statement
     /// @copybrief Node::child()
     const Statement* child(const size_t i) const override final {
         if (i == 0) return this->condition();
-        if (i == 1) return this->thenBranch();
-        if (i == 2) return this->elseBranch();
+        if (i == 1) return this->trueBranch();
+        if (i == 2) return this->falseBranch();
         return nullptr;
     }
     /// @copybrief Node::replacechild()
@@ -975,45 +976,45 @@ struct ConditionalStatement : public Statement
             Block* blk = dynamic_cast<Block*>(node);
             if (!blk) return false;
             if (i == 1) {
-                mThenBranch.reset(blk);
-                mThenBranch->setParent(this);
+                mTrueBranch.reset(blk);
+                mTrueBranch->setParent(this);
             }
             else {
-                mElseBranch.reset(blk);
-                mElseBranch->setParent(this);
+                mFalseBranch.reset(blk);
+                mFalseBranch->setParent(this);
             }
             return true;
         }
         return false;
     }
 
-    /// @brief  Query if this ConditionalStatement has a valid 'else' branch
-    /// @return True if a valid else branch exists, false otherwise
-    inline bool hasElseBranch() const {
-        return static_cast<bool>(this->elseBranch());
+    /// @brief  Query if this ConditionalStatement has a valid 'false' branch
+    /// @return True if a valid 'false' branch exists, false otherwise
+    inline bool hasFalse() const {
+        return static_cast<bool>(this->falseBranch());
     }
     /// @brief  Query the number of branches held by this ConditionalStatement.
     ///         This is only ever 1 or 2.
-    /// @return 2 if a valid 'then' and 'else' branch exist, 1 otherwise
+    /// @return 2 if a valid 'true' and 'false' branch exist, 1 otherwise
     size_t branchCount() const {
-        return this->hasElseBranch() ? 2 : 1;
+        return this->hasFalse() ? 2 : 1;
     }
     /// @brief  Access a const pointer to the ConditionalStatements condition
     ///         as an abstract expression.
     /// @return A const pointer to the condition as an expression
     const Expression* condition() const { return mConditional.get(); }
-    /// @brief  Access a const pointer to the ConditionalStatements 'then'
+    /// @brief  Access a const pointer to the ConditionalStatements 'true'
     ///         branch as a Block
-    /// @return A const pointer to the 'then' branch
-    const Block* thenBranch() const { return mThenBranch.get(); }
-    /// @brief  Access a const pointer to the ConditionalStatements 'else'
+    /// @return A const pointer to the 'true' branch
+    const Block* trueBranch() const { return mTrueBranch.get(); }
+    /// @brief  Access a const pointer to the ConditionalStatements 'false'
     ///         branch as a Block
-    /// @return A const pointer to the 'else' branch
-    const Block* elseBranch() const { return mElseBranch.get(); }
+    /// @return A const pointer to the 'false' branch
+    const Block* falseBranch() const { return mFalseBranch.get(); }
 private:
     Expression::UniquePtr mConditional;
-    Block::UniquePtr mThenBranch;
-    Block::UniquePtr mElseBranch;
+    Block::UniquePtr mTrueBranch;
+    Block::UniquePtr mFalseBranch;
 };
 
 /// @brief  A BinaryOperator represents a single binary operation between a
@@ -1030,16 +1031,16 @@ struct BinaryOperator : public Expression
     ///         tokens::OperatorToken and a valid LHS and RHS expression,
     ///         transferring ownership of the expressions to the BinaryOperator
     ///         and updating parent data on the expressions.
-    /// @param  op     The binary token representing the operation to perform.
-    ///                Should not be an assignment token.
     /// @param  left   The left hand side of the binary expression
     /// @param  right  The right hand side of the binary expression
-    BinaryOperator(const tokens::OperatorToken op,
-            Expression* left,
-            Expression* right)
-        : mOperation(op)
-        , mLeft(left)
-        , mRight(right) {
+    /// @param  op     The binary token representing the operation to perform.
+    ///                Should not be an assignment token.
+    BinaryOperator(Expression* left,
+            Expression* right,
+            const tokens::OperatorToken op)
+        : mLeft(left)
+        , mRight(right)
+        , mOperation(op) {
             assert(mLeft);
             assert(mRight);
             mLeft->setParent(this);
@@ -1047,21 +1048,21 @@ struct BinaryOperator : public Expression
         }
     /// @brief Construct a new BinaryOperator with a string, delegating
     ///        construction to the above BinaryOperator constructor.
-    /// @param  op     A string representing the binary operation to perform
     /// @param  left   The left hand side of the binary expression
     /// @param  right  The right hand side of the binary expression
-    BinaryOperator(const std::string& op,
-            Expression* left,
-            Expression* right)
-        : BinaryOperator(tokens::operatorTokenFromName(op), left, right) {}
+    /// @param  op     A string representing the binary operation to perform
+    BinaryOperator(Expression* left,
+            Expression* right,
+            const std::string& op)
+        : BinaryOperator(left, right, tokens::operatorTokenFromName(op)) {}
     /// @brief  Deep copy constructor for a BinaryOperator, performing a
     ///         deep copy on both held expressions, ensuring parent information
     ///         is updated.
     /// @param  other  A const reference to another BinaryOperator to deep copy
     BinaryOperator(const BinaryOperator& other)
-        : mOperation(other.mOperation)
-        , mLeft(other.mLeft->copy())
-        , mRight(other.mRight->copy()) {
+        : mLeft(other.mLeft->copy())
+        , mRight(other.mRight->copy())
+        , mOperation(other.mOperation) {
             mLeft->setParent(this);
             mRight->setParent(this);
         }
@@ -1115,41 +1116,140 @@ struct BinaryOperator : public Expression
     /// @return A const pointer to the RHS expression
     const Expression* rhs() const { return mRight.get(); }
 private:
-    const tokens::OperatorToken mOperation;
     Expression::UniquePtr mLeft;
     Expression::UniquePtr mRight;
+    const tokens::OperatorToken mOperation;
+};
+
+/// @brief  A TernaryOperator represents a ternary (conditional) expression
+///         'a ? b : c' which evaluates to 'b' if 'a' is true and 'c' if 'a' is false.
+///         Requires 'b' and 'c' to be convertibly typed expressions, or both void.
+///         The 'true' expression ('b') is optional with the conditional expression 'a'
+///         returned if it evaluates to true, otherwise returning 'c'. Note that 'a'
+///         will only be evaluated once in this case.
+struct TernaryOperator : public Expression
+{
+    using UniquePtr = std::unique_ptr<TernaryOperator>;
+
+    /// @brief  Construct a new TernaryOperator with a conditional expression
+    ///         and true (optional) and false expressions, transferring
+    ///         ownership of the expressions to the TernaryOperator
+    ///         and updating parent data on the expressions.
+    /// @param  conditional      The conditional expression determining the expression
+    ///                          selection
+    /// @param  trueExpression   The (optional) expression evaluated if the condition
+    ///                          is true
+    /// @param  falseExpression  The expression evaluated if the condition is false
+    TernaryOperator(Expression* conditional,
+                    Expression* trueExpression,
+                    Expression* falseExpression)
+        : mConditional(conditional)
+        , mTrueBranch(trueExpression)
+        , mFalseBranch(falseExpression) {
+            assert(mConditional);
+            assert(mFalseBranch);
+            mConditional->setParent(this);
+            if (mTrueBranch) mTrueBranch->setParent(this);
+            mFalseBranch->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a TernaryOperator, performing a
+    ///         deep copy on held expressions, ensuring parent information
+    ///         is updated.
+    /// @param  other  A const reference to another TernaryOperator to deep copy
+    TernaryOperator(const TernaryOperator& other)
+        : mConditional(other.mConditional->copy())
+        , mTrueBranch(other.hasTrue() ? other.mTrueBranch->copy() : nullptr)
+        , mFalseBranch(other.mFalseBranch->copy()) {
+            mConditional->setParent(this);
+            if (mTrueBranch) mTrueBranch->setParent(this);
+            mFalseBranch->setParent(this);
+        }
+    ~TernaryOperator() override = default;
+
+    /// @copybrief Node::copy()
+    TernaryOperator* copy() const override final {
+        return new TernaryOperator(*this);
+    }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::TernaryOperatorNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "ternary"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "tern"; }
+    /// @copybrief Node::basetype()
+    const Expression* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 3; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return mConditional.get();
+        if (i == 1) return mTrueBranch.get();
+        if (i == 2) return mFalseBranch.get();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i > 2) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        if (i == 0) {
+            mConditional.reset(expr);
+            mConditional->setParent(this);
+        }
+        else if (i == 1) {
+            mTrueBranch.reset(expr);
+            mTrueBranch->setParent(this);
+        }
+        else if (i == 2) {
+            mFalseBranch.reset(expr);
+            mFalseBranch->setParent(this);
+        }
+        return true;
+    }
+
+    /// @brief  Query whether or not this has an optional if-true branch.
+    bool hasTrue() const { return static_cast<bool>(this->trueBranch()); }
+    /// @brief  Access a const pointer to the TernaryOperator conditional as
+    ///         an abstract expression
+    /// @return A const pointer to the conditional expression
+    const Expression* condition() const { return mConditional.get(); }
+    /// @brief  Access a const pointer to the TernaryOperator true expression as
+    ///         an abstract expression
+    /// @return A const pointer to the true expression
+    const Expression* trueBranch() const { return mTrueBranch.get(); }
+    /// @brief  Access a const pointer to the TernaryOperator false expression as
+    ///         an abstract expression
+    /// @return A const pointer to the false expression
+    const Expression* falseBranch() const { return mFalseBranch.get(); }
+private:
+    Expression::UniquePtr mConditional;
+    Expression::UniquePtr mTrueBranch;
+    Expression::UniquePtr mFalseBranch;
 };
 
 /// @brief  AssignExpressions represents a similar object construction to a
-///         BinaryOperator, however they specifically represent right hand size
-///         (RHS) to left hand side (LHS) traversal and assignment.
-///         AssignExpressions can be chained together and are thus derived as
-///         Expressions rather than Statements.
-/// @note   The default traversal order is reversed for child nodes of
-///         AssignExpressions. Nodes are laid out in memory with the RHS
-///         followed by the LHS (in contrast to BinaryOperators where this is
-///         the other way around).
+///         BinaryOperator. AssignExpressions can be chained together and are
+///         thus derived as Expressions rather than Statements.
 /// @note   AssignExpressions can either be direct or compound assignments. The
 ///         latter is represented by the last argument in the primary
-///         constructor. If true, it is assumed that the RHS is a BinaryOperator
-///         which also accesses the LHS target. This is guaranteed by AX grammar.
+///         constructor which is expected to be a valid binary token.
 struct AssignExpression : public Expression
 {
     using UniquePtr = std::unique_ptr<AssignExpression>;
 
     /// @brief  Construct a new AssignExpression with valid LHS and RHS
     ///         expressions, transferring ownership of the expressions to the
-    ///         BinaryOperator and updating parent data on the expressions.
+    ///         AssignExpression and updating parent data on the expressions.
     /// @param  lhs  The left hand side of the assign expression
     /// @param  rhs  The right hand side of the assign expression
-    /// @param  isCompound  Whether this is a compound assignment or not
-    AssignExpression(Expression* lhs, Expression* rhs, const bool isCompound)
-        : mCompound(isCompound)
+    /// @param  op   The compound assignment token, if any
+    AssignExpression(Expression* lhs, Expression* rhs,
+        const tokens::OperatorToken op = tokens::EQUALS)
+        : mLHS(lhs)
         , mRHS(rhs)
-        , mLHS(lhs) {
+        , mOperation(op) {
             assert(mLHS);
             assert(mRHS);
-            assert((mCompound && mRHS->isType<BinaryOperator>()) || !mCompound);
             mLHS->setParent(this);
             mRHS->setParent(this);
         }
@@ -1159,9 +1259,9 @@ struct AssignExpression : public Expression
     /// @param  other  A const reference to another AssignExpression to deep
     ///                copy
     AssignExpression(const AssignExpression& other)
-        : mCompound(other.mCompound)
+        : mLHS(other.mLHS->copy())
         , mRHS(other.mRHS->copy())
-        , mLHS(other.mLHS->copy()) {
+        , mOperation(other.mOperation) {
             mLHS->setParent(this);
             mRHS->setParent(this);
         }
@@ -1183,8 +1283,8 @@ struct AssignExpression : public Expression
     size_t children() const override final { return 2; }
     /// @copybrief Node::child()
     const Expression* child(const size_t i) const override final {
-        if (i == 0) return this->rhs();
-        if (i == 1) return this->lhs();
+        if (i == 0) return this->lhs();
+        if (i == 1) return this->rhs();
         return nullptr;
     }
     /// @copybrief Node::replacechild()
@@ -1193,12 +1293,12 @@ struct AssignExpression : public Expression
         Expression* expr = dynamic_cast<Expression*>(node);
         if (!expr) return false;
         if (i == 0) {
-            mRHS.reset(expr);
-            mRHS->setParent(this);
-        }
-        else if (i == 1) {
             mLHS.reset(expr);
             mLHS->setParent(this);
+        }
+        else if (i == 1) {
+            mRHS.reset(expr);
+            mRHS->setParent(this);
         }
         return true;
     }
@@ -1207,36 +1307,11 @@ struct AssignExpression : public Expression
     ///         Compound AssignExpressions are assignments which read and write
     ///         to the LHS value. i.e. +=, -=, *= etc
     /// @return The binary operation as a tokens::OperatorToken
-    inline bool isCompound() const { return mCompound; }
+    inline bool isCompound() const { return mOperation != tokens::EQUALS; }
     /// @brief  Query the actual operational type of this AssignExpression. For
     ///         simple (non-compound) AssignExpressions, tokens::EQUALS is
-    ///         returned. If this is a compound AssignExpression, the RHS
-    ///         BinaryOperator is queried and it's operational type is used to
-    ///         determine the compound type.
-    inline tokens::OperatorToken operation() const {
-        if (this->isCompound()) {
-            assert(mRHS->isType<BinaryOperator>());
-            const tokens::OperatorToken binary =
-                static_cast<BinaryOperator*>(mRHS.get())->operation();
-
-            switch (binary) {
-                case tokens::PLUS       : return tokens::PLUSEQUALS;
-                case tokens::MINUS      : return tokens::MINUSEQUALS;
-                case tokens::MULTIPLY   : return tokens::MULTIPLYEQUALS;
-                case tokens::DIVIDE     : return tokens::DIVIDEEQUALS;
-                case tokens::MODULO     : return tokens::MODULOEQUALS;
-                case tokens::SHIFTLEFT  : return tokens::SHIFTLEFTEQUALS;
-                case tokens::SHIFTRIGHT : return tokens::SHIFTRIGHTEQUALS;
-                case tokens::BITAND     : return tokens::BITANDEQUALS;
-                case tokens::BITXOR     : return tokens::BITXOREQUALS;
-                case tokens::BITOR      : return tokens::BITOREQUALS;
-                default : {
-                    assert(false && "Invalid compund assignment in AST.");
-                }
-            }
-        }
-        return tokens::EQUALS;
-    }
+    ///         returned.
+    inline tokens::OperatorToken operation() const { return mOperation; }
     /// @brief  Access a const pointer to the AssignExpression LHS as an
     ///         abstract expression
     /// @return A const pointer to the LHS expression
@@ -1246,9 +1321,9 @@ struct AssignExpression : public Expression
     /// @return A const pointer to the RHS expression
     const Expression* rhs() const { return mRHS.get(); }
 private:
-    const bool mCompound;
-    Expression::UniquePtr mRHS;
     Expression::UniquePtr mLHS;
+    Expression::UniquePtr mRHS;
+    const tokens::OperatorToken mOperation;
 };
 
 /// @brief  A Crement node represents a single increment '++' and decrement '--'
@@ -1356,11 +1431,11 @@ struct UnaryOperator : public Expression
     /// @brief  Construct a new UnaryOperator with a given tokens::OperatorToken
     ///         and a valid expression, transferring ownership of the expression
     ///         to the UnaryOperator and updating parent data on the expression.
-    /// @param  op    The unary token representing the operation to perform.
     /// @param  expr  The expression to perform the unary operator on
-    UnaryOperator(const tokens::OperatorToken op, Expression* expr)
-        : mOperation(op)
-        , mExpression(expr) {
+    /// @param  op    The unary token representing the operation to perform.
+    UnaryOperator(Expression* expr, const tokens::OperatorToken op)
+        : mExpression(expr)
+        , mOperation(op) {
             assert(mExpression);
             mExpression->setParent(this);
         }
@@ -1368,15 +1443,15 @@ struct UnaryOperator : public Expression
     ///        construction to the above UnaryOperator constructor.
     /// @param  op    A string representing the unary operation to perform
     /// @param  expr  The expression to perform the unary operator on
-    UnaryOperator(const std::string& op, Expression* expr)
-        : UnaryOperator(tokens::operatorTokenFromName(op), expr) {}
+    UnaryOperator(Expression* expr, const std::string& op)
+        : UnaryOperator(expr, tokens::operatorTokenFromName(op)) {}
     /// @brief  Deep copy constructor for a UnaryOperator, performing a deep
     ///         copy on the underlying expressions, ensuring parent information
     ///         is updated.
     /// @param  other  A const reference to another UnaryOperator to deep copy
     UnaryOperator(const UnaryOperator& other)
-        : mOperation(other.mOperation)
-        , mExpression(other.mExpression->copy()) {
+        : mExpression(other.mExpression->copy())
+        , mOperation(other.mOperation) {
             mExpression->setParent(this);
         }
     ~UnaryOperator() override = default;
@@ -1416,8 +1491,8 @@ struct UnaryOperator : public Expression
     /// @return A const pointer to the expression
     const Expression* expression() const { return mExpression.get(); }
 private:
-    const tokens::OperatorToken mOperation;
     Expression::UniquePtr mExpression;
+    const tokens::OperatorToken mOperation;
 };
 
 /// @brief  Cast nodes represent the conversion of an underlying expression to
@@ -1499,24 +1574,38 @@ private:
 };
 
 /// @brief FunctionCalls represent a single call to a function and any provided
-///        arguments. The argument list can be empty but must not be null. The
-///        function name is expected to exist in the AX function registry.
+///        arguments. The argument list can be empty. The function name is
+///        expected to exist in the AX function registry.
 struct FunctionCall : public Expression
 {
     using UniquePtr = std::unique_ptr<FunctionCall>;
 
     /// @brief  Construct a new FunctionCall with a given function identifier
+    ///         and an optional argument, transferring ownership of any
+    ///         provided argument to the FunctionCall and updating parent data
+    ///         on the arguments.
+    /// @param  function   The name/identifier of the function
+    /// @param  argument  Function argument
+    FunctionCall(const std::string& function,
+        Expression* argument = nullptr)
+        : mFunctionName(function)
+        , mArguments() {
+            this->append(argument);
+        }
+    /// @brief  Construct a new FunctionCall with a given function identifier
     ///         and optional argument list, transferring ownership of any
     ///         provided arguments to the FunctionCall and updating parent data
     ///         on the arguments.
     /// @param  function   The name/identifier of the function
-    /// @param  arguments  Function arguments stored in an ExpressionList
+    /// @param  arguments  Function arguments
     FunctionCall(const std::string& function,
-        ExpressionList* arguments = new ExpressionList())
+        const std::vector<Expression*>& arguments)
         : mFunctionName(function)
-        , mArguments(arguments) {
-            assert(arguments);
-            mArguments->setParent(this);
+        , mArguments() {
+            mArguments.reserve(arguments.size());
+            for (Expression* arg : arguments) {
+                this->append(arg);
+            }
         }
     /// @brief  Deep copy constructor for a FunctionCall, performing a deep copy
     ///         on all held function arguments, ensuring parent information is
@@ -1524,8 +1613,11 @@ struct FunctionCall : public Expression
     /// @param  other  A const reference to another FunctionCall to deep copy
     FunctionCall(const FunctionCall& other)
         : mFunctionName(other.mFunctionName)
-        , mArguments(other.mArguments->copy()) {
-            mArguments->setParent(this);
+        , mArguments() {
+            mArguments.reserve(other.mArguments.size());
+            for (const Expression::UniquePtr& expr : other.mArguments) {
+                this->append(expr->copy());
+            }
         }
     ~FunctionCall() override = default;
 
@@ -1540,39 +1632,45 @@ struct FunctionCall : public Expression
     /// @copybrief Node::basetype()
     const Expression* basetype() const override { return this; }
     /// @copybrief Node::children()
-    size_t children() const override final { return 1; }
+    size_t children() const override final { return this->size(); }
     /// @copybrief Node::child()
-    const ExpressionList* child(const size_t i) const override final {
-        if (i == 0) return this->args();
-        return nullptr;
+    const Expression* child(const size_t i) const override final {
+        if (i >= mArguments.size()) return nullptr;
+        return mArguments[i].get();
     }
     /// @copybrief Node::replacechild()
     inline bool replacechild(const size_t i, Node* node) override final {
-        if (i != 0) return false;
-        ExpressionList* exprl = dynamic_cast<ExpressionList*>(node);
-        if (!exprl) return false;
-        mArguments.reset(exprl);
-        mArguments->setParent(this);
+        if (mArguments.size() <= i) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        mArguments[i].reset(expr);
+        mArguments[i]->setParent(this);
         return true;
     }
 
-    /// @brief  Access a const pointer to this FunctionCall node's arguments as
-    ///         an ExpressionList
-    /// @return A const pointer to the function arguments
-    const ExpressionList* args() const { return mArguments.get(); }
     /// @brief  Access the function name/identifier
     /// @return A const reference to the function name
     inline const std::string& name() const { return mFunctionName; }
     /// @brief  Query the total number of arguments stored on this function
-    /// @note   This is different to FunctionCall::children. Whilst a
-    ///         FunctionCall only ever has one child (the ExpressionList), the
-    ///         size of the ExpressionList determines the number of arguments
-    ///         passed to the function
     /// @return The number of arguments. Can be 0
-    inline size_t numArgs() const { return mArguments->size(); }
+    inline size_t numArgs() const { return mArguments.size(); }
+
+    /// @brief  Alias for FunctionCall::children
+    inline size_t size() const { return mArguments.size(); }
+    /// @brief  Query whether this Expression list holds any valid expressions
+    /// @return True if this node if empty, false otherwise
+    inline bool empty() const { return mArguments.empty(); }
+    /// @brief  Appends an argument to this function call, transferring
+    ///         ownership to the FunctionCall and updating parent data on the
+    ///         expression. If the expression is a nullptr, it is ignored.
+    inline void append(Expression* expr) {
+        if (expr) {
+            mArguments.emplace_back(expr);
+            expr->setParent(this);
+        }
+    }
 private:
     const std::string mFunctionName;
-    ExpressionList::UniquePtr mArguments;
+    std::vector<Expression::UniquePtr> mArguments;
 };
 
 /// @brief  Keywords represent keyword statements defining changes in execution.
@@ -1622,10 +1720,6 @@ private:
 ///         be specified but current construction is limited to either a single
 ///         or double component lookup. Providing two components infers a matrix
 ///         indexing operation.
-/// @note   Components are consolidated into an ExpressionList, resulting in the
-///         number of child AST nodes being 2 rather than 3. This AST node is
-///         unique in this way and is implemented as such to support future
-///         behavior.
 /// @note   Single indexing operations are still valid for matrix indexing
 struct ArrayUnpack : public Expression
 {
@@ -1643,26 +1737,24 @@ struct ArrayUnpack : public Expression
     ArrayUnpack(Expression* expr,
         Expression* component0,
         Expression* component1 = nullptr)
-        : Expression()
-        , mComponents(new ExpressionList())
+        : mIdx0(component0)
+        , mIdx1(component1)
         , mExpression(expr) {
-            assert(component0);
+            assert(mIdx0);
             assert(mExpression);
-            mComponents->addExpression(component0);
-            mComponents->addExpression(component1);
+            mIdx0->setParent(this);
+            if(mIdx1) mIdx1->setParent(this);
             mExpression->setParent(this);
-            mComponents->setParent(this);
         }
     /// @brief  Deep copy constructor for a ArrayUnpack, performing a deep
     ///         copy on the expression being indexed and all held components,
     ///         ensuring parent information is updated.
     /// @param  other  A const reference to another ArrayUnpack to deep copy
     ArrayUnpack(const ArrayUnpack& other)
-        : mComponents(other.mComponents->copy())
-        , mExpression(other.mExpression->copy()) {
-            mExpression->setParent(this);
-            mComponents->setParent(this);
-        }
+        : ArrayUnpack(other.mExpression->copy(),
+            other.mIdx0->copy(),
+            other.mIdx1 ? other.mIdx1->copy() : nullptr) {}
+
     ~ArrayUnpack() override = default;
 
     /// @copybrief Node::copy()
@@ -1676,43 +1768,35 @@ struct ArrayUnpack : public Expression
     /// @copybrief Node::basetype()
     const Expression* basetype() const override { return this; }
     /// @copybrief Node::children()
-    size_t children() const override final { return 2; }
+    size_t children() const override final { return 3; }
     /// @copybrief Node::child()
     const Statement* child(const size_t i) const override final {
-        if (i == 0) return this->components();
-        if (i == 1) return this->expression();
+        if (i == 0) return this->component0();
+        if (i == 1) return this->component1();
+        if (i == 2) return this->expression();
         return nullptr;
     }
     /// @copybrief Node::replacechild()
     inline bool replacechild(const size_t i, Node* node) override final {
-        if (i > 1) return false;
-        if (i == 0) {
-            ExpressionList* exprl = dynamic_cast<ExpressionList*>(node);
-            if (!exprl) return false;
-            mComponents.reset(exprl);
-            mComponents->setParent(this);
-        }
-        else if (i == 1) {
-            Expression* expr = dynamic_cast<Expression*>(node);
-            if (!expr) return false;
-            mExpression.reset(expr);
-            mExpression->setParent(this);
-        }
+        if (i > 2) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        if (!expr) return false;
+        if (i == 0) mIdx0.reset(expr);
+        if (i == 1) mIdx1.reset(expr);
+        if (i == 2) mExpression.reset(expr);
+        expr->setParent(this);
         return true;
     }
 
     /// @brief  Access a const pointer to the first component being used as an
     ///         abstract Expression
     /// @return A const pointer to the first component
-    inline const Expression* component0() const { return mComponents->child(0); }
+    inline const Expression* component0() const { return mIdx0.get(); }
     /// @brief  Access a const pointer to the second component being used as an
     ///         abstract Expression
     /// @note   This can be a nullptr for single indexing operations
     /// @return A const pointer to the second component
-    inline const Expression* component1() const { return mComponents->child(1); }
-    /// @brief  Access a const pointer to the list of components
-    /// @return A const pointer to the list of components
-    inline const ExpressionList* components() const { return mComponents.get(); }
+    inline const Expression* component1() const { return mIdx1.get(); }
     /// @brief  Access a const pointer to the expression being indexed as an
     ///         abstract Expression
     /// @return A const pointer to the expression
@@ -1730,36 +1814,45 @@ struct ArrayUnpack : public Expression
         return static_cast<bool>(this->component1());
     }
 private:
-    ExpressionList::UniquePtr mComponents;
+    Expression::UniquePtr mIdx0, mIdx1;
     Expression::UniquePtr mExpression;
 };
 
 /// @brief  ArrayPacks represent temporary container creations of arbitrary
 ///         sizes, typically generated through the use of curly braces {}.
-///         It uses an ExpressionList to store its array "arguments", allowing
-///         for complex expressions to generate array elements.
 struct ArrayPack : public Expression
 {
     using UniquePtr = std::unique_ptr<ArrayPack>;
 
-    /// @brief  Construct a new ArrayPack with a valid set of array arguments
-    ///         (stored in an ExpressionList), transferring ownership of the
-    ///         ExpressionList to the ArrayPack and updating parent data on the
-    ///         ExpressionList.
-    /// @param  arguments  The ExpressionList holding the array arguments
-    ArrayPack(ExpressionList* arguments)
-        : Expression()
-        , mArguments(arguments) {
-            assert(mArguments);
-            mArguments->setParent(this);
+    /// @brief  Construct a new ArrayPack with a single expression, transferring
+    ///         ownership of the expression to the ArrayPack and updating parent
+    ///         data on the expression. If the expression is a nullptr, it is
+    ///         ignored.
+    /// @param  expression  The Expression to construct from
+    ArrayPack(Expression* expression)
+        : mExpressions() {
+            this->append(expression);
+        }
+    /// @brief  Construct a new ArrayPack transferring ownership of any
+    ///         provided arguments to the ArrayPack and updating parent data
+    ///         on the arguments.
+    /// @param  arguments  ArrayPack arguments
+    ArrayPack(const std::vector<Expression*>& arguments)
+        : mExpressions() {
+            mExpressions.reserve(arguments.size());
+            for (Expression* arg : arguments) {
+                this->append(arg);
+            }
         }
     /// @brief  Deep copy constructor for a ArrayPack, performing a deep copy
-    ///         on all held array arguments, ensuring parent information is
-    ///         updated.
+    ///         on all held arguments, ensuring parent information is updated.
     /// @param  other  A const reference to another ArrayPack to deep copy
     ArrayPack(const ArrayPack& other)
-        : mArguments(new ExpressionList(*other.mArguments)) {
-            mArguments->setParent(this);
+        : mExpressions() {
+            mExpressions.reserve(other.mExpressions.size());
+            for (const Expression::UniquePtr& expr : other.mExpressions) {
+                this->append(expr->copy());
+            }
         }
     ~ArrayPack() override = default;
 
@@ -1774,36 +1867,37 @@ struct ArrayPack : public Expression
     /// @copybrief Node::basetype()
     const Expression* basetype() const override { return this; }
     /// @copybrief Node::children()
-    size_t children() const override final { return 1; }
+    size_t children() const override final { return this->size(); }
     /// @copybrief Node::child()
-    const ExpressionList* child(const size_t i) const override final {
-        if (i == 0) return this->args();
-        return nullptr;
+    const Expression* child(const size_t i) const override final {
+        if (i >= mExpressions.size()) return nullptr;
+        return mExpressions[i].get();
     }
     /// @copybrief Node::replacechild()
     inline bool replacechild(const size_t i, Node* node) override final {
-        if (i != 0) return false;
-        ExpressionList* exprl = dynamic_cast<ExpressionList*>(node);
-        if (!exprl) return false;
-        mArguments.reset(exprl);
-        mArguments->setParent(this);
+        if (mExpressions.size() <= i) return false;
+        Expression* expr = dynamic_cast<Expression*>(node);
+        mExpressions[i].reset(expr);
+        mExpressions[i]->setParent(this);
         return true;
     }
 
-    /// @brief  Access a const pointer to this ArrayPack's arguments as an
-    ///         ExpressionList
-    /// @return A const pointer to the function arguments
-    const ExpressionList* args() const { return mArguments.get(); }
-    /// @brief  Query the total number of array "arguments" stored on this
-    ///         ArrayPack
-    /// @note   This is different to ArrayPack::children. Whilst a
-    ///         ArrayPack only ever has one child (the ExpressionList), the
-    ///         size of the ExpressionList determines the number of arguments
-    ///         passed to the array pack operation
-    /// @return The number of arguments
-    inline size_t numArgs() const { return mArguments->size(); }
+    /// @brief  Alias for ArrayPack::children
+    inline size_t size() const { return mExpressions.size(); }
+    /// @brief  Query whether this Expression list holds any valid expressions
+    /// @return True if this node if empty, false otherwise
+    inline bool empty() const { return mExpressions.empty(); }
+    /// @brief  Appends an argument to this ArrayPack, transferring ownership
+    ///         to the ArrayPack and updating parent data on the expression.
+    ///         If the expression is a nullptr, it is ignored.
+    inline void append(Expression* expr) {
+        if (expr) {
+            mExpressions.emplace_back(expr);
+            expr->setParent(this);
+        }
+    }
 private:
-    ExpressionList::UniquePtr mArguments;
+    std::vector<Expression::UniquePtr> mExpressions;
 };
 
 /// @brief  Attributes represent any access to a primitive value, typically
@@ -2049,59 +2143,6 @@ private:
     const tokens::CoreType mType;
 };
 
-/// @brief  DeclareLocal AST nodes symbolize a single type declaration of a
-///         local variable. Like Local AST nodes, they derive from Variable and
-///         thus store the local variables name. They also however store its
-///         specified type. These have the important distinction of representing
-///         the initial creation and allocation of a variable, in comparison to
-///         a Local node which only represents access.
-/// @note   An DeclareLocal is a complete "leaf-level" AST node. It has no
-///         children and nothing derives from it.
-struct DeclareLocal : public Variable
-{
-    using UniquePtr = std::unique_ptr<DeclareLocal>;
-
-    /// @brief  Construct a new DeclareLocal with a given name and type
-    /// @param  name  The name of the local variable being declared
-    /// @param  type  The type of the declaration
-    DeclareLocal(const std::string& name, const tokens::CoreType type)
-        : Variable(name)
-        , mType(type) {}
-    /// @brief  Deep copy constructor for a DeclareLocal
-    /// @note   No parent information needs updating as an DeclareLocal is a
-    ///         "leaf level" node (contains no children)
-    /// @param  other  A const reference to another DeclareLocal to deep copy
-    DeclareLocal(const DeclareLocal& other)
-        : Variable(other)
-        , mType(other.mType) {}
-    ~DeclareLocal() override = default;
-
-    /// @copybrief Node::copy()
-    DeclareLocal* copy() const override final { return new DeclareLocal(*this); }
-    /// @copybrief Node::nodetype()
-    NodeType nodetype() const override { return Node::DeclareLocalNode; }
-    /// @copybrief Node::nodename()
-    const char* nodename() const override { return "declaration"; }
-    /// @copybrief Node::subname()
-    const char* subname() const override { return "dcl"; }
-    /// @copybrief Node::basetype()
-    const Variable* basetype() const override { return this; }
-
-    /// @brief  Access the type that was specified at which to create the given
-    ///         local
-    /// @return The declaration type
-    inline tokens::CoreType type() const { return mType; }
-    /// @brief  Get the declaration type as a front end AX type/token string
-    /// @note   This returns the associated token to the type, not necessarily
-    ///         equal to the OpenVDB type string
-    /// @return A string representing the type/token
-    inline std::string typestr() const {
-        return ast::tokens::typeStringFromToken(mType);
-    }
-private:
-    const tokens::CoreType mType;
-};
-
 /// @brief  Local AST nodes represent a single accesses to a local variable.
 ///         The only store the name of the variable being accessed.
 /// @note   A Local is a complete "leaf-level" AST node. It has no children and
@@ -2127,6 +2168,105 @@ struct Local : public Variable
     /// @copybrief Node::basetype()
     const Variable* basetype() const override { return this; }
 };
+
+/// @brief  DeclareLocal AST nodes symbolize a single type declaration of a
+///         local variable. These store the local variables that They also however store its
+///         specified type. These have the important distinction of representing
+///         the initial creation and allocation of a variable, in comparison to
+///         a Local node which only represents access.
+struct DeclareLocal : public Statement
+{
+    using UniquePtr = std::unique_ptr<DeclareLocal>;
+
+    /// @brief  Construct a new DeclareLocal with a given name and type
+    /// @param  type  The type of the declaration
+    /// @param  local The local variable being declared
+    /// @param  init  The initialiser expression of the local
+    DeclareLocal(const tokens::CoreType type, Local* local, Expression* init = nullptr)
+        : mType(type)
+        , mLocal(local)
+        , mInit(init) {
+            assert(mLocal);
+            mLocal->setParent(this);
+            if (mInit) mInit->setParent(this);
+        }
+    /// @brief  Deep copy constructor for a DeclareLocal
+    /// @note   No parent information needs updating as an DeclareLocal is a
+    ///         "leaf level" node (contains no children)
+    /// @param  other  A const reference to another DeclareLocal to deep copy
+    DeclareLocal(const DeclareLocal& other)
+        : mType(other.mType)
+        , mLocal(other.mLocal->copy())
+        , mInit(other.hasInit() ? other.mInit->copy() : nullptr) {
+            mLocal->setParent(this);
+            if (mInit) mInit->setParent(this);
+        }
+    ~DeclareLocal() override = default;
+
+    /// @copybrief Node::copy()
+    DeclareLocal* copy() const override final { return new DeclareLocal(*this); }
+    /// @copybrief Node::nodetype()
+    NodeType nodetype() const override { return Node::DeclareLocalNode; }
+    /// @copybrief Node::nodename()
+    const char* nodename() const override { return "declaration"; }
+    /// @copybrief Node::subname()
+    const char* subname() const override { return "dcl"; }
+    /// @copybrief Node::basetype()
+    const Statement* basetype() const override { return this; }
+    /// @copybrief Node::children()
+    size_t children() const override final { return 2; }
+    /// @copybrief Node::child()
+    const Expression* child(const size_t i) const override final {
+        if (i == 0) return this->local();
+        if (i == 1) return this->init();
+        return nullptr;
+    }
+    /// @copybrief Node::replacechild()
+    inline bool replacechild(const size_t i, Node* node) override final {
+        if (i > 1) return false;
+        if (i == 0) {
+            Local* local = dynamic_cast<Local*>(node);
+            if (!local) return false;
+            mLocal.reset(local);
+            mLocal->setParent(this);
+        }
+        else {
+            Expression* init = dynamic_cast<Expression*>(node);
+            if (!init) return false;
+            mInit.reset(init);
+            mInit->setParent(this);
+        }
+        return true;
+    }
+
+    /// @brief  Access the type that was specified at which to create the given
+    ///         local
+    /// @return The declaration type
+    inline tokens::CoreType type() const { return mType; }
+    /// @brief  Get the declaration type as a front end AX type/token string
+    /// @note   This returns the associated token to the type, not necessarily
+    ///         equal to the OpenVDB type string
+    /// @return A string representing the type/token
+    inline std::string typestr() const {
+        return ast::tokens::typeStringFromToken(mType);
+    }
+    /// @brief  Query if this declaration has an initialiser
+    /// @return True if an initialiser exists, false otherwise
+    inline bool hasInit() const { return static_cast<bool>(this->init()); }
+
+    /// @brief  Access a const pointer to the Local
+    /// @return A const pointer to the local
+    const Local* local() const { return mLocal.get(); }
+    /// @brief  Access a const pointer to the initialiser
+    /// @return A const pointer to the initialiser
+    const Expression* init() const { return mInit.get(); }
+
+private:
+    const tokens::CoreType mType;
+    Local::UniquePtr       mLocal; // could be Variable for attribute declaration
+    Expression::UniquePtr  mInit;
+};
+
 
 /// @brief  A Value (literal) AST node holds either literal text or absolute
 ///         value information on all numerical, string and boolean constants.

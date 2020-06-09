@@ -1,7 +1,0 @@
-
-float abc = 0.2f;
-float deg = 0.8f;
-
-abc = deg;
-
-@float_test = abc;

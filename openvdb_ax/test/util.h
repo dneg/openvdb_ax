@@ -34,11 +34,13 @@
 
 #include <openvdb_ax/ast/AST.h>
 #include <openvdb_ax/ast/Tokens.h>
+#include <openvdb/Types.h>
 
 #include <memory>
 #include <vector>
 #include <utility>
 #include <string>
+#include <type_traits>
 
 #define ERROR_MSG(Msg, Code) Msg + std::string(": \"") + Code + std::string("\"")
 
@@ -68,6 +70,19 @@ namespace unittest_util
 // necessary.
 using CodeTests = std::vector<std::pair<std::string, openvdb::ax::ast::Node::Ptr>>;
 
+//
+
+// Find + Replace all string helper
+inline void replace(std::string& str, const std::string& oldStr, const std::string& newStr)
+{
+    std::string::size_type pos = 0u;
+    while ((pos = str.find(oldStr, pos)) != std::string::npos) {
+        str.replace(pos, oldStr.length(), newStr);
+        pos += newStr.length();
+    }
+}
+
+//
 
 inline bool compareLinearTrees(const std::vector<const openvdb::ax::ast::Node*>& a,
     const std::vector<const openvdb::ax::ast::Node*>& b, const bool allowEmpty = false)
@@ -159,10 +174,6 @@ inline bool compareLinearTrees(const std::vector<const openvdb::ax::ast::Node*>&
                 static_cast<const openvdb::ax::ast::DeclareLocal*>(b[i])->type()) {
                 return false;
             }
-            if (static_cast<const openvdb::ax::ast::DeclareLocal*>(a[i])->name() !=
-                static_cast<const openvdb::ax::ast::DeclareLocal*>(b[i])->name()) {
-                return false;
-            }
         }
         else if (a[i]->nodetype() == openvdb::ax::ast::Node::LocalNode) {
             if (static_cast<const openvdb::ax::ast::Local*>(a[i])->name() !=
@@ -218,13 +229,13 @@ inline bool compareLinearTrees(const std::vector<const openvdb::ax::ast::Node*>&
 }
 
 inline std::vector<std::string>
-nameSequence(const std::string& base, const int number)
+nameSequence(const std::string& base, const size_t number)
 {
     std::vector<std::string> names;
     if (number <= 0) return names;
     names.reserve(number);
 
-    for (int i = 1; i <= number; i++) {
+    for (size_t i = 1; i <= number; i++) {
         names.emplace_back(base + std::to_string(i));
     }
 

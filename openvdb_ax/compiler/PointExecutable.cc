@@ -63,7 +63,6 @@ using KernelFunctionPtr = std::add_pointer<codegen::PointKernel::Signature>::typ
 using FunctionTraitsT = codegen::PointKernel::FunctionTraitsT;
 using ReturnT = FunctionTraitsT::ReturnType;
 
-
 /// @brief  The arguments of the generated function
 ///
 struct PointFunctionArguments

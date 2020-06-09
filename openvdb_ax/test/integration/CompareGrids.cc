@@ -33,8 +33,59 @@
 
 #include <openvdb/points/PointDataGrid.h>
 
+#ifdef OPENVDB_AX_NO_MATRIX
+namespace openvdb {
+OPENVDB_USE_VERSION_NAMESPACE
+namespace OPENVDB_VERSION_NAME {
+namespace math {
+
+template <typename MatT>
+bool matapprox(const MatT& a, const MatT& b, const MatT& t)
+{
+    const auto *t0 = a.asPointer();
+    const auto *t1 = b.asPointer();
+    const auto *t2 = t.asPointer();
+    for (size_t i=0; i<MatT::numElements(); ++i) {
+        if (!isApproxEqual(t0[i], t1[i], t2[i])) return false;
+    }
+    return true;
+}
+
+/// Specialise isApproxEqual for matrices
+template <> bool isApproxEqual<Mat3s>(const Mat3s& a, const Mat3s& b, const Mat3s& t) { return matapprox(a, b, t); }
+template <> bool isApproxEqual<Mat3d>(const Mat3d& a, const Mat3d& b, const Mat3d& t) { return matapprox(a, b, t); }
+template <> bool isApproxEqual<Mat4s>(const Mat4s& a, const Mat4s& b, const Mat4s& t) { return matapprox(a, b, t); }
+template <> bool isApproxEqual<Mat4d>(const Mat4d& a, const Mat4d& b, const Mat4d& t) { return matapprox(a, b, t); }
+
+}
+}
+}
+#endif // OPENVDB_AX_NO_MATRIX
+
 namespace unittest_util
 {
+
+using TypeList = openvdb::TypeList<
+    double,
+    float,
+    int64_t,
+    int32_t,
+    int16_t,
+    bool,
+    openvdb::math::Vec2<double>,
+    openvdb::math::Vec2<float>,
+    openvdb::math::Vec2<int32_t>,
+    openvdb::math::Vec3<double>,
+    openvdb::math::Vec3<float>,
+    openvdb::math::Vec3<int32_t>,
+    openvdb::math::Vec4<double>,
+    openvdb::math::Vec4<float>,
+    openvdb::math::Vec4<int32_t>,
+    openvdb::math::Mat3<double>,
+    openvdb::math::Mat3<float>,
+    openvdb::math::Mat4<double>,
+    openvdb::math::Mat4<float>,
+    std::string>;
 
 struct DiagnosticArrayData
 {
@@ -300,35 +351,22 @@ compareAttributes<openvdb::points::PointDataTree::LeafNodeType>
         }
 
         if (settings.mCheckArrayValues) {
-            if (array1.type().second == "str") compareStringArrays(array1, array2, firstLeaf, secondLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<bool>())     compareArrays<bool>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<float>())    compareArrays<float>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<double>())   compareArrays<double>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<uint8_t>())  compareArrays<uint8_t>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<uint32_t>()) compareArrays<uint32_t>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<int16_t>())  compareArrays<int16_t>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<int32_t>())  compareArrays<int32_t>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<int64_t>())  compareArrays<int64_t>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Vec3d>()) compareArrays<openvdb::Vec3d>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Vec3f>()) compareArrays<openvdb::Vec3f>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Vec3i>()) compareArrays<openvdb::Vec3i>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Vec4d>()) compareArrays<openvdb::Vec4d>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Vec4f>()) compareArrays<openvdb::Vec4f>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::Vec4i>()) compareArrays<openvdb::Vec4i>(array1, array2, firstLeaf, name, data);
-            else if (type == openvdb::typeNameAsString<openvdb::math::Mat3<float>>())  {
-                compareArrays<openvdb::math::Mat3<float>>(array1, array2, firstLeaf, name, data);
-            }
-            else if (type == openvdb::typeNameAsString<openvdb::math::Mat3<double>>()) {
-                compareArrays<openvdb::math::Mat3<double>>(array1, array2, firstLeaf, name, data);
-            }
-            else if (type == openvdb::typeNameAsString<openvdb::math::Mat4<float>>()) {
-                compareArrays<openvdb::math::Mat4<float>>(array1, array2, firstLeaf, name, data);
-            }
-            else if (type == openvdb::typeNameAsString<openvdb::math::Mat4<double>>()) {
-                compareArrays<openvdb::math::Mat4<double>>(array1, array2, firstLeaf, name, data);
+            if (array1.type().second == "str") {
+                compareStringArrays(array1, array2, firstLeaf, secondLeaf, name, data);
             }
             else {
-                throw std::runtime_error("Unsupported array type for comparison: " + type);
+                bool success = false;
+                // Remove string types but add uint8_t types (used by group arrays)
+                TypeList::Remove<std::string>::Append<uint8_t>::foreach([&](auto x) {
+                    if (type == openvdb::typeNameAsString<decltype(x)>()) {
+                        compareArrays<decltype(x)>(array1, array2, firstLeaf, name, data);
+                        success = true;
+                    }
+                });
+
+                if (!success) {
+                    throw std::runtime_error("Unsupported array type for comparison: " + type);
+                }
             }
         }
     }
@@ -611,30 +649,32 @@ bool compareUntypedGrids(ComparisonResult &resultData,
                          const ComparisonSettings &settings,
                          const openvdb::MaskGrid::ConstPtr maskGrid)
 {
-#define INSTANTIATE_COMPARE_GRIDS(Type)                                                        \
-    if (firstGrid.isType<Type>()) {                                                            \
-        const Type& firstGridTyped = static_cast<const Type&>(firstGrid);                      \
-        const Type& secondGridTyped = static_cast<const Type&>(secondGrid);                    \
-        return compareGrids(resultData, firstGridTyped, secondGridTyped, settings, maskGrid);  \
+    bool result = false, valid = false;;
+    TypeList::foreach([&](auto x) {
+        using GridT = ConverterT<decltype(x)>;
+        if (firstGrid.isType<GridT>()) {
+            valid = true;
+            const GridT& firstGridTyped = static_cast<const GridT&>(firstGrid);
+            const GridT& secondGridTyped = static_cast<const GridT&>(secondGrid);
+            result = compareGrids(resultData, firstGridTyped, secondGridTyped, settings, maskGrid);
+        }
+    });
+
+    if (!valid) {
+        if (firstGrid.isType<openvdb::points::PointDataGrid>()) {
+            valid = true;
+            const openvdb::points::PointDataGrid& firstGridTyped =
+                static_cast<const openvdb::points::PointDataGrid&>(firstGrid);
+            const openvdb::points::PointDataGrid& secondGridTyped =
+                static_cast<const openvdb::points::PointDataGrid&>(secondGrid);
+            result = compareGrids(resultData, firstGridTyped, secondGridTyped, settings, maskGrid);
+        }
     }
 
-    INSTANTIATE_COMPARE_GRIDS(openvdb::MaskGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::BoolGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::FloatGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::DoubleGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::Int32Grid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::Int64Grid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3fGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3dGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::Vec3IGrid)
-    INSTANTIATE_COMPARE_GRIDS(ConverterT<openvdb::math::Vec4<float>>)
-    INSTANTIATE_COMPARE_GRIDS(ConverterT<openvdb::math::Vec4<double>>)
-    INSTANTIATE_COMPARE_GRIDS(ConverterT<openvdb::math::Vec4<int32_t>>)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::StringGrid)
-    INSTANTIATE_COMPARE_GRIDS(openvdb::points::PointDataGrid)
-
-    OPENVDB_THROW(openvdb::TypeError, "Unsupported grid type: " + firstGrid.valueType());
-    return false;
+    if (!valid) {
+        OPENVDB_THROW(openvdb::TypeError, "Unsupported grid type: " + firstGrid.valueType());
+    }
+    return result;
 }
 
 

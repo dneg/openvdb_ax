@@ -25,7 +25,8 @@ The doxygen documentation provide information on both AX as a language and the
 developer documentation for OpenVDB AX as a C++ API. There are two main sections:
 @par
  - The @subpage ax "AX Language Documentation" provides useful information for front-end users looking for documentation on the AX Language.
- - The @subpage openvdbax "OpenVDB AX Documentation" provides build, API and other C++ specific software information for developers.
+ - The @subpage openvdbaxbuild "Building OpenVDB AX" provides build instructions and requirements.
+ - The @subpage openvdbax "OpenVDB AX Documentation" provides API and other C++ specific software information for developers.
 @par
 Some additional quick links to useful subsections of the documentation are also
 provided:

@@ -153,14 +153,19 @@ inline FunctionGroup::Ptr axsetvoxel(const FunctionOptions& op)
     using SetVoxelI32 = void(void*, const openvdb::math::Vec3<int32_t>*, const int32_t);
     using SetVoxelI16 = void(void*, const openvdb::math::Vec3<int32_t>*, const int16_t);
     using SetVoxelB = void(void*, const openvdb::math::Vec3<int32_t>*, const bool);
+    using SetVoxelV2D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec2<double>*);
+    using SetVoxelV2F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec2<float>*);
+    using SetVoxelV2I = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec2<int32_t>*);
     using SetVoxelV3D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec3<double>*);
     using SetVoxelV3F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec3<float>*);
     using SetVoxelV3I = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec3<int32_t>*);
-    // @note Vec4 types are NOT registered by default by VDB or VDB AX - hooks are provided
-    // in case of custom registration and the VDB AX unit tests
     using SetVoxelV4D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec4<double>*);
     using SetVoxelV4F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec4<float>*);
     using SetVoxelV4I = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Vec4<int32_t>*);
+    using SetVoxelM3D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Mat3<double>*);
+    using SetVoxelM3F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Mat3<float>*);
+    using SetVoxelM4D = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Mat4<double>*);
+    using SetVoxelM4F = void(void*, const openvdb::math::Vec3<int32_t>*, const openvdb::math::Mat4<float>*);
     using SetVoxelStr = void(void*, const openvdb::math::Vec3<int32_t>*, const AXString*);
 
     return FunctionBuilder("setvoxel")
@@ -176,12 +181,19 @@ inline FunctionGroup::Ptr axsetvoxel(const FunctionOptions& op)
             .addFunctionAttribute(llvm::Attribute::NoUnwind)
             .addFunctionAttribute(llvm::Attribute::NoRecurse)
             .setConstantFold(false)
+        .addSignature<SetVoxelV2D>((SetVoxelV2D*)(setvoxelptr))
+        .addSignature<SetVoxelV2F>((SetVoxelV2F*)(setvoxelptr))
+        .addSignature<SetVoxelV2I>((SetVoxelV2I*)(setvoxelptr))
         .addSignature<SetVoxelV3D>((SetVoxelV3D*)(setvoxelptr))
         .addSignature<SetVoxelV3F>((SetVoxelV3F*)(setvoxelptr))
         .addSignature<SetVoxelV3I>((SetVoxelV3I*)(setvoxelptr))
         .addSignature<SetVoxelV4D>((SetVoxelV4D*)(setvoxelptr))
         .addSignature<SetVoxelV4F>((SetVoxelV4F*)(setvoxelptr))
         .addSignature<SetVoxelV4I>((SetVoxelV4I*)(setvoxelptr))
+        .addSignature<SetVoxelM3D>((SetVoxelM3D*)(setvoxelptr))
+        .addSignature<SetVoxelM3F>((SetVoxelM3F*)(setvoxelptr))
+        .addSignature<SetVoxelM4D>((SetVoxelM4D*)(setvoxelptr))
+        .addSignature<SetVoxelM4F>((SetVoxelM4F*)(setvoxelptr))
         .addSignature<SetVoxelStr>((SetVoxelStr*)(setvoxelstr))
             .addParameterAttribute(0, llvm::Attribute::NoAlias)
             .addParameterAttribute(0, llvm::Attribute::ReadOnly)
@@ -249,16 +261,20 @@ inline FunctionGroup::Ptr axgetvoxel(const FunctionOptions& op)
     using GetVoxelI32 = void(void*, void*, const openvdb::math::Vec3<float>*, int32_t*);
     using GetVoxelI16 = void(void*, void*, const openvdb::math::Vec3<float>*, int16_t*);
     using GetVoxelB = void(void*, void*, const openvdb::math::Vec3<float>*, bool*);
+    using GetVoxelV2D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec2<double>*);
+    using GetVoxelV2F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec2<float>*);
+    using GetVoxelV2I = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec2<int32_t>*);
     using GetVoxelV3D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec3<double>*);
     using GetVoxelV3F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec3<float>*);
     using GetVoxelV3I = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec3<int32_t>*);
-    // @note Vec4 types are NOT registered by default by VDB or VDB AX - hooks are provided
-    // in case of custom registration and the VDB AX unit tests
     using GetVoxelV4D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec4<double>*);
     using GetVoxelV4F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec4<float>*);
     using GetVoxelV4I = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Vec4<int32_t>*);
+    using GetVoxelM3D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Mat3<double>*);
+    using GetVoxelM3F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Mat3<float>*);
+    using GetVoxelM4D = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Mat4<double>*);
+    using GetVoxelM4F = void(void*, void*, const openvdb::math::Vec3<float>*, openvdb::math::Mat4<float>*);
     using GetVoxelStr = void(void*, void*, const openvdb::math::Vec3<float>*, AXString*);
-
 
     return FunctionBuilder("getvoxel")
         .addSignature<GetVoxelD>((GetVoxelD*)(getvoxel))
@@ -267,12 +283,19 @@ inline FunctionGroup::Ptr axgetvoxel(const FunctionOptions& op)
         .addSignature<GetVoxelI32>((GetVoxelI32*)(getvoxel))
         .addSignature<GetVoxelI16>((GetVoxelI16*)(getvoxel))
         .addSignature<GetVoxelB>((GetVoxelB*)(getvoxel))
+        .addSignature<GetVoxelV2D>((GetVoxelV2D*)(getvoxel))
+        .addSignature<GetVoxelV2F>((GetVoxelV2F*)(getvoxel))
+        .addSignature<GetVoxelV2I>((GetVoxelV2I*)(getvoxel))
         .addSignature<GetVoxelV3D>((GetVoxelV3D*)(getvoxel))
         .addSignature<GetVoxelV3F>((GetVoxelV3F*)(getvoxel))
         .addSignature<GetVoxelV3I>((GetVoxelV3I*)(getvoxel))
         .addSignature<GetVoxelV4D>((GetVoxelV4D*)(getvoxel))
         .addSignature<GetVoxelV4F>((GetVoxelV4F*)(getvoxel))
         .addSignature<GetVoxelV4I>((GetVoxelV4I*)(getvoxel))
+        .addSignature<GetVoxelM3F>((GetVoxelM3F*)(getvoxel))
+        .addSignature<GetVoxelM3D>((GetVoxelM3D*)(getvoxel))
+        .addSignature<GetVoxelM4F>((GetVoxelM4F*)(getvoxel))
+        .addSignature<GetVoxelM4D>((GetVoxelM4D*)(getvoxel))
         .addSignature<GetVoxelStr>((GetVoxelStr*)(getvoxelstr))
             .addParameterAttribute(0, llvm::Attribute::NoAlias)
             .addParameterAttribute(0, llvm::Attribute::ReadOnly)

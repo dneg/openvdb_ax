@@ -819,6 +819,31 @@ arrayPackCast(std::vector<llvm::Value*>& values,
     return arrayPack(values, builder);
 }
 
+inline llvm::Value*
+scalarToMatrix(llvm::Value* scalar,
+     llvm::IRBuilder<>& builder,
+     const size_t dim = 3)
+{
+    assert(scalar && (scalar->getType()->isIntegerTy() ||
+        scalar->getType()->isFloatingPointTy()) &&
+        "value type is not a scalar type");
+
+    llvm::Type* type = scalar->getType();
+    llvm::Value* array =
+        insertStaticAlloca(builder,
+            llvm::ArrayType::get(type, dim*dim));
+
+    llvm::Value* zero = llvm::ConstantFP::get(type, 0.0);
+
+    for (size_t i = 0; i < dim*dim; ++i) {
+        llvm::Value* m = ((i % (dim+1) == 0) ? scalar : zero);
+        llvm::Value* element = builder.CreateConstGEP2_64(array, 0, i);
+        builder.CreateStore(m, element);
+    }
+
+    return array;
+}
+
 }
 }
 }
