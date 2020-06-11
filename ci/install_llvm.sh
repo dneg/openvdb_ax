@@ -15,9 +15,23 @@ if [ -z $LLVM_ROOT_DIR ]; then
     exit -1
 fi
 
+LLVM_MAJOR_VERSION=$(echo $LLVM_VERSION | cut -d. -f1)
+LLVM_MINOR_VERSION=$(echo $LLVM_VERSION | cut -d. -f2)
+LLVM_PATCH_VERSION=$(echo $LLVM_VERSION | cut -d. -f3)
+
+echo "LLVM Major Version : $LLVM_MAJOR_VERSION"
+echo "LLVM Minor Version : $LLVM_MINOR_VERSION"
+echo "LLVM Patch Version : $LLVM_PATCH_VERSION"
 echo "Downloading LLVM $LLVM_VERSION src..."
 
-wget -O llvm-$LLVM_VERSION.src.tar.xz https://releases.llvm.org/$LLVM_VERSION/llvm-$LLVM_VERSION.src.tar.xz
+# From LLVM >= 10, use github releases
+if [ $LLVM_MAJOR_VERSION -ge 10 ]; then
+    LLVM_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/llvm-$LLVM_VERSION.src.tar.xz"
+else
+    LLVM_URL="https://releases.llvm.org/$LLVM_VERSION/llvm-$LLVM_VERSION.src.tar.xz"
+fi
+
+wget -O llvm-$LLVM_VERSION.src.tar.xz $LLVM_URL
 tar -xf llvm-$LLVM_VERSION.src.tar.xz
 rm -f llvm-$LLVM_VERSION.src.tar.xz
 cd llvm-$LLVM_VERSION.src

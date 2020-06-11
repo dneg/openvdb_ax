@@ -24,7 +24,6 @@
 # IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
 # LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 #
-#
 # Travis yaml script to configure continous integration
 #
 # Author: Nick Avramoussis
@@ -57,14 +56,27 @@ before_install:
       ci/install_deps_macos.sh $LLVM_VERSION;
     fi
 
-# Build matrix for linux which tests against llvm 5/6/7/8
+# Build matrix for linux which tests against llvm 5/6/7/8/9/10
 # for both gcc and clang. Note that the test for osx is
 # done outside of this matrix by the default settings above
 matrix:
   include:
     ###############################################################
-    # Linux LLVM 5/6/7/8/9 - GCC
+    # Linux LLVM 5/6/7/8/9/10 - GCC
     ###############################################################
+    - os: linux
+      compiler: gcc
+      env: LLVM_VERSION=10
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+            - sourceline: 'deb https://apt.llvm.org/xenial/ llvm-toolchain-xenial-10 main'
+              key_url: 'https://apt.llvm.org/llvm-snapshot.gpg.key'
+          packages:
+            - *native_deps
+            - llvm-10-dev
+            - libclang-10-dev # Required otherwise CMake fails
     - os: linux
       compiler: gcc
       env: LLVM_VERSION=9
@@ -167,8 +179,11 @@ matrix:
             - *native_deps
             - llvm-5.0-dev
     ###############################################################
-    # MacOS LLVM 6/7/8/9 - GCC
+    # MacOS LLVM 6/7/8/9/10 - GCC
     ###############################################################
+    - os: osx
+      compiler: gcc
+      env: LLVM_VERSION=10
     - os: osx
       compiler: gcc
       env: LLVM_VERSION=9
@@ -182,8 +197,11 @@ matrix:
       compiler: gcc
       env: LLVM_VERSION=6
     ###############################################################
-    # MacOS LLVM 6/7/8/9 - clang
+    # MacOS LLVM 6/7/8/9/10 - clang
     ###############################################################
+    - os: osx
+      compiler: clang
+      env: LLVM_VERSION=10
     - os: osx
       compiler: clang
       env: LLVM_VERSION=9

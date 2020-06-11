@@ -29,22 +29,23 @@
 ///////////////////////////////////////////////////////////////////////////
 
 /// @file version.h
+///
 /// @brief Library and file format version numbers
 ///
-/// @details
-/// Based off of the versioning system within openvdb. There is currently no AX
-/// namespace versioning which instead leverages openvdb's version namespace.
+/// @details  Based off of the versioning system within openvdb. There is
+///   currently no AX namespace versioning which instead leverages openvdb's
+///   version namespace.
 ///
-/// The library minor version number gets incremented whenever a change is made
-/// to any aspect of the public API (not just the grid API) that necessitates
-/// changes to client code.  Changes to APIs in private or internal namespaces
-/// do not trigger a minor version number increment; such APIs should not be used
-/// in client code.
+///   The library minor version number gets incremented whenever a change is made
+///   to any aspect of the public API (not just the grid API) that necessitates
+///   changes to client code.  Changes to APIs in private or internal namespaces
+///   do not trigger a minor version number increment; such APIs should not be
+///   used in client code.
 ///
-/// A patch version number increment indicates a change, usually a new feature
-/// or a bug fix, that does not necessitate changes to client code but rather
-/// only recompilation of that code (because the library namespace incorporates
-/// the version number).
+///    A patch version number increment indicates a change, usually a new feature
+///    or a bug fix, that does not necessitate changes to client code but rather
+///    only recompilation of that code (because the library namespace
+///    incorporates the version number).
 ///
 
 #ifndef OPENVDB_AX_VERSION_HAS_BEEN_INCLUDED

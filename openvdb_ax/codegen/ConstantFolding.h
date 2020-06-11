@@ -27,11 +27,12 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////
 
 /// @file codegen/ConstantFolding.h
 ///
 /// @authors Nick Avramoussis
+///
+/// @brief  Constant folding for C++ bindings.
 ///
 
 #ifndef OPENVDB_AX_CODEGEN_CONSTANT_FOLDING_HAS_BEEN_INCLUDED

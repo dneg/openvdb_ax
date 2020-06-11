@@ -27,10 +27,10 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
-//
+
 /// @file SOP_OpenVDB_AX.cc
 ///
-/// @author DNEG FX R&D
+/// @authors  Nick Avramoussis, Richard Jones, Francisco Gochez, Matt Warner
 ///
 /// @brief AX SOP for OpenVDB Points and Volumes
 ///

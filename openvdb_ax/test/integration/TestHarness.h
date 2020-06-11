@@ -27,11 +27,12 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
+
+/// @file test/integration/TestHarness.h
 ///
-/// @file unittest/TestHarness.h
+/// @authors Francisco Gochez, Nick Avramoussis
 ///
-/// @authors Francisco Gochez
-///
+/// @brief  Test harness and base methods
 
 #ifndef OPENVDB_POINTS_UNITTEST_TEST_HARNESS_INCLUDED
 #define OPENVDB_POINTS_UNITTEST_TEST_HARNESS_INCLUDED

@@ -17,7 +17,7 @@ jobs:
         image: ['2019', '2020']
         compiler: ['g++', 'clang++']
         build: ['Release']
-        llvm: ['6.0.0','7.0.0','8.0.0','9.0.0']
+        llvm: ['6.0.0','7.0.0','8.0.0','9.0.0','10.0.0']
         # Debug builds
         include:
           - image: '2020'
@@ -59,7 +59,7 @@ jobs:
       matrix:
         compiler: ['g++', 'clang++']
         build: ['Release']
-        llvm: ['6','7','8','9']
+        llvm: ['6','7','8','9','10']
         # Debug builds
         include:
           - compiler: 'g++'

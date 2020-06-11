@@ -33,10 +33,10 @@
 /// @authors Nick Avramoussis, Richard Jones
 ///
 /// @brief  Contains the function objects that define the functions used in
-///         point compute function generation, to be inserted into the
-///         FunctionRegistry. These define the functions available when operating
-///         on points. Also includes the definitions for the point attribute
-///         retrieval and setting.
+///   point compute function generation, to be inserted into the
+///   FunctionRegistry. These define the functions available when operating
+///   on points. Also includes the definitions for the point attribute
+///   retrieval and setting.
 ///
 
 #include "Functions.h"

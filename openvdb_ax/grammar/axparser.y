@@ -28,6 +28,13 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file grammar/axparser.y
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief  OpenVDB AX Grammar Rules
+///
+
 %{
     #include <stdio.h>
     #include <vector>

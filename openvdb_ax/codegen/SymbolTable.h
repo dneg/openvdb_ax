@@ -33,7 +33,7 @@
 /// @authors Nick Avramoussis
 ///
 /// @brief  Contains the symbol table which holds mappings of variables names
-///         to llvm::Values.
+///   to llvm::Values.
 ///
 
 #ifndef OPENVDB_AX_CODEGEN_SYMBOL_TABLE_HAS_BEEN_INCLUDED

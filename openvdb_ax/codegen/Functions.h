@@ -33,8 +33,8 @@
 /// @authors Nick Avramoussis, Richard Jones, Francisco Gochez
 ///
 /// @brief  Contains the function objects that define the functions used in
-///         compute function generation, to be inserted into the FunctionRegistry.
-///         These define general purpose functions such as math functions.
+///   compute function generation, to be inserted into the FunctionRegistry.
+///   These define general purpose functions such as math functions.
 ///
 
 #ifndef OPENVDB_AX_CODEGEN_GENERIC_FUNCTIONS_HAS_BEEN_INCLUDED

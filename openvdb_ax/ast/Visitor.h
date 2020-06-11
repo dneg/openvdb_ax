@@ -33,9 +33,9 @@
 /// @authors Nick Avramoussis
 ///
 /// @brief  Contains the AX AST Node Visitor, providing default and
-///         customizable traversal and visitation methods on a AST
-///         hierarchy. Using the visitor pattern is the recommended way
-///         to implement custom operations on AST nodes.
+///   customizable traversal and visitation methods on a AST hierarchy.
+///   Using the visitor pattern is the recommended way to implement
+///   custom operations on AST nodes.
 ///
 
 #ifndef OPENVDB_AX_AST_VISITOR_HAS_BEEN_INCLUDED

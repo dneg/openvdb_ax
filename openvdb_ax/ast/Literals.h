@@ -28,6 +28,13 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file ast/Literals.h
+///
+/// @authors Nick Avramoussis
+///
+/// @brief  Basic string to numerical conversion for the parser.
+///
+
 #ifndef OPENVDB_AX_AST_LITERALS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_LITERALS_HAS_BEEN_INCLUDED
 

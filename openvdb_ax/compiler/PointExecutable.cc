@@ -28,6 +28,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file compiler/PointExecutable.cc
+
 #include "PointExecutable.h"
 
 #include <openvdb/Types.h>

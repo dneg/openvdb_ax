@@ -28,6 +28,11 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file test/util.h
+///
+/// @author Nick Avramoussis
+///
+/// @brief  Test utilities
 
 #ifndef OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED

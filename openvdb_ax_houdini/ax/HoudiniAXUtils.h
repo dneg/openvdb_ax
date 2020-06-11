@@ -28,12 +28,12 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file ax/HoudiniAXUtils.h
 ///
 /// @authors Nick Avramoussis
 ///
-/// @brief  Utility methods for OpenVDB AX in Houdini,
-///         contains VEX and channel expression conversion methods.
-///
+/// @brief  Utility methods for OpenVDB AX in Houdini, contains
+///   VEX and channel expression conversion methods.
 ///
 
 #ifndef OPENVDB_AX_HOUDINI_AX_UTILS_HAS_BEEN_INCLUDED

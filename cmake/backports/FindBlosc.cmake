@@ -1,28 +1,5 @@
-# Copyright (c) DreamWorks Animation LLC
-#
-# All rights reserved. This software is distributed under the
-# Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
-#
-# Redistributions of source code must retain the above copyright
-# and license notice and the following restrictions and disclaimer.
-#
-# *     Neither the name of DreamWorks Animation nor the names of
-# its contributors may be used to endorse or promote products derived
-# from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
-# LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
+# Copyright Contributors to the OpenVDB Project
+# SPDX-License-Identifier: MPL-2.0
 #
 #[=======================================================================[.rst:
 
@@ -86,12 +63,16 @@ may be provided to tell this module where to look.
   Global list of library paths intended to be searched by and find_xxx call
 ``BLOSC_USE_STATIC_LIBS``
   Only search for static blosc libraries
+``BLOSC_USE_EXTERNAL_SOURCES``
+  Set to ON if Blosc has been built using external sources for LZ4, snappy,
+  zlib and zstd. Default is OFF.
 ``DISABLE_CMAKE_SEARCH_PATHS``
   Disable CMakes default search paths for find_xxx calls in this module
 
 #]=======================================================================]
 
 cmake_minimum_required(VERSION 3.3)
+include(GNUInstallDirs)
 
 # Monitoring <PackageName>_ROOT variables
 if(POLICY CMP0074)
@@ -123,11 +104,12 @@ elseif(DEFINED ENV{BLOSC_ROOT})
 endif()
 
 # Additionally try and use pkconfig to find blosc
-
-if(NOT DEFINED PKG_CONFIG_FOUND)
-  find_package(PkgConfig)
+if(USE_PKGCONFIG)
+  if(NOT DEFINED PKG_CONFIG_FOUND)
+    find_package(PkgConfig)
+  endif()
+  pkg_check_modules(PC_Blosc QUIET blosc)
 endif()
-pkg_check_modules(PC_Blosc QUIET blosc)
 
 # ------------------------------------------------------------------------
 #  Search for blosc include DIR
@@ -145,7 +127,7 @@ list(APPEND _BLOSC_INCLUDE_SEARCH_DIRS
 find_path(Blosc_INCLUDE_DIR blosc.h
   ${_FIND_BLOSC_ADDITIONAL_OPTIONS}
   PATHS ${_BLOSC_INCLUDE_SEARCH_DIRS}
-  PATH_SUFFIXES include
+  PATH_SUFFIXES ${CMAKE_INSTALL_INCLUDEDIR} include
 )
 
 if(EXISTS "${Blosc_INCLUDE_DIR}/blosc.h")
@@ -183,27 +165,32 @@ list(APPEND _BLOSC_LIBRARYDIR_SEARCH_DIRS
   ${SYSTEM_LIBRARY_PATHS}
 )
 
-# Static library setup
-if(UNIX AND BLOSC_USE_STATIC_LIBS)
-  set(_BLOSC_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+# Library suffix handling
+
+set(_BLOSC_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+
+if(WIN32)
+  if(BLOSC_USE_STATIC_LIBS)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
+  endif()
+else()
+  if(BLOSC_USE_STATIC_LIBS)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  endif()
 endif()
 
-set(BLOSC_PATH_SUFFIXES
-  lib64
-  lib
-)
+# libblosc is the name of the blosc static lib on windows
 
-find_library(Blosc_LIBRARY blosc
+find_library(Blosc_LIBRARY blosc libblosc
   ${_FIND_BLOSC_ADDITIONAL_OPTIONS}
   PATHS ${_BLOSC_LIBRARYDIR_SEARCH_DIRS}
-  PATH_SUFFIXES ${BLOSC_PATH_SUFFIXES}
+  PATH_SUFFIXES ${CMAKE_INSTALL_LIBDIR} lib64 lib
 )
 
-if(UNIX AND BLOSC_USE_STATIC_LIBS)
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ${_BLOSC_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES})
-  unset(_BLOSC_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES)
-endif()
+# Reset library suffix
+
+set(CMAKE_FIND_LIBRARY_SUFFIXES ${_BLOSC_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES})
+unset(_BLOSC_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES)
 
 # ------------------------------------------------------------------------
 #  Cache and set Blosc_FOUND
@@ -219,19 +206,45 @@ find_package_handle_standard_args(Blosc
 )
 
 if(Blosc_FOUND)
+  # Configure lib type. If XXX_USE_STATIC_LIBS, we always assume a static
+  # lib is in use. If win32, we can't mark the import .libs as shared, so
+  # these are always marked as UNKNOWN. Otherwise, infer from extension.
+  set(BLOSC_LIB_TYPE UNKNOWN)
+  if(BLOSC_USE_STATIC_LIBS)
+    set(BLOSC_LIB_TYPE STATIC)
+  elseif(UNIX)
+    get_filename_component(_BLOSC_EXT ${Blosc_LIBRARY} EXT)
+    if(_BLOSC_EXT STREQUAL ".a")
+      set(BLOSC_LIB_TYPE STATIC)
+    elseif(_BLOSC_EXT STREQUAL ".so" OR
+           _BLOSC_EXT STREQUAL ".dylib")
+      set(BLOSC_LIB_TYPE SHARED)
+    endif()
+  endif()
+
   set(Blosc_LIBRARIES ${Blosc_LIBRARY})
   set(Blosc_INCLUDE_DIRS ${Blosc_INCLUDE_DIR})
-  set(Blosc_DEFINITIONS ${PC_Blosc_CFLAGS_OTHER})
 
   get_filename_component(Blosc_LIBRARY_DIRS ${Blosc_LIBRARY} DIRECTORY)
 
   if(NOT TARGET Blosc::blosc)
-    add_library(Blosc::blosc UNKNOWN IMPORTED)
+    add_library(Blosc::blosc ${BLOSC_LIB_TYPE} IMPORTED)
     set_target_properties(Blosc::blosc PROPERTIES
       IMPORTED_LOCATION "${Blosc_LIBRARIES}"
-      INTERFACE_COMPILE_DEFINITIONS "${Blosc_DEFINITIONS}"
+      INTERFACE_COMPILE_OPTIONS "${PC_Blosc_CFLAGS_OTHER}"
       INTERFACE_INCLUDE_DIRECTORIES "${Blosc_INCLUDE_DIRS}"
     )
+
+    # Blosc may optionally be compiled with external sources for
+    # lz4, snappy, zlib and zstd. Add them as interface libs if
+    # requested (there doesn't seem to be a way to figure this
+    # out automatically).
+    if(BLOSC_USE_EXTERNAL_SOURCES)
+      set_target_properties(Blosc::blosc PROPERTIES
+        INTERFACE_LINK_DIRECTORIES "${Blosc_LIBRARY_DIRS}"
+        INTERFACE_LINK_LIBRARIES "lz4;snappy;zlib;zstd"
+      )
+    endif()
   endif()
 elseif(Blosc_FIND_REQUIRED)
   message(FATAL_ERROR "Unable to find Blosc")

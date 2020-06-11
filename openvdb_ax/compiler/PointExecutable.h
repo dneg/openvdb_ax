@@ -32,7 +32,8 @@
 ///
 /// @authors Nick Avramoussis, Francisco Gochez, Richard Jones
 ///
-/// @brief Contains PointExecutable class
+/// @brief The PointExecutable, produced by the OpenVDB AX Compiler for
+///   execution over OpenVDB Points Grids.
 ///
 
 #ifndef OPENVDB_AX_COMPILER_POINT_EXECUTABLE_HAS_BEEN_INCLUDED

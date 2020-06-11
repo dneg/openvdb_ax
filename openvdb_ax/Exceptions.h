@@ -28,6 +28,13 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file Exceptions.h
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief  OpenVDB AX Exceptions
+///
+
 #ifndef OPENVDB_AX_EXCEPTIONS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_EXCEPTIONS_HAS_BEEN_INCLUDED
 

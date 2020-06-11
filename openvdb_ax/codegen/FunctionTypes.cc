@@ -28,10 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-/// @authors Nick Avramoussis
-///
-/// @brief
-///
+/// @file codegen/FunctionTypes.cc
 
 #include "FunctionTypes.h"
 

@@ -30,10 +30,10 @@
 
 /// @file codegen/PointComputeGenerator.h
 ///
-/// @authors Nick Avramoussis
+/// @authors Nick Avramoussis, Matt Warner, Francisco Gochez, Richard Jones
 ///
 /// @brief  The visitor framework and function definition for point data
-///         grid code generation
+///   grid code generation
 ///
 
 #ifndef OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED

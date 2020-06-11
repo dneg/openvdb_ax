@@ -33,7 +33,7 @@
 /// @authors Nick Avramoussis
 ///
 /// @brief  Various function and operator tokens used throughout the
-///         AST and code generation
+///   AST and code generation
 ///
 
 #ifndef OPENVDB_AX_AST_TOKENS_HAS_BEEN_INCLUDED

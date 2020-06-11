@@ -33,9 +33,9 @@
 /// @authors Nick Avramoussis, Richard Jones, Francisco Gochez
 ///
 /// @brief  Definitions for all standard functions supported by AX. A
-///         standard function is one that is supported no matetr the input
-///         primitive type and rely either solely on AX types or core AX
-///         intrinsics.
+///   standard function is one that is supported no matetr the input
+///   primitive type and rely either solely on AX types or core AX
+///   intrinsics.
 
 #include "Functions.h"
 

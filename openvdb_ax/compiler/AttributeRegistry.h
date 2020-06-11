@@ -33,13 +33,13 @@
 /// @authors Nick Avramoussis, Francisco Gochez
 ///
 /// @brief These classes contain lists of expected attributes and volumes
-///        which are populated by compiler during its internal code generation.
-///        These will then be requested from the inputs to the executable
-///        when execute is called. In this way, accesses are requested at
-///        execution time, allowing the executable objects to be shared and
-///        stored.
+///   which are populated by compiler during its internal code generation.
+///   These will then be requested from the inputs to the executable
+///   when execute is called. In this way, accesses are requested at
+///   execution time, allowing the executable objects to be shared and
+///   stored.
 ///
-///
+
 #ifndef OPENVDB_AX_COMPILER_TARGET_REGISTRY_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_TARGET_REGISTRY_HAS_BEEN_INCLUDED
 

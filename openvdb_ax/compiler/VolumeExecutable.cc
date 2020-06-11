@@ -28,6 +28,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file compiler/VolumeExecutable.cc
+
 #include "VolumeExecutable.h"
 
 #include <openvdb_ax/Exceptions.h>
