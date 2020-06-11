@@ -28,8 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-/// @authors Nick Avramoussis, Matt Warner, Francisco Gochez, Richard Jones
-///
+/// @file codegen/PointComputeGenerator.cc
 
 #include "PointComputeGenerator.h"
 

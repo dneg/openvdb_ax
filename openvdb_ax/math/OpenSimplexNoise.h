@@ -27,7 +27,22 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////
+
+/// @file math/OpenSimplexNoise.h
+///
+/// @authors Francisco Gochez
+///
+/// @brief  Methods for generating OpenSimplexNoise (n-dimensional gradient noise)
+///
+/// @details  This code is based on https://gist.github.com/tombsar/716134ec71d1b8c1b530
+///   (accessed on 22/05/2019). We have simplified that code in a number of ways,
+///   most notably by removing the template on dimension (this only generates 3
+///   dimensional noise) and removing the base class as it's unnecessary for our
+///   uses. We also assume C++ 2011 or above and have thus removed a number of
+///   #ifdef blocks.
+///
+///   The OSN namespace contains the original copyright.
+///
 
 #ifndef OPENVDB_AX_MATH_OPEN_SIMPLEX_NOISE_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_MATH_OPEN_SIMPLEX_NOISE_HAS_BEEN_INCLUDED
@@ -87,12 +102,6 @@ void curlnoise(double (*out)[3], double x, double y, double z)
 
 namespace OSN
 {
-
-// This code is based on https://gist.github.com/tombsar/716134ec71d1b8c1b530 (accessed on
-// 22/05/2019).  We have simplified that code in a number of ways, most notably by removing the
-// template on dimension (this only generates 3 dimensional noise) and removing the base class
-// as it's unnecessary for our uses.  We also assume C++ 2011 or above and have thus removed a
-// number of #ifdef blocks.
 
 // The following is the original copyright notice:
 /*

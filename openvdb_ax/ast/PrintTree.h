@@ -28,6 +28,14 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file ast/PrintTree.h
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief  Various tools which traverse an AX AST and report information
+///   back to a std::ostream.
+///
+
 #ifndef OPENVDB_AX_AST_PRINT_TREE_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_PRINT_TREE_HAS_BEEN_INCLUDED
 

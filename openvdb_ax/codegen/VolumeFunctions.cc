@@ -33,9 +33,9 @@
 /// @authors Nick Avramoussis, Richard Jones
 ///
 /// @brief  Contains the function objects that define the functions used in
-///         volume compute function generation, to be inserted into the FunctionRegistry.
-///         These define the functions available when operating on volumes.
-///         Also includes the definitions for the volume value retrieval and setting.
+///   volume compute function generation, to be inserted into the FunctionRegistry.
+///   These define the functions available when operating on volumes.
+///   Also includes the definitions for the volume value retrieval and setting.
 ///
 
 #include "Functions.h"

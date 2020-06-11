@@ -33,7 +33,7 @@
 /// @authors Nick Avramoussis
 ///
 /// @brief  The visitor framework and function definition for volume grid
-///         code generation
+///   code generation
 ///
 
 #ifndef OPENVDB_AX_VOLUME_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED

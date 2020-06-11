@@ -1,28 +1,5 @@
-# Copyright (c) DreamWorks Animation LLC
-#
-# All rights reserved. This software is distributed under the
-# Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
-#
-# Redistributions of source code must retain the above copyright
-# and license notice and the following restrictions and disclaimer.
-#
-# *     Neither the name of DreamWorks Animation nor the names of
-# its contributors may be used to endorse or promote products derived
-# from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
-# LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
+# Copyright Contributors to the OpenVDB Project
+# SPDX-License-Identifier: MPL-2.0
 #
 #[=======================================================================[.rst:
 
@@ -94,6 +71,7 @@ may be provided to tell this module where to look.
 #]=======================================================================]
 
 cmake_minimum_required(VERSION 3.3)
+include(GNUInstallDirs)
 
 # Monitoring <PackageName>_ROOT variables
 if(POLICY CMP0074)
@@ -125,11 +103,12 @@ elseif(DEFINED ENV{LOG4CPLUS_ROOT})
 endif()
 
 # Additionally try and use pkconfig to find log4cplus
-
-if(NOT DEFINED PKG_CONFIG_FOUND)
-  find_package(PkgConfig)
+if(USE_PKGCONFIG)
+  if(NOT DEFINED PKG_CONFIG_FOUND)
+    find_package(PkgConfig)
+  endif()
+  pkg_check_modules(PC_Log4cplus QUIET log4cplus)
 endif()
-pkg_check_modules(PC_Log4cplus QUIET log4cplus)
 
 # ------------------------------------------------------------------------
 #  Search for Log4cplus include DIR
@@ -147,7 +126,7 @@ list(APPEND _LOG4CPLUS_INCLUDE_SEARCH_DIRS
 find_path(Log4cplus_INCLUDE_DIR log4cplus/version.h
   ${_FIND_LOG4CPLUS_ADDITIONAL_OPTIONS}
   PATHS ${_LOG4CPLUS_INCLUDE_SEARCH_DIRS}
-  PATH_SUFFIXES include
+  PATH_SUFFIXES ${CMAKE_INSTALL_INCLUDEDIR} include
 )
 
 if(EXISTS "${Log4cplus_INCLUDE_DIR}/log4cplus/version.h")
@@ -183,29 +162,30 @@ list(APPEND _LOG4CPLUS_LIBRARYDIR_SEARCH_DIRS
   ${SYSTEM_LIBRARY_PATHS}
 )
 
+# Library suffix handling
 
-if(UNIX AND LOG4CPLUS_USE_STATIC_LIBS)
-  set(_LOG4CPLUS_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+set(_LOG4CPLUS_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
+
+if(WIN32)
+  if(LOG4CPLUS_USE_STATIC_LIBS)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
+  endif()
+else()
+  if(LOG4CPLUS_USE_STATIC_LIBS)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  endif()
 endif()
-
-# Build suffix directories
-
-set(LOG4CPLUS_PATH_SUFFIXES
-  lib64
-  lib
-)
 
 find_library(Log4cplus_LIBRARY log4cplus
   ${_FIND_LOG4CPLUS_ADDITIONAL_OPTIONS}
   PATHS ${_LOG4CPLUS_LIBRARYDIR_SEARCH_DIRS}
-  PATH_SUFFIXES ${LOG4CPLUS_PATH_SUFFIXES}
+  PATH_SUFFIXES ${CMAKE_INSTALL_LIBDIR} lib64 lib
 )
 
-if(UNIX AND LOG4CPLUS_USE_STATIC_LIBS)
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ${_LOG4CPLUS_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES})
-  unset(_LOG4CPLUS_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES)
-endif()
+# Reset library suffix
+
+set(CMAKE_FIND_LIBRARY_SUFFIXES ${_LOG4CPLUS_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES})
+unset(_LOG4CPLUS_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES)
 
 # ------------------------------------------------------------------------
 #  Cache and set Log4cplus_FOUND
@@ -221,17 +201,32 @@ find_package_handle_standard_args(Log4cplus
 )
 
 if(Log4cplus_FOUND)
+  # Configure lib type. If XXX_USE_STATIC_LIBS, we always assume a static
+  # lib is in use. If win32, we can't mark the import .libs as shared, so
+  # these are always marked as UNKNOWN. Otherwise, infer from extension.
+  set(LOG4CPLUS_LIB_TYPE UNKNOWN)
+  if(LOG4CPLUS_USE_STATIC_LIBS)
+    set(LOG4CPLUS_LIB_TYPE STATIC)
+  elseif(UNIX)
+    get_filename_component(_LOG4CPLUS_EXT ${Log4cplus_LIBRARY} EXT)
+    if(_LOG4CPLUS_EXT STREQUAL ".a")
+      set(LOG4CPLUS_LIB_TYPE STATIC)
+    elseif(_LOG4CPLUS_EXT STREQUAL ".so" OR
+           _LOG4CPLUS_EXT STREQUAL ".dylib")
+      set(LOG4CPLUS_LIB_TYPE SHARED)
+    endif()
+  endif()
+
   set(Log4cplus_LIBRARIES ${Log4cplus_LIBRARY})
   set(Log4cplus_INCLUDE_DIRS ${Log4cplus_INCLUDE_DIR})
-  set(Log4cplus_DEFINITIONS ${PC_Log4cplus_CFLAGS_OTHER})
 
   get_filename_component(Log4cplus_LIBRARY_DIRS ${Log4cplus_LIBRARY} DIRECTORY)
 
   if(NOT TARGET Log4cplus::log4cplus)
-    add_library(Log4cplus::log4cplus UNKNOWN IMPORTED)
+    add_library(Log4cplus::log4cplus ${LOG4CPLUS_LIB_TYPE} IMPORTED)
     set_target_properties(Log4cplus::log4cplus PROPERTIES
       IMPORTED_LOCATION "${Log4cplus_LIBRARIES}"
-      INTERFACE_COMPILE_DEFINITIONS "${Log4cplus_DEFINITIONS}"
+      INTERFACE_COMPILE_OPTIONS "${PC_Log4cplus_CFLAGS_OTHER}"
       INTERFACE_INCLUDE_DIRECTORIES "${Log4cplus_INCLUDE_DIRS}"
     )
   endif()

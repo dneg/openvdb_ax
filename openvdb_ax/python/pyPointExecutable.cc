@@ -28,6 +28,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file python/pyPointExecutable.cc
+
 #include "pyPointExecutable.h"
 
 #include <openvdb/openvdb.h>

@@ -28,8 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-/// @authors Nick Avramoussis
-///
+/// @file codegen/VolumeComputeGenerator.cc
 
 #include "VolumeComputeGenerator.h"
 

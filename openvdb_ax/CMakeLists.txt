@@ -130,19 +130,6 @@ message(STATUS "Found LLVM: ${LLVM_DIR} (found suitable version \"${LLVM_PACKAGE
 
 find_package(Boost REQUIRED COMPONENTS random)
 
-if(WIN32)
-  # Because of implicit linking!
-  link_directories(${Boost_LIBRARY_DIR})
-  if(OPENVDB_DISABLE_BOOST_IMPLICIT_LINKING)
-    add_definitions(-DBOOST_ALL_NO_LIB)
-  endif()
-endif()
-
-# @todo Should be target definitions
-if(WIN32)
-  add_definitions(-D_WIN32 -DNOMINMAX -DOPENVDB_DLL)
-endif()
-
 #########################################################################
 
 set(OPENVDB_AX_LIBRARY_SOURCE_FILES
@@ -250,15 +237,9 @@ if(OPENVDB_AX_STATIC)
     SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS}
   )
 
-  if(WIN32)
-    set_target_properties(openvdb_ax_static
-      PROPERTIES OUTPUT_NAME libopenvdb_ax
-      )
-  else()
-    set_target_properties(openvdb_ax_static
-      PROPERTIES OUTPUT_NAME openvdb_ax
-      )
-  endif()
+  set_target_properties(openvdb_ax_static
+    PROPERTIES OUTPUT_NAME openvdb_ax
+  )
 
   target_link_libraries(openvdb_ax_static
     PUBLIC ${OPENVDB_AX_CORE_DEPENDENT_LIBS}
@@ -327,13 +308,5 @@ if(OPENVDB_AX_STATIC)
 endif()
 
 if(OPENVDB_AX_SHARED)
-  if(WIN32)
-    install(TARGETS
-      openvdb_ax_shared
-      RUNTIME DESTINATION bin COMPONENT Runtime
-      ARCHIVE DESTINATION lib COMPONENT Runtime
-      )
-  else()
-    install(TARGETS openvdb_ax_shared DESTINATION lib)
-  endif()
+  install(TARGETS openvdb_ax_shared DESTINATION lib)
 endif()

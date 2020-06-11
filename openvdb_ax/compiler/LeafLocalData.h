@@ -28,6 +28,12 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file compiler/LeafLocalData.h
+///
+/// @authors Nick Avramoussis
+///
+/// @brief  Thread/Leaf local data used during execution over OpenVDB Points
+///
 
 #ifndef OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED

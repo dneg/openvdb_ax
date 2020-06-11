@@ -28,6 +28,14 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file cmd/openvdb_ax.cc
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief  The command line vdb_ax binary which provides tools to
+///   run and analyze AX code.
+///
+
 #include <openvdb_ax/ast/AST.h>
 #include <openvdb_ax/ast/Scanners.h>
 #include <openvdb_ax/ast/PrintTree.h>

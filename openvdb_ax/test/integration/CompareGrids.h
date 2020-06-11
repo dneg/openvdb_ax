@@ -27,13 +27,14 @@
 // LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
 //
 ///////////////////////////////////////////////////////////////////////////
+
+/// @file test/integration/CompareGrids.h
 ///
-/// @file unittest/CompareGrids.h
+/// @authors Francisco Gochez, Nick Avramoussis
 ///
-/// @authors Nick Avramoussis
+/// @brief  Functions for comparing entire VDB grids and generating
+///   reports on their differences
 ///
-/// @brief Functions for comparing entire VDB grids and generating reports on their
-/// differences
 
 #ifndef OPENVDB_POINTS_UNITTEST_COMPARE_GRIDS_INCLUDED
 #define OPENVDB_POINTS_UNITTEST_COMPARE_GRIDS_INCLUDED

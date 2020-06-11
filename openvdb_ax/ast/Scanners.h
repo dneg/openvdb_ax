@@ -28,6 +28,14 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file ast/Scanners.h
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief  Retrieve intrinsic information from AX AST by performing
+///   various traversal algorithms.
+///
+
 #ifndef OPENVDB_AX_COMPILER_AST_SCANNERS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_AST_SCANNERS_HAS_BEEN_INCLUDED
 

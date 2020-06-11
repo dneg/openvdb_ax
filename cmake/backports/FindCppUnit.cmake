@@ -1,28 +1,5 @@
-# Copyright (c) DreamWorks Animation LLC
-#
-# All rights reserved. This software is distributed under the
-# Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
-#
-# Redistributions of source code must retain the above copyright
-# and license notice and the following restrictions and disclaimer.
-#
-# *     Neither the name of DreamWorks Animation nor the names of
-# its contributors may be used to endorse or promote products derived
-# from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
-# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-# IN NO EVENT SHALL THE COPYRIGHT HOLDERS' AND CONTRIBUTORS' AGGREGATE
-# LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
+# Copyright Contributors to the OpenVDB Project
+# SPDX-License-Identifier: MPL-2.0
 #
 #[=======================================================================[.rst:
 
@@ -94,6 +71,7 @@ may be provided to tell this module where to look.
 #]=======================================================================]
 
 cmake_minimum_required(VERSION 3.3)
+include(GNUInstallDirs)
 
 # Monitoring <PackageName>_ROOT variables
 if(POLICY CMP0074)
@@ -125,11 +103,12 @@ elseif(DEFINED ENV{CPPUNIT_ROOT})
 endif()
 
 # Additionally try and use pkconfig to find cppunit
-
-if(NOT DEFINED PKG_CONFIG_FOUND)
-  find_package(PkgConfig)
+if(USE_PKGCONFIG)
+  if(NOT DEFINED PKG_CONFIG_FOUND)
+    find_package(PkgConfig)
+  endif()
+  pkg_check_modules(PC_CppUnit QUIET cppunit)
 endif()
-pkg_check_modules(PC_CppUnit QUIET cppunit)
 
 # ------------------------------------------------------------------------
 #  Search for CppUnit include DIR
@@ -147,7 +126,7 @@ list(APPEND _CPPUNIT_INCLUDE_SEARCH_DIRS
 find_path(CppUnit_INCLUDE_DIR cppunit/Portability.h
   ${_FIND_CPPUNIT_ADDITIONAL_OPTIONS}
   PATHS ${_CPPUNIT_INCLUDE_SEARCH_DIRS}
-  PATH_SUFFIXES include
+  PATH_SUFFIXES ${CMAKE_INSTALL_INCLUDEDIR} include
 )
 
 if(EXISTS "${CppUnit_INCLUDE_DIR}/cppunit/Portability.h")
@@ -178,28 +157,23 @@ list(APPEND _CPPUNIT_LIBRARYDIR_SEARCH_DIRS
 set(_CPPUNIT_ORIG_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
 
 if(WIN32)
-  list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES
-    "_dll.lib"
-  )
-elseif(UNIX)
   if(CPPUNIT_USE_STATIC_LIBS)
-    list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES
-      ".a"
-    )
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".lib")
+  else()
+    list(APPEND CMAKE_FIND_LIBRARY_SUFFIXES "_dll.lib")
+  endif()
+else()
+  if(CPPUNIT_USE_STATIC_LIBS)
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
   endif()
 endif()
 
 # Build suffix directories
 
-set(CPPUNIT_PATH_SUFFIXES
-  lib64
-  lib
-)
-
 find_library(CppUnit_LIBRARY cppunit
   ${_FIND_CPPUNIT_ADDITIONAL_OPTIONS}
   PATHS ${_CPPUNIT_LIBRARYDIR_SEARCH_DIRS}
-  PATH_SUFFIXES ${CPPUNIT_PATH_SUFFIXES}
+  PATH_SUFFIXES ${CMAKE_INSTALL_LIBDIR} lib64 lib
 )
 
 # Reset library suffix
@@ -221,17 +195,32 @@ find_package_handle_standard_args(CppUnit
 )
 
 if(CppUnit_FOUND)
+  # Configure lib type. If XXX_USE_STATIC_LIBS, we always assume a static
+  # lib is in use. If win32, we can't mark the import .libs as shared, so
+  # these are always marked as UNKNOWN. Otherwise, infer from extension.
+  set(CPPUNIT_LIB_TYPE UNKNOWN)
+  if(CPPUNIT_USE_STATIC_LIBS)
+    set(CPPUNIT_LIB_TYPE STATIC)
+  elseif(UNIX)
+    get_filename_component(_CPPUNIT_EXT ${CppUnit_LIBRARY} EXT)
+    if(_CPPUNIT_EXT STREQUAL ".a")
+      set(CPPUNIT_LIB_TYPE STATIC)
+    elseif(_CPPUNIT_EXT STREQUAL ".so" OR
+           _CPPUNIT_EXT STREQUAL ".dylib")
+      set(CPPUNIT_LIB_TYPE SHARED)
+    endif()
+  endif()
+
   set(CppUnit_LIBRARIES ${CppUnit_LIBRARY})
   set(CppUnit_INCLUDE_DIRS ${CppUnit_INCLUDE_DIR})
-  set(CppUnit_DEFINITIONS ${PC_CppUnit_CFLAGS_OTHER})
 
   get_filename_component(CppUnit_LIBRARY_DIRS ${CppUnit_LIBRARY} DIRECTORY)
 
   if(NOT TARGET CppUnit::cppunit)
-    add_library(CppUnit::cppunit UNKNOWN IMPORTED)
+    add_library(CppUnit::cppunit ${CPPUNIT_LIB_TYPE} IMPORTED)
     set_target_properties(CppUnit::cppunit PROPERTIES
       IMPORTED_LOCATION "${CppUnit_LIBRARIES}"
-      INTERFACE_COMPILE_DEFINITIONS "${CppUnit_DEFINITIONS}"
+      INTERFACE_COMPILE_OPTIONS "${PC_CppUnit_CFLAGS_OTHER}"
       INTERFACE_INCLUDE_DIRECTORIES "${CppUnit_INCLUDE_DIRS}"
     )
   endif()

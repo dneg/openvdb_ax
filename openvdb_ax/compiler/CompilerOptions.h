@@ -28,6 +28,13 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file compiler/CompilerOptions.h
+///
+/// @authors Nick Avramoussis
+///
+/// @brief  OpenVDB AX Compiler Options
+///
+
 #ifndef OPENVDB_AX_COMPILER_COMPILER_OPTIONS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_COMPILER_OPTIONS_HAS_BEEN_INCLUDED
 

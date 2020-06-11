@@ -30,9 +30,13 @@
 
 /// @file compiler/Compiler.h
 ///
-/// @authors Nick Avramoussis, Francisco Gochez
+/// @authors Nick Avramoussis, Francisco Gochez, Richard Jones
 ///
-/// @brief
+/// @brief  The OpenVDB AX Compiler class provides methods to generate
+///   AX executables from a provided AX AST (or directly from a given
+///   string). The class object exists to cache various structures,
+///   primarily LLVM constructs, which benefit from existing across
+///   additional compilation runs.
 ///
 
 #ifndef OPENVDB_AX_COMPILER_HAS_BEEN_INCLUDED

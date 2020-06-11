@@ -32,7 +32,9 @@
 ///
 /// @authors Nick Avramoussis, Francisco Gochez
 ///
-/// @brief Contains the CustomData class
+/// @brief  Access to the CustomData class which can provide custom user
+///   user data to the OpenVDB AX Compiler.
+///
 
 #ifndef OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED

@@ -28,9 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-///
-/// @authors Nick Avramoussis, Matt Warner, Francisco Gochez, Richard Jones
-///
+/// @file codegen/ComputeGenerator.cc
 
 #include "ComputeGenerator.h"
 

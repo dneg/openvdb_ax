@@ -30,9 +30,10 @@
 
 /// @file compiler/VolumeExecutable.h
 ///
-/// @authors Nick Avramoussis, Francisco Gochez
+/// @authors Nick Avramoussis, Francisco Gochez, Richard Jones
 ///
-/// @brief Contains VolumeExecutable class
+/// @brief The VolumeExecutable, produced by the OpenVDB AX Compiler for
+///   execution over Numerical OpenVDB Grids.
 ///
 
 #ifndef OPENVDB_AX_COMPILER_VOLUME_EXECUTABLE_HAS_BEEN_INCLUDED

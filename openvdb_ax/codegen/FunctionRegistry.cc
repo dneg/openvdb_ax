@@ -28,6 +28,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
+/// @file codegen/FunctionRegistry.cc
+
 #include "FunctionRegistry.h"
 #include "Functions.h"
 #include "FunctionTypes.h"

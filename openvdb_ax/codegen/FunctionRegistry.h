@@ -33,7 +33,7 @@
 /// @authors Nick Avramoussis
 ///
 /// @brief  Contains the global function registration definition which
-///         described all available user front end functions
+///   described all available user front end functions
 ///
 
 #ifndef OPENVDB_AX_CODEGEN_FUNCTION_REGISTRY_HAS_BEEN_INCLUDED

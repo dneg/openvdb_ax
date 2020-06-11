@@ -33,7 +33,7 @@
 /// @authors Nick Avramoussis
 ///
 /// @brief  Utility code generation methods for performing various llvm
-///         operations
+///   operations
 ///
 
 #ifndef OPENVDB_AX_CODEGEN_UTILS_HAS_BEEN_INCLUDED
