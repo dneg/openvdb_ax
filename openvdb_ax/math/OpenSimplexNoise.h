@@ -39,7 +39,7 @@
 ///   most notably by removing the template on dimension (this only generates 3
 ///   dimensional noise) and removing the base class as it's unnecessary for our
 ///   uses. We also assume C++ 2011 or above and have thus removed a number of
-///   #ifdef blocks.
+///   ifdef blocks.
 ///
 ///   The OSN namespace contains the original copyright.
 ///

@@ -106,10 +106,12 @@ Version 1.0.0 - In Development
       logic.
 
     CMake / Build / Testing:
+    - Synced CMake modules from OpenVDB repository
     - Added github actions CI for VFX platforms 2019 and 2020 which match
       existing travis functionality
     - Bison now errors on any warnings during grammar generation.
-    - Updated CMake use of llvm_map_components_to_libnames to support LLVM 10.
+    - Updated CMake use of llvm_map_components_to_libnames to support LLVM 10
+      and added LLVM 10 CI.
     - Added matrix grid detection during the CMake build step.
     - Fixed TestLoopNode tests which were not being executed
     - Started re-factor of auto-generated integration tests and considerably

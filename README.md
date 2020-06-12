@@ -18,7 +18,7 @@ OpenVDB AX is an open source C++ library that provides a powerful and easy way o
 
 This repository hosts the latest developments in the OpenVDB AX repository. This has been used in production at DNEG in various feature films yet remains a work-in-progress and such may be quite volatile. That is, both API and ABI **may be subject to change** so development using more niche features and lower-level components of the library (close to the LLVM component) should be approached with caution. However, use of the library and AX language (i.e. through the provided vdb_ax binary and Houdini OpenVDB AX SOP) is encouraged and future developments will focus on extending the language further to offer a wider range of functionality.
 
-For the latest changes please see our [change log](openvdb_ax/CHANGES.md).
+For the latest changes please see our [change log](CHANGES.md).
 
 
 ### License
@@ -31,7 +31,7 @@ OpenVDB AX is released under the [Mozilla Public License Version 2.0](https://ww
 OpenVDB AX follows the same requirements as OpenVDB. For more information on required dependency versions, see the [OpenVDB Dependency Page](https://www.openvdb.org/documentation/doxygen/dependencies.html). Importantly, OpenVDB AX requires the following:
 
  * A C++ 14 Compiler
- * [OpenVDB 6.2.1](https://github.com/AcademySoftwareFoundation/openvdb/releases/tag/v6.2.1)
+ * [OpenVDB 6.2.1](https://github.com/AcademySoftwareFoundation/openvdb/releases/tag/v6.2.1) or later
  * [LLVM](https://llvm.org/). Though OpenVDB AX supports versions of LLVM >= 5.0, we recommend LLVM 8.0 which is the current version most used and tested against.
 
 ### Documentation
