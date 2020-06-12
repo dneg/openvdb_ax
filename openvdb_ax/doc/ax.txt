@@ -10,9 +10,9 @@ information on the AX language including syntax, data types, available
 functionality (including OpenVDB specific methods) execution structure and
 control flow. See the @subpage openvdbax documentation for the C++ developer
 documentation.
-@par
-@b NOTE: These documents are currently in @b BETA and are subject to change.
-Please @ref contact us for more information.
+@note
+These documents are currently in @b BETA and are subject to change. Please @ref
+contact us for more information.
 
 @section axcontents Contents
 - @ref axintro
@@ -23,6 +23,7 @@ Please @ref contact us for more information.
     - @ref axscalars
     - @ref axvecmats
     - @ref axstrings
+    - @ref axtypeprecedence
 - @ref axoperators
     - @ref axopbinary
         - @ref axopassignment
@@ -200,18 +201,17 @@ information.
 
 @section axdatatypes Data Types
 @par
-AX supports a rich variety of native types to be able to maximise efficiency
-of arithmetic operations and facilitate accessing OpenVDB data. Primarily, the
-native AX types aim to provide access to all natively supported OpenVDB Data
-types. Native OpenVDB types are types that are registered as either valid
-OpenVDB Grid types @b or valid OpenVDB Point attribute types by the @b default
-OpenVDB installation.
-@par
-The table below lists all available types in AX, the exposed @ref axattribaccess
-"attribute access" syntax and whether or not the attribute syntax is valid for both
-point and volume execution contexts. Importantly, note that some attribute access
-types are invalid for volumes, regardless if custom applications register these
-OpenVDB types.
+AX supports a rich variety of native types to be able to maximise the efficiency
+of arithmetic operations and facilitate accessing underlying geometry. As AX was
+originaly designed for OpenVDB, native AX types aim to provide direct access to
+all supported OpenVDB data types. You may find, however, that some AX types do
+not exist as OpenVDB volume/point types or refuse to be serialized in some
+installations of OpenVDB. The table below lists all available types in AX, the
+exposed @ref axattribaccess "attribute access" syntax and whether or not the
+attribute syntax is valid for both point and volume execution contexts.
+Developers installing OpenVDB and OpenVDB AX may wish to read the
+@ref vdbaxtoaxtypes "type registry documentation" which explains how to enable
+missing types from OpenVDB.
 @anchor axdatatypestable
 @par
 <table>
@@ -234,17 +234,17 @@ OpenVDB types.
 <td style="border-top-width: thick">`vec2i`</td>
 <td style="border-top-width: thick">2-element vector of integer values</td>
 <td style="border-top-width: thick">`vec2i@`</td>
-<td style="border-top-width: thick">@b Yes</td>
+<td style="border-top-width: thick">No</td>
 <td style="border-top-width: thick">No</td>
 </tr>
-<tr><td>`vec2f`</td><td>2-element vector of float values  </td><td>`vec2f@    v@`</td><td>@b Yes</td><td>No</td></tr>
-<tr><td>`vec2d`</td><td>2-element vector of double values </td><td>`vec2d@`</td><td>@b Yes</td><td>No</td></tr>
+<tr><td>`vec2f`</td><td>2-element vector of float values  </td><td>`vec2f@`</td><td>No</td><td>No</td></tr>
+<tr><td>`vec2d`</td><td>2-element vector of double values </td><td>`vec2d@`</td><td>No</td><td>No</td></tr>
 <tr><td>`vec3i`</td><td>3-element vector of integer values</td><td>`vec3i@`</td><td>@b Yes</td><td>@b Yes</td></tr>
 <tr><td>`vec3f`</td><td>3-element vector of float values  </td><td>`vec3f@    v@`</td><td>@b Yes</td><td>@b Yes</td></tr>
 <tr><td>`vec3d`</td><td>3-element vector of double values </td><td>`vec3d@`</td><td>@b Yes</td><td>@b Yes</td></tr>
-<tr><td>`vec4i`</td><td>4-element vector of integer values</td><td>`vec4i@`</td><td>@b Yes</td><td>No</td></tr>
-<tr><td>`vec4f`</td><td>4-element vector of float values  </td><td>`vec4f@    v@`</td><td>@b Yes</td><td>No</td></tr>
-<tr><td>`vec4d`</td><td>4-element vector of double values </td><td>`vec4d@`</td><td>@b Yes</td><td>No</td></tr>
+<tr><td>`vec4i`</td><td>4-element vector of integer values</td><td>`vec4i@`</td><td>No</td><td>No</td></tr>
+<tr><td>`vec4f`</td><td>4-element vector of float values  </td><td>`vec4f@`</td><td>No</td><td>No</td></tr>
+<tr><td>`vec4d`</td><td>4-element vector of double values </td><td>`vec4d@`</td><td>No</td><td>No</td></tr>
 <tr>
 <td style="border-top-width: thick" rowspan="4"> @ref axvecmats "Matrices" </td>
 <td style="border-top-width: thick">`mat3f`</td>
@@ -272,7 +272,7 @@ AX Supports boolean, integer and floating point scalar types. All scalar
 typenames are pulled from C, where @b `short` represents a 16-bit value, @b `int`
 represents a 32-bit integer value and @b `long` represents a 64-bit value. @b
 `float` and @b `double` represent 32-bit and 64-bit floating point values
-respectively. All scalars, excluding bools, are signed and there are no other
+respectively. All scalars, excluding bools, are signed; there are no other
 unsigned scalar types in AX.
 @par Integer Overflow and Floating Point Truncation
 Scalars may be cast from one type to another, either explicitly using the
@@ -361,6 +361,60 @@ is currently fairly limited. Characters themselves (users may know this as a
 any number of characters (including the empty string). String literals are
 represented by enclosing any number of @ref axtokens "supported AX characters"
 by quotes <b>\"&nbsp;\"</b>.
+
+@subsection axtypeprecedence Implicit conversion / type precedence
+@par
+All operators that perform on two or more types must internally run the
+operation at a single precision. When mixing different types (e.g. `int +
+float`) values may need to be converted to another type before the operation is
+performed. To allow for easier writing of expressions, AX will automatically
+detect these cases and convert values when necessary. This is known as
+<b>implicit type conversion</b> and the way in which the target operation type
+is chosen is known as <b>type precedence</b>.
+@par
+When referring to type precedence, we are primarily refering to the conversion of
+one @b scalar type to another. For vectors, matrices and other containers, this
+refers to the conversion of their element type e.g. `mat3f` to `mat3d`. The
+conversion rules for more than the element type (e.g. `int` to `mat4f`) are
+governed by AX's assignment and operator rules, detailed in the @ref axoperators
+section of this documentation.
+@par
+Type precedence @b only applies to the @b element type of the type in question.
+Containers (such as vectors or matrices) may change their element type precision
+(e.g. `vec2i` to `vec2f`). Each scalar type has a ranking which is compared, and
+the resulting highest rank is chosen as the target type for all values. These
+rankings are defined as follows:
+ - If any element types are of type `double`, all other element types are converted to `double`
+ - else, if any element types are of type `float`, all other element types are converted to `float`
+ - else, if any element types are of type `long`, all other element types are converted to `long`
+ - else, if any element types are of type `int`, all other element types are converted to `int`
+ - else, if any element types are of type `short`, all other element types are converted to `short`
+ - else, all element types are `bool`
+@par
+For example:
+@par
+@code{.c}
+int a = 0;
+float b = 0.0f;
+// In the following, the arithmetic a + b chooses floating point precision as
+// defined by the above type precedence rules (i.e. float(a) + b). The temporary
+// value created by the arithmetic + will be at float precision. The subsequent
+// assignment must then convert the final result back an integer, resulting in
+// an expression equal to: a = int(float(a) + b);
+a = a + b;
+
+// This example shows arithmetic minus with a float scalar and vec4d. Minus is a
+// supported operator of vec4d, however as the element types do not match
+// (float vs double), implicit conversion must be observed. With the above rules,
+// we can determine the following expression: c = double(b) + c. Note that
+// as the result of "double(b) + c" is a vec4d and the target of the subsequent
+// assignment ("c") is a vec4d, no further conversion needs to be performed.
+vec4d c = 0.0; // double element type
+c = b - c;
+@endcode
+@par
+Strings are not included in this precedence as there are no supported arithmetic
+binary operations for strings with operand types other than string.
 
 <br/><hr>
 
@@ -492,24 +546,10 @@ supported):
 <th>Left Operand Type</th><th>Binary Op(s)</th><th>Right Operand Type</th><th>Description</th>
 </tr>
 <tr style="text-align:center">
-<td rowspan="3">@ref axscalars "scalar"</td><td td rowspan="3">`=`</td>
+<td rowspan="1">@ref axscalars "scalar"</td><td rowspan="1">`=`</td>
 <td>@ref axscalars "scalar"</td>
 <td style="text-align:left">On type mismatch, right hand side is copied and
 @ref axtypeprecedence "implicitly cast" to the left hand side type.</td>
-</tr>
-<tr style="text-align:center">
-<td>@ref axvecmats "vector"</td>
-<td style="text-align:left;thick;text-align:left" rowspan="2">The left hand side
-scalar is assigned the first element of the vector or matrix (after implicit
-casting). Equal to:
-@code{.c}
-vec3f a; // vec or matrix
-int b; // any scalar type
-b = a[0];
-@endcode
-</td>
-</tr>
-<tr style="text-align:center"><td>@ref axvecmats "matrix"</td>
 </tr>
 <tr style="text-align:center">
 <td style="border-top-width: thick" rowspan="2">@ref axvecmats "vector"</td>
@@ -537,18 +577,25 @@ for (int i = 0; i < 3; ++i) a[i] = b[i];
 @endcode
 If the right hand side element type does not
 match the left hand side element type, each element of the right hand side is
-copied and implicitly cast to the target left hand side element type.
+copied and @ref axtypeprecedence "implicitly cast "to the target left hand side
+element type.
 <b>Operand sizes must match.</b></td>
 <tr style="text-align:center">
 <td style="border-top-width: thick" rowspan="2">@ref axvecmats "matrix"</td>
 <td style="border-top-width: thick;text-align:center" rowspan="2">`=`</td>
 <td style="border-top-width: thick">@ref axscalars "scalar"</td>
 <td style="border-top-width:thick;text-align:left">
-Each element of the vector is set to the right hand side scalar. i.e.
-<br/> `a[0]&nbsp;=&nbsp;b[0];&nbsp;...&nbsp;a[n-1]&nbsp;=&nbsp;b[n-1];` <br/>
-where `n` is the @b total size of the matrix. If the scalar type does not match
-element type of vector, the scalar is copied and @ref axtypeprecedence
-"implicitly cast" to that type.</td>
+Diagonal matrix construction. Each diagonal component of the left hand side
+matrix is set to to the right hand side scalar. All other components are zero
+initialized i.e.
+@code{.c}
+for (int i = 0; i < dim; ++i)
+    a[i] = ((i % (dim+1) == 0) ? b : 0;
+@endcode
+Where `a` is the matrix, `dim` is the dimension of the matrix (e.g. 3 for
+`mat3f`) and `b` is the scalar. If the scalar type does not match element type
+of matrix, the scalar is copied and @ref axtypeprecedence "implicitly cast" to
+that type.</td>
 <tr style="text-align:center"><td>@ref axvecmats "matrix"</td>
 <td style="text-align:left">Component wise assignment i.e.
 <br/> `a[0]&nbsp;=&nbsp;b[0];&nbsp;...&nbsp;a[n-1]&nbsp;=&nbsp;b[n-1];` <br/>
@@ -562,10 +609,9 @@ is equal to:
 mat4f a = 0, b = 1;
 for (int i = 0; i < 16; ++i) a[i] = b[i];
 @endcode
-If the right hand side element type does not
-match the left hand side element type, each element of the right hand side is
-copied and @ref axtypeprecedence "implicitly cast" to the target left hand side
-element type.
+If the right hand side element type does not match the left hand side element
+type, each element of the right hand side is copied and @ref axtypeprecedence
+"implicitly cast" to the target left hand side element type.
 <b>Operand sizes must match.</b></td>
 </tr>
 <tr style="text-align:center">
@@ -606,17 +652,26 @@ Where @b op is one of :
 <td bgcolor="#ffc4c4"> <b>`&gt;&gt;= `</b></td>
 </tr></table>
 @par
-The behaviour of a given compound assignment (for example `a += b`) is exactly
-the same as replacing the compound assignment with a
-@ref axopassignment "direct assignment" followed by a
-@ref axopbinarithmetic "binary expression" with the same operands and given
-arithmetic token (i.e. `a = a + b`). In both instance, the @b `lhs` is currently
-evaluated twice. The @b `rhs` side is not modified, however the @b `lhs` is both
-read from and written to. Note that the arithmetic operation may cast either
-@b `lhs` or @b `rhs` following the rules of AX's @ref axopbinarithmetic
-"arithmetic type precedence". See the @ref axopbinarithmetic "arithmetic operations"
-section for more information on arithmetic type precedence and explanations on
-the above compound operators.
+The behaviour of a given compound assignment (for example `a += b`) is similar
+to replacing the compound assignment with a @ref axopassignment
+"direct assignment" followed by a @ref axopbinarithmetic "binary expression"
+with the same operands and given arithmetic token (i.e. `a = a + b`). However,
+compound assignments imporantly do @b not evaluate the @b `lhs` twice. This is
+important when assigning to an expression which is not an attribute or local
+value. The best example of this is assigning to a @ref axopunincdec "pre-crement"
+operation:
+@par
+@code{.c}
+int a = 1;
+++a += 1; // equal to a = ++a + 1 which is equal to 3
+@endcode
+@par
+The @b `rhs` side is not modified, however the @b `lhs` is both read from and
+written to. Note that the arithmetic operation may cast either @b `lhs` or @b
+`rhs` following the rules of AX's @ref axopbinarithmetic
+"arithmetic type precedence". See the @ref axopbinarithmetic
+"arithmetic operations" section for more information on arithmetic type
+precedence and explanations on the above compound operators.
 @par
 @code{.c}
 int a = 3;
@@ -672,7 +727,7 @@ container types). Binary arithmetic operations have the following forms:
 <tr><td>Subtraction</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`-`</b> @a `rhs` </td><td>The first operand minus the second operand</td></tr>
 <tr><td>Multiplication</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`*`</b> @a `rhs` </td><td>The product of both operands</td></tr>
 <tr><td>Division</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`/`</b> @a `rhs` </td><td>The first operand divided by the second operand</td></tr>
-<tr><td>Modulo</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`%`</b> @a `rhs` </td><td>The @b integral remainder of the first operand divided by the second operand</td></tr>
+<tr><td>Modulo</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`%`</b> @a `rhs` </td><td>The remainder of the first operand divided by the second operand</td></tr>
 <tr><td>Bitwise AND</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`&amp;`</b> @a `rhs` </td>
 <td>The @b integral bitwise AND result of each bit in the first operand applied to the bit at the same location in the second operand</td></tr>
 <tr><td>Bitwise OR</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`|`</b> @a `rhs` </td>
@@ -684,34 +739,6 @@ container types). Binary arithmetic operations have the following forms:
 <tr><td>Bitwise shift right</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`&gt;&gt;`</b> @a `rhs` </td>
 <td>The @b integral bitwise right shift of the first operand by the second operand</td></tr>
 </table>
-@anchor axtypeprecedence
-@par Implicit conversion for arithmetic operations (type precedence)
-All binary operations only perform on operands of the same type. To allow for
-easier writing of expressions, AX supports implicit conversion of types based on
-the type's <b>contained type</b>. For scalars, this is simply the scalar type.
-For vectors and matrices, this is the component type (for example, @b `double`
-for a @b `vec2d` type). Note that the sizes of either operand are @b not changed
-(scalar can be thought to have a size of 1). Before any other operation is
-performed:
- - If the element type of both operands does not match, the highest ranking
- type is used to convert the other to a new container, equal in the size to
- the original, with element types that of the higher ranking type. The ranking
- is as follows, from highest to lowest:
-     - `double` -> `float` -> `long` -> `int` -> `short` -> `bool`
- - @b Then, if the operation is a <b>arithmetic bitwise</b> or @b modulo (`%`)
- operation and the resulting element type from the type precedence conversion
- was @b not an integral type, both operands are cast to @b `long` types.
-@par
-Strings are not included in this precedence as there are no supported arithmetic
-binary operations for strings with operand types other than string.
-@par
-@code{.c}
-int a = 0;
-float b = 0.0f;
-vec4d c = 0.0; // double element type
-a + b; // a is converted to a float i.e. float(a) + b
-b + c; // b is converted to a double i.e. double(b) + c
-@endcode
 @anchor axbinadditiveop
 @par Additive operands
 Binary additive operations perform summations on the input arguments. They have
@@ -722,12 +749,12 @@ the following forms:
 <tr><td bgcolor="#ffc4c4"> @a `lhs` @b `-` @a `rhs` </td></tr>
 </table>
 @par
-After implicit conversion, the result of the binary operation with the arithmetic
-@b `+` (@ref axtokens "plus token") is the sum of the operands, and the result of
-the binary operation with the arithmetic @b `-` (@ref axtokens "minus token")
-token is the second operand subtracted from the first operand. The following
-combination of AX type categories are supported for additive operations (if an
-operation is not listed, it is not supported):
+After @ref axtypeprecedence "implicit conversion", the result of the binary
+operation with the arithmetic @b `+` (@ref axtokens "plus token") is the sum of
+the operands, and the result of the binary operation with the arithmetic @b `-`
+(@ref axtokens "minus token") token is the second operand subtracted from the
+first operand. The following combination of AX type categories are supported for
+additive operations (if an operation is not listed, it is not supported):
 @par
 <table>
 <tr style="text-align:center">
@@ -738,8 +765,9 @@ operation is not listed, it is not supported):
 </tr>
 <tr style="text-align:center"><td>@ref axvecmats "vector"</td>
 <td style="text-align:left" rowspan="2">Performs per component binary operations
-(after implicit conversion) with the left hand side scalar to every element of
-the right hand side vector or matrix, returning a vector or matrix.
+(after @ref axtypeprecedence "implicit conversion") with the left hand side
+scalar to every element of the right hand side vector or matrix, returning a
+vector or matrix.
 @code{.c}
 vec3f a = 2.0f;
 int b = 1;
@@ -764,8 +792,8 @@ for (int i = 0; i < 3; ++i) c[i] = b + a[i];
 </tr>
 <tr style="text-align:center"><td>@ref axvecmats "vector"</td>
 <td style="text-align:left">Performs per component binary operations (after
-implicit conversion), returning a new vector with each element holding the
-corresponding result. <b>Operand sizes must match.</b>
+@ref axtypeprecedence "implicit conversion"), returning a new vector with each
+element holding the corresponding result. <b>Operand sizes must match.</b>
 @code{.c}
 vec3f a = 2, b = 1;
 vec3f c = a - b;
@@ -786,8 +814,8 @@ for (int i = 0; i < 3; ++i) c[i] = a[i] - b[i];
 </tr>
 <tr style="text-align:center"><td>@ref axvecmats "matrix"</td>
 <td style="text-align:left">Performs per component binary operations (after
-implicit conversion), returning a new matrix with each element holding the
-corresponding result. <b>Operand sizes must match.</b>
+@ref axtypeprecedence "implicit conversion"), returning a new matrix with each
+element holding the corresponding result. <b>Operand sizes must match.</b>
 @code{.c}
 mat4f a = 0, b = 1;
 mat4f c = a - b;
@@ -807,10 +835,10 @@ for (int i = 0; i < 16; ++i) c[i] = a[i] - b[i];
 <td style="border-top-width: thick;text-align:left">Performs string concatenation</td>
 </tr>
 </table>
-@par
-@b Note: Floating point addition is communicative (`a + b = b + a`) but is not
-@b necessarily associative `(a + b) + c` is not necessarily equal to
-`a + (b + c)`.
+@note
+Floating point addition and subtraction is communicative (`a + b = b + a`) but
+is not @b necessarily associative. i.e. `(a + b) + c` is not necessarily equal
+to `a + (b + c)`.
 @par
 Examples of validity of additive operations:
 @par
@@ -819,9 +847,9 @@ short a = 0;
 vec2f b = 1.0f;
 vec2i c = 2;
 mat4d d = 0.0;
-c + a; // valid
-c + d; // invalid
-c - b; // valid
+c + a; // valid vec + scalar
+c + d; // invalid vec + matrix
+c - b; // valid vec - scalar
 @endcode
 @anchor axbinmultop
 @par Multiplicative operands
@@ -833,47 +861,35 @@ The binary multiplicative operands have the following forms:
 <tr><td bgcolor="#ffc4c4"> @a `lhs` @b `%` @a `rhs` </td></tr>
 </table>
 @par
-After implicit conversion, the result of the binary operation:
+After @ref axtypeprecedence "implicit conversion", the result of the binary
+operation:
  - with the arithmetic @b `*` (@ref axtokens "asterisk token") is:
     - the product of the operands
     - @b OR performs matrix multiplication for vector and matrix types.
  - with the arithmetic @b `/` (@ref axtokens "forward slash token") is the first
  operand divided by the second operand.
  - with the arithmetic @b `%` (@ref axtokens "percentage token") is the remainder
- of the integer division of the first operand by the second.
+ of the division of the first operand by the second.
+@note
+The multiplicative operation @b `*` has important behaviour for vectors and
+matrix types.
 @par
-Note that the multiplicative operation @b `*` has important behaviour for
-vectors and matrix types. The following combination of AX type categories are
-supported for multiplicative operations (if an operation is not listed, it is
-not supported):
+The following combination of AX type categories are supported for multiplicative
+operations (if an operation is not listed, it is not supported):
 @par
 <table>
 <tr style="text-align:center">
 <th>Left Operand Type</th><th>Binary Op(s)</th><th>Right Operand Type</th><th>Description</th>
 </tr>
-<tr style="text-align:center"><td rowspan="4">@ref axscalars "scalar"</td><td>`* /`</td><td rowspan="2">@ref axscalars "scalar"</td>
-<td style="text-align:left">Returns the result of the scalar multiplication or division.</td>
+<tr style="text-align:center"><td rowspan="3">@ref axscalars "scalar"</td><td rowspan="2">`* / %`</td><td rowspan="1">@ref axscalars "scalar"</td>
+<td style="text-align:left">Returns the result of the scalar multiplication, division or remainder of the division respectively. </td>
 </tr>
-<tr style="text-align:center"><td>`%`</td></td><td style="text-align:left">
-Returns the integer remainder of the integer division of the operands.
-@b Note: The modulus operator only operates on integer operands. After type
-precedence has been applied, if the operands are floating point types, they will
-be cast to @b `long` types. e.g:
-@code{.c}
-float a = 1, b = 2;
-int c = a % b;
-@endcode
-is equal to:
-@code{.c}
-float a = 1, b = 2;
-int c = long(a) % long(b);
-@endcode
-</td>
-</tr>
-<tr style="text-align:center"><td rowspan="2">`* / %`</td><td>@ref axvecmats "vector"</td></td>
-<td style="text-align:left" rowspan="2">
-Performs per component binary operations (after implicit conversion) with the
-left hand side scalar to every element of the right hand side vector or matrix.
+<tr style="text-align:center"><td>@ref axvecmats "vector"</td></td>
+<td style="text-align:left" rowspan="1">
+Performs per component binary operations (after
+@ref axtypeprecedence "implicit conversion") with the left hand side scalar to
+every element of the right hand side vector. The scalar is effectively treated
+as a vector of the same size as the right hand side type.
 @code{.c}
 vec3f a = 2.0f;
 int b = 1;
@@ -884,24 +900,40 @@ is equal to:
 vec3f a = 2.0f;
 int b = 1;
 vec3f c;
-for (int i = 0; i < 3; ++i) c[i] = a[i] * b;
+for (int i = 0; i < 3; ++i) c[i] = b * a[i];
 @endcode
 </td>
 </tr>
-<tr style="text-align:center"><td>@ref axvecmats "matrix"</td>
+<tr style="text-align:center"><td rowspan="1">`*`</td><td>@ref axvecmats "matrix"</td>
+<td style="text-align:left" rowspan="1">
+Performs matrix multiplication after diagonal matrix construction from the left
+hand side scalar.
+@code{.c}
+mat3f a = 1;
+float b = 1;
+mat3f c = a * b;
+@endcode
+is equal to:
+@code{.c}
+mat3f a = 1;
+float b = 1;
+mat3f tmp = b; // diagonal matrix
+mat3f c = a * tmp;
+@endcode
+</td>
 </tr>
 <tr style="text-align:center">
 <td style="border-top-width: thick" rowspan="3">@ref axvecmats "vector"</td>
-<td style="border-top-width: thick; text-align:center">`* / %`</td>
+<td style="border-top-width: thick; text-align:center" rowspan="2">`* / %`</td>
 <td style="border-top-width: thick">@ref axscalars "scalar"</td>
-<td style="border-top-width: thick;text-align:left">Same as `scalar op vector`</td>
+<td style="border-top-width: thick;text-align:left">Same as `scalar op vector`
+with the operands reversed (importantly for division and modulus)</td>
 </tr>
 <tr style="text-align:center">
-<td>`* / %`</td>
 <td>@ref axvecmats "vector"</td>
 <td style="text-align:left">Performs per component binary operations (after
-implicit conversion), returning a new vector with each element holding the
-corresponding result. <b>Operand sizes must match.</b>
+@ref axtypeprecedence "implicit conversion"), returning a new vector with each
+element holding the corresponding result. <b>Operand sizes must match.</b>
 @code{.c}
 vec3f a = 2, b = 1;
 vec3f c = a * b;
@@ -930,6 +962,27 @@ mat4f a = identity4();
 vec3f b = { 1, 2, 3 };
 b = transform(b, a);
 @endcode
+Typically, matrix multiplication requires arguments of the same dimension sizes -
+that is, a `mat4` can only be applied to a `vec4`. However, it is often useful to
+be able to directly apply `mat4` transformations to `vec3` types, most often due
+to positions being represented as `vec3`. `vec3 * mat4` multiplication is
+supported, where by the `vec3` is extended with a `1` component and the
+resulting last last component is dropped from the return
+value:
+@code{.c}
+mat4f a = identity4();
+vec3f b = { 1, 2, 3 };
+// b * a is equal to:
+vec4f tmp;
+tmp[0] = b[0];
+tmp[1] = b[1];
+tmp[2] = b[2];
+tmp[3] = 1;
+tmp = tmp * a;
+b[0] = tmp[0];
+b[1] = tmp[1];
+b[2] = tmp[2];
+@endcode
 @b Note: Valid operand sizes and return types match those of the
 @ref axtransform "transform" function i.e:
     - `vec3 * mat3 = vec3`
@@ -938,12 +991,12 @@ b = transform(b, a);
 </td>
 </tr>
 <tr style="text-align:center">
-<td style="border-top-width: thick" rowspan="4">@ref axvecmats "matrix"</td>
-<td style="border-top-width: thick;text-align:center">`* / %`</td>
+<td style="border-top-width: thick" rowspan="3">@ref axvecmats "matrix"</td>
+<td style="border-top-width: thick;text-align:center" rowspan="3">`*`</td>
 <td style="border-top-width: thick">@ref axscalars "scalar"</td>
-<td style="border-top-width: thick;text-align:left">Same as `scalar op matrix`</td>
+<td style="border-top-width: thick;text-align:left">Same as `scalar * matrix`</td>
 </tr>
-<tr style="text-align:center"><td rowspan="2">`*`</td><td>@ref axvecmats "vector"</td>
+<tr style="text-align:center"><td>@ref axvecmats "vector"</td>
 <td style="text-align:left">
 Transforms the right hand side vector by the left hand side matrix using matrix
 multiplication. This is the same as calling the @ref axpretransform "pretransform"
@@ -958,6 +1011,27 @@ is equal to:
 mat4f a = identity4();
 vec3f b = { 1, 2, 3 };
 b = pretransform(a, b);
+@endcode
+Typically, matrix multiplication requires arguments of the same dimension sizes -
+that is, a `mat4` can only be applied to a `vec4`. However, it is often useful to
+be able to directly apply `mat4` transformations to `vec3` types, most often due
+to positions being represented as `vec3`. `mat4 * vec3` multiplication is
+supported, where by the `vec3` is extended with a `1` component and the
+resulting last last component is dropped from the return
+value:
+@code{.c}
+mat4f a = identity4();
+vec3f b = { 1, 2, 3 };
+// a * b is equal to:
+vec4f tmp;
+tmp[0] = b[0];
+tmp[1] = b[1];
+tmp[2] = b[2];
+tmp[3] = 1;
+tmp = a * tmp;
+b[0] = tmp[0];
+b[1] = tmp[1];
+b[2] = tmp[2];
 @endcode
 @b Note: Valid operand sizes and return types match those of the
 @ref axpretransform "pretransform" function i.e:
@@ -988,23 +1062,12 @@ for(i = 0; i < 4; ++i) {
 @endcode
 </td>
 </tr>
-<tr style="text-align:center"><td>`/ %`</td><td>@ref axvecmats "matrix"</td>
-<td style="text-align:left">Performs per component binary operations (after
-implicit conversion), returning a new matrix with each element holding the
-corresponding result. <b>Operand sizes must match.</b>
-@code{.c}
-mat4d a = 2, b = 1;
-mat4d c = a / b;
-@endcode
-is equal to:
-@code{.c}
-mat4d a = 2, b = 1;
-mat4d c;
-for (int i = 0; i < 16; ++i) c[i] = a[i] / b[i];
-@endcode
-</td>
-</tr>
 </table>
+@note
+Floating point multiplication is communicative (`a * b = b * a`) but is not
+@b necessarily associative. i.e. `(a * b) * c` is not necessarily equal to
+`a * (b * c)`.
+
 @anchor axbinbitwiseop
 @par Bitwise operands
 Binary bitwise operations have the following forms:
@@ -1017,9 +1080,7 @@ Binary bitwise operations have the following forms:
 <tr><td bgcolor="#ffc4c4"> @a `lhs` @b `>>` @a `rhs` </td></tr>
 </table>
 @par
-These operations only run on integer operands. Floating point types, including
-floating point vector and matrix containers, will have their element types cast
-to integer types before running bitwise operations. After @ref axtypeprecedence
+These operations only run on @b integral operands. After @ref axtypeprecedence
 "implicit conversion", the result of the binary operation:
  - with the @b `&` (@ref axtokens "ampersand token") is the result of the
   logical AND operation on each pair of the corresponding bits of the input
@@ -1039,11 +1100,13 @@ to integer types before running bitwise operations. After @ref axtypeprecedence
 <tr style="text-align:center">
 <th>Left Operand Type</th><th>Binary Op(s)</th><th>Right Operand Type</th><th>Description</th>
 </tr>
-<tr style="text-align:center"><td>@ref axscalars "scalar"</td><td>`& | ^ << >>`</td><td>@ref axscalars "scalar"</td>
+<tr style="text-align:center">
+<td>@ref axscalars "intergral"</td>
+<td>`& | ^ << >>`</td>
+<td>@ref axscalars "intergral"</td>
 <td style="text-align:left">
-Returns the result of the bitwise operation as described above. Note however
-that if either of the operands are floating point types, they will be converted
-to @b `long` types, as described in @ref axtypeprecedence "implict casting".
+Returns the result of the bitwise operation as described above. If either operand
+is not an integral type (`bool` `short` `int` or `long`), the program is ill formed.
 </td>
 </table>
 
@@ -1085,11 +1148,11 @@ operations (if an operation is not listed, it is not supported):
 <tr style="text-align:center">
 <td>@ref axvecmats "vector"</td>
 <td style="text-align:left" rowspan="2">
-Performs per component comparisons (after implicit conversion) with the left
-hand side scalar to every element of the right hand side vector or matrix and
-perform a logical AND combination on the results of these comparisons. This
-effectively returns true if every element of the vector or matrix is equal to
-the scalar.
+Performs per component comparisons (after
+@ref axtypeprecedence "implicit conversion") with the lefthand side scalar to
+every element of the right hand side vector or matrix and perform a logical AND
+combination on the results of these comparisons. This effectively returns true
+if every element of the vector or matrix is equal to the scalar.
 @code{.c}
 vec3f a = 2.0f;
 int b = 1;
@@ -1116,9 +1179,10 @@ for (int i = 1; i < 3; ++i) c &= a[i] == b;
 <tr style="text-align:center">
 <td>@ref axvecmats "vector"</td>
 <td style="text-align:left">
-Performs binary comparison operations (after implicit conversion) on each pair
-corresponding components in the vector operands and returns true if all
-component pairs are equal. <b>Operand sizes must match.</b>
+Performs binary comparison operations (after
+@ref axtypeprecedence "implicit conversion") on each pair corresponding
+components in the vector operands and returns true if all component pairs are
+equal. <b>Operand sizes must match.</b>
 @code{.c}
 vec3f a = 1, b = 2;
 bool c = a == b;
@@ -1139,9 +1203,10 @@ for (int i = 1; i < 3; ++i) c &= a[i] == b[i];
 </tr>
 <tr style="text-align:center"><td>@ref axvecmats "matrix"</td>
 <td style="text-align:left">
-Performs binary comparison operations (after implicit conversion) on each pair
-corresponding components in the matrix operands and returns true if all
-component pairs are equal. <b>Operand sizes must match.</b>
+Performs binary comparison operations (after
+@ref axtypeprecedence "implicit conversion") on each pair corresponding
+components in the matrix operands and returns true if all component pairs are
+equal. <b>Operand sizes must match.</b>
 @code{.c}
 mat4f a = 1, b = 2;
 bool c = a == b;
@@ -1161,18 +1226,22 @@ for (int i = 1; i < 16; ++i) c &= a[i] == b[i];
 @par
 Binary logical operations compute and return the result of a boolean operation
 on two operands. Both operands are implicitly converted to @b `bool` types if
-they are not already. They have the following forms:
+they are not already.
+@warning
+These operators are <b>currently not</b> short-circuiting; all operands are
+evaluated once. Importantly, do not rely on this behaviour as it may be subject
+to change.
+@par
+They have the following forms:
 @par
 <table>
 <tr><th>Operator&nbsp;Name</th><th>Operator&nbsp;Syntax</th><th>Returns</th></tr>
 <tr><td>AND</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`&&`</b> @a `rhs` </td>
 <td>Returns true if both operands are true. Otherwise, the result is false. This
-operator is short-circuiting: if the first operand is false, the second operand
-is not evaluated</td></tr>
+operator is @b NOT short-circuiting: all operands are evaluated once.</td></tr>
 <tr><td>Inclusive OR</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`||`</b> @a `rhs` </td>
 <td>Returns true if either the first or the second operand (or both) is true.
-This operator is short-circuiting: if the first operand is true, the second
-operand is not evaluated.</td></tr>
+This operator is @b NOT short-circuiting: all operands are evaluated once.</td></tr>
 </table>
 @par
 The following combination of AX type categories are supported for comparison
@@ -1210,7 +1279,8 @@ Arithmetic unary operators are comprised of arithemtic and bitwise operators.
 <td>Returns the negative representation of @b `a`</td>
 </tr>
 <tr><td>Bitwise NOT</td><td bgcolor="#ffc4c4"> <b>`~`</b>@a `a` </td>
-<td>Returns the bitwise NOT (one's complement) value of @b `a`</td>
+<td>Returns the bitwise NOT (one's complement) value of @b `a`. This operator
+is only valid on integral element types.</td>
 </tr>
 </table>
 @par
@@ -1221,10 +1291,10 @@ arithmetic operations (if an operation is not listed, it is not supported):
 <tr style="text-align:center">
 <th>Operand Type</th><th>Binary Op(s)</th><th>Description</th>
 </tr>
-<tr style="text-align:center"><td>@ref axscalars "scalar"</td><td>`+ - ~`</td>
+<tr style="text-align:center"><td>@ref axscalars "scalar"</td><td rowspan="2">`+ - ~`</td>
 <td style="text-align:left">Returns the result of the scalar unary operations.</td>
 </tr>
-<tr style="text-align:center"><td>@ref axvecmats "vector"</td><td>`+ -`</td>
+<tr style="text-align:center"><td>@ref axvecmats "vector"</td>
 <td style="text-align:left">
 Performs per component unary operations, returning a new vector with each
 element holding the corresponding result. <b>Operand sizes must match.</b>
@@ -1238,6 +1308,8 @@ vec3f a = 2;
 vec3f b;
 for (int i = 0; i < 3; ++i) b[i] = -a[i];
 @endcode
+@b Note: The bitwise not `~` operator is only valid on integer vector types;
+`vec2i`, `vec3i` and `vec4i`.
 </td>
 </tr>
 <tr style="text-align:center"><td>@ref axvecmats "matrix"</td><td>`+ -`</td>
@@ -1261,7 +1333,7 @@ for (int i = 0; i < 3; ++i) b[i] = -a[i];
 
 @subsubsection axopunlogical Logical
 @par
-Logical unary operators consist of a single operator.
+Logical unary operators consist of a single operand.
 @par
 <table>
 <tr><th>Operator Name</th><th>Operator Syntax</th><th>Returns</th></tr>
@@ -1277,9 +1349,27 @@ operations (if an operation is not listed, it is not supported):
 <tr style="text-align:center">
 <th>Operand Type</th><th>Binary Op(s)</th><th>Description</th>
 </tr>
-<tr style="text-align:center"><td>@ref axscalars "scalar"</td><td>`!`</td>
+<tr style="text-align:center"><td>@ref axscalars "scalar"</td><td rowspan="2">`!`</td>
 <td style="text-align:left">Returns the result of the scalar logical operation.
 The scalar operand is converted to a bool if it is not already.</td>
+</tr>
+<tr style="text-align:center"><td>@ref axvecmats "vector"</td>
+<td style="text-align:left">
+Performs per component unary operations, returning a new vector with each
+element holding the corresponding result. <b>Operand sizes must match.</b>
+@code{.c}
+vec3i a = 2;
+vec3i b = !a;
+@endcode
+is equal to:
+@code{.c}
+vec3i a = 2;
+vec3i b;
+for (int i = 0; i < 3; ++i) b[i] = !a[i];
+@endcode
+@b Note: The logical not `!` operator is only valid on integer vector types;
+`vec2i`, `vec3i` and `vec4i`.
+</td>
 </tr>
 </table>
 
@@ -1310,7 +1400,9 @@ not listed, it is not supported):
 <tr style="text-align:center"><td>@ref axscalars "scalar"</td>
 <td>`++(pre) (post)++` <br/> `--(pre) (post)--`</td>
 <td style="text-align:left">Returns the result (reference or copy) of the scalar
-increment or decrement operation. </td>
+increment or decrement operation.\n
+@b Note: boolean incrementation and decrementation is not supported. Only
+`short`, `int`, `long`, `float` and `double` types are valid.  </td>
 </tr>
 </table>
 
@@ -1647,9 +1739,18 @@ int a = 5;
 a-=1, a+=2; // a = 6
 a = a--, ++a; // exp1: a = a--, exp2: ++a. a = 7
 @endcode
+@note
+Although you may consider the comma operator as a type of binary operator, it
+is fundamentally different as the types either side of the operator do @b not
+interact. Each expression in the comma operator is evaluated independently of
+all other expressions.
 
+@anchor axopternary
 @par Ternary Conditional
-Currently unsupported - work in progress
+
+@note
+todo
+
 <!--
 The ternary conditional operator can be thought of as an in-line @ref axaxbranching
 "if statment", where each branch has a single statement. It has the form:
@@ -1684,9 +1785,9 @@ from first to last. This operator is only valid with argument lists of sizes
 vec3f a = { 1.0f, 2.0f, 3.0f }; // right hand side of assignment creates a vec3f
 vec3f b = dot(a, { a[0], 5.0, 6.0 }); // second argument creates a vec3d
 @endcode
-@par
-@b Note that in the above examples, the value of @b `a[0]` is copied into the
-initializer operator.
+@note
+In the above examples, the value of @b `a[0]` is copied into the initializer
+operator.
 @par Initialization Type
 A mixture of arbitrary scalar types can be used in the initializer operator e.g:
 @code{.c}
@@ -1809,10 +1910,14 @@ Operators are listed in descending precedence.
 <td> @ref axopbinlogical OR</a></td>
 </tr>
 <tr> <!-- *********************** ROW 14 *********************** -->
-<th rowspan="5"> 14</th>
+<th rowspan="6"> 14</th>
+<td style="border-bottom-style: none; border-top-style: none"> <code>a?b:c</code></td>
+<td style="border-bottom-style: none; border-top-style: none"> @ref axopternary "Ternary operator" </td>
+<td style="vertical-align: top" rowspan="6"> Right-to-left</td>
+</tr>
+<tr>
 <td style="border-bottom-style: none; border-top-style: none"> <code>=</code></td>
 <td style="border-bottom-style: none; border-top-style: none"> @ref axopassignment "Direct assignment" </td>
-<td style="vertical-align: top" rowspan="5"> Right-to-left</td>
 </tr>
 <tr>
 <td style="border-bottom-style: none; border-top-style: none"> <code>+=</code>   <code>-=</code></td>
