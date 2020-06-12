@@ -30,10 +30,10 @@ jobs:
             llvm: '8.0.0'
       fail-fast: false
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - name: llvm_cache
         id: llvm_cache
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           key: ${{ env.LLVM_DIR }}
           path: ${{ env.LLVM_DIR }}
