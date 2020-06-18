@@ -51,6 +51,8 @@ Version 1.0.0 - In Development
     - Fixed a small memory leak which would occur when invalid code was parsed
     - Fixed issues with the way declaration lists were being printed with
       ast::reprint in loop initializers
+    - Fixed a potential crash when calling incompatible VDB functions for points
+      or volumes
 
     Houdini:
     - The AX SOP automatically drops unsupported grid types with a warning.
@@ -108,7 +110,9 @@ Version 1.0.0 - In Development
     CMake / Build / Testing:
     - Synced CMake modules from OpenVDB repository
     - Added github actions CI for VFX platforms 2019 and 2020 which match
-      existing travis functionality
+      existing travis functionality.
+    - Added whitespace github action tests
+    - Added doxygen code block github action tests
     - Bison now errors on any warnings during grammar generation.
     - Updated CMake use of llvm_map_components_to_libnames to support LLVM 10
       and added LLVM 10 CI.

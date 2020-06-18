@@ -1,7 +1,16 @@
 
 name: ci
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+  schedule:
+    # run this workflow every midnight Tuesday
+    - cron:  '0 0 * * 2'
 
 jobs:
   linux-core:
@@ -31,6 +40,7 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
+      # Setup
       - name: llvm_cache
         id: llvm_cache
         uses: actions/cache@v2
@@ -42,13 +52,17 @@ jobs:
         run: ./ci/install_llvm.sh ${{ matrix.llvm }} ${{ env.LLVM_DIR }}
       - name: install_libedit
         run: yum -y install libedit-devel
+      # Build
       - name: build
         run: |
           ./ci/build.sh \
             -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
             -DLLVM_DIR=${{ env.LLVM_DIR }}
+      # Tests
       - name: test
         run: cd build && ctest -V
+      - name: test_doxygen_examples
+        run: ./ci/extract_test_examples.sh
 
   macos-core:
     runs-on: macos-10.15
@@ -71,15 +85,20 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v2
+      # Setup
       - name: install_deps
         run: ./ci/install_deps_macos.sh ${{ matrix.llvm }}
       - name: install_openvdb
         run: ./ci/install_openvdb.sh 7.0.0 $HOME/openvdb-7.0.0-${{ matrix.compiler }}
+      # Build
       - name: build
         run: |
           ./ci/build.sh \
             -DCMAKE_BUILD_TYPE=${{ matrix.build }} \
             -DLLVM_DIR=/usr/local/opt/llvm@${{ matrix.llvm }}/lib/cmake/llvm \
             -DOPENVDB_ROOT=$HOME/openvdb-7.0.0-${{ matrix.compiler }}
+      # Tests
       - name: test
         run: cd build && ctest -V
+      - name: test_doxygen_examples
+        run: ./ci/extract_test_examples.sh
