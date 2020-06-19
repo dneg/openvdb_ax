@@ -57,6 +57,22 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
+
+namespace {
+
+/// @todo  Provide more framework for functions such that they can only
+///        be registered against compatible code generators.
+inline void verifyContext(const llvm::Function* const F, const std::string& name)
+{
+    if (!F || F->getName() != "ax.compute.voxel") {
+        OPENVDB_THROW(AXCompilerError, "Function \"" << name << "\" cannot be called for "
+            "the current target. This function only runs on OpenVDB Grids (not OpenVDB Point Grids).");
+    }
+}
+
+}
+
+
 inline FunctionGroup::Ptr axgetvoxelpws(const FunctionOptions& op)
 {
     static auto generate = [](const std::vector<llvm::Value*>&,
@@ -64,8 +80,7 @@ inline FunctionGroup::Ptr axgetvoxelpws(const FunctionOptions& op)
     {
         // Pull out parent function arguments
         llvm::Function* compute = B.GetInsertBlock()->getParent();
-        assert(compute);
-        assert(compute->getName() == "ax.compute.voxel");
+        verifyContext(compute, "getvoxelpws");
         llvm::Value* coordws = extractArgument(compute, "coord_ws");
         assert(coordws);
         return coordws;
@@ -90,8 +105,7 @@ inline FunctionGroup::Ptr axgetcoord(const FunctionOptions& op)
     {
         // Pull out parent function arguments
         llvm::Function* compute = B.GetInsertBlock()->getParent();
-        assert(compute);
-        assert(compute->getName() == "ax.compute.voxel");
+        verifyContext(compute, (Index == 0 ? "getcoordx" : Index == 1 ? "getcoordy" : "getcoordz"));
         llvm::Value* coordis = extractArgument(compute, "coord_is");
         assert(coordis);
         return B.CreateLoad(B.CreateConstGEP2_64(coordis, 0, Index));

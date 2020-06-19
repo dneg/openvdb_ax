@@ -164,6 +164,7 @@ message(STATUS "CMake Build Type: ${CMAKE_BUILD_TYPE}")
 # for sub projects and verify version requirements
 
 set(HAS_AVAILABLE_WARNINGS FALSE)
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
   if(OPENVDB_CXX_STRICT)
     message(STATUS "Configuring Clang CXX warnings")
@@ -194,7 +195,38 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   # Increase the number of sections that an object file can contain
-  add_compile_options("/bigobj")
+  add_compile_options(/bigobj)
+  # Math constants are not included in <cmath> unless _USE_MATH_DEFINES is
+  # defined on MSVC
+  # https://msdn.microsoft.com/en-us/library/4hwaceh6.aspx
+  add_definitions(-D_USE_MATH_DEFINES)
+  # Disable the non-portable Windows definitions of min() and max() macros
+  add_definitions(-DNOMINMAX)
+  # Excludes APIs such as Cryptography, DDE, RPC, Shell, and Windows Sockets
+  add_definitions(-DWIN32_LEAN_AND_MEAN)
+  # Disable non-secure CRT library function warnings
+  # https://docs.microsoft.com/en-us/cpp/error-messages/compiler-warnings/
+  #     compiler-warning-level-3-c4996?view=vs-2019#unsafe-crt-library-functions
+  add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+  # Disable POSIX function name warnings
+  # https://docs.microsoft.com/en-us/cpp/error-messages/compiler-warnings/
+  #     compiler-warning-level-3-c4996?view=vs-2019#posix-function-names
+  add_definitions(-D_CRT_NONSTDC_NO_WARNINGS)
+  if(NOT OPENVDB_CXX_STRICT)
+    message(STATUS "Suppressing some noisy MSVC CXX warnings, "
+      "set OPENVDB_CXX_STRICT=ON to re-enable them.")
+    # Conversion from int64_t to long
+    add_compile_options(/wd4244)
+    # It's not possible to use STL types in DLL interfaces in a portable and
+    # reliable way so disable this warning
+    add_compile_options(/wd4251)
+    # Conversion from size_t to uLong
+    add_compile_options(/wd4267)
+    # Non dll-interface class used as base for dll-interface class
+    add_compile_options(/wd4275)
+    # Truncation from 'int' to 'bool'
+    add_compile_options(/wd4305)
+  endif()
 endif()
 
 if(OPENVDB_CXX_STRICT AND NOT HAS_AVAILABLE_WARNINGS)

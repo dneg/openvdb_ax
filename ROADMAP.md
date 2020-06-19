@@ -14,6 +14,7 @@ A list of completed features/milestones that previously appeared on the OpenVDB 
 * Noise functions supported by AX.
 * Support for matrix variables and matrix point attributes.
 * For/while loops.
+* Ternary operators.
 
 ## Current goals
 
@@ -34,7 +35,6 @@ Most current work is aimed at our first stable release of OpenVDB AX. This is pr
 This section is where we talk about other longer term ambitions we have for OpenVDB AX. These generally take the shape of features to be added to the language. These are in no particular order and we are hoping for input from the community to help drive the direction we go with these.
 
 * Support for array variables and array point attributes.
-* Ternary operators.
 * User defined function declarations.
 * Syntax highlighting for AX in Houdini and possibly some text editors.
 * Voxel active state lookup and editing.
