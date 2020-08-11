@@ -1122,7 +1122,9 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
                     throw std::runtime_error("No point executable has been built");
                 }
 
-                mCompilerCache.mPointExecutable->execute(*points, &pointsGroup, createMissing);
+                mCompilerCache.mPointExecutable->setGroupExecution(pointsGroup);
+                mCompilerCache.mPointExecutable->setCreateMissing(createMissing);
+                mCompilerCache.mPointExecutable->execute(*points);
 
                 if (mCompilerCache.mRequiresDeletion) {
                     openvdb::points::deleteFromGroup(points->tree(), "dead", false, false);
@@ -1175,7 +1177,9 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
                 iterType = static_cast<ax::VolumeExecutable::IterType>(evalInt("activity", 0, time));
 
             const size_t size = grids.size();
-            mCompilerCache.mVolumeExecutable->execute(grids, iterType, createMissing);
+            mCompilerCache.mVolumeExecutable->setValueIterator(iterType);
+            mCompilerCache.mVolumeExecutable->setCreateMissing(createMissing);
+            mCompilerCache.mVolumeExecutable->execute(grids);
 
             if (evalInt("prune", 0, time)) {
                 PruneOp op;
@@ -1346,8 +1350,6 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
     using VectorData = TypedMetadata<math::Vec3<float>>;
     using FloatData = TypedMetadata<float>;
     using StringData = openvdb::ax::AXStringMetadata;
-    using FloatRampData = hax::RampDataCache<float>;
-    using VectorRampData = hax::RampDataCache<math::Vec3<float>>;
 
     ax::CustomData& data = *(mCompilerCache.mCustomData);
 
@@ -1550,44 +1552,18 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
 
                 PRM_Parm& parm = node->getParm(index);
                 const bool isRamp = parm.isRampType();
+                hax::RampDataCache::Ptr ramp(new hax::RampDataCache());
 
                 if (!isRamp) {
                     const std::string message =
                         "Invalid channel reference: " + nameOrPath + ". Parameter is not a ramp.";
                     addWarning(SOP_MESSAGE, message.c_str());
-                    FloatRampData::Ptr floatRampData(new FloatRampData());
-                    data.insertData(nameOrPath, floatRampData);
+                    data.insertData(nameOrPath, ramp);
                     continue;
                 }
 
-                UT_Ramp houdiniRamp;
-                node->updateRampFromMultiParm(time, parm, houdiniRamp);
-
-                const int numNodes = houdiniRamp.getNodeCount();
-                const bool isVectorRamp = parm.isRampTypeColor();
-                if (!isVectorRamp) {
-                    // must be a float ramp
-
-                    FloatRampData::Ptr floatRampData(new FloatRampData());
-
-                    for (int i = 0; i < numNodes; ++i) {
-                        const UT_ColorNode* const rampNode = houdiniRamp.getNode(i);
-                        floatRampData->insertRampPoint(rampNode->t, rampNode->rgba.r);
-                    }
-
-                    data.insertData(nameOrPath, floatRampData);
-                }
-                else {
-                    VectorRampData::Ptr vectorRampData(new VectorRampData());
-
-                    for (int i = 0; i < numNodes; ++i) {
-                        const UT_ColorNode* const rampNode = houdiniRamp.getNode(i);
-                        vectorRampData->insertRampPoint(rampNode->t,
-                            Vec3R(rampNode->rgba.r, rampNode->rgba.g, rampNode->rgba.b));
-                    }
-
-                    data.insertData(nameOrPath, vectorRampData);
-                }
+                node->updateRampFromMultiParm(time, parm, ramp->value());
+                data.insertData(nameOrPath, ramp);
 
                 // add all parms of this ramps multi parm as a dependency to this
                 // micronode if it exists
@@ -1612,8 +1588,8 @@ SOP_OpenVDB_AX::Cache::evaluateExternalExpressions(const double time,
                 data.insertData<StringData>(nameOrPath, stringData);
             }
             else if (isCHRampLookup) {
-                FloatRampData::Ptr floatRampData(new FloatRampData());
-                data.insertData<FloatRampData>(nameOrPath, floatRampData);
+                hax::RampDataCache::Ptr ramp(new hax::RampDataCache());
+                data.insertData<hax::RampDataCache>(nameOrPath, ramp);
             }
 
             // Only warn if we can't find the channel reference on a valid

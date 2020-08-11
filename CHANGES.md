@@ -12,6 +12,10 @@ Version 1.0.0 - In Development
     - Added full AX type support for matching VDB Point/Volume types which may
       or may not be registered. Registration of these types still depends on
       on downstream software.
+    - Introduce new single header singles which expose new ax::run() pipeline
+      methods. These provide easier access to running a full ax pipeline
+    - The AX VolumeExecutable can now optionally run over any active tile level
+      of an OpenVDB Tree.
 
     Improvements:
     - Updated scalar to matrix promotion rules. When a scalar is promoted to a
@@ -56,6 +60,27 @@ Version 1.0.0 - In Development
 
     Houdini:
     - The AX SOP automatically drops unsupported grid types with a warning.
+    - Improved the performance of the chramp() method. Evaluation is now 2x
+      faster and supports all Houdini ramp parameter interpolation modes.
+
+    Compiler:
+    - Removed unnecessary parser callback members from the Compiler
+    - Reverse the LLVM context and engine constructor order on the executables
+
+    Executables:
+    - Added a single openvdb::GridBase execute method to the VolumeExecutable
+    - Reworked the executables execute signatures. These now only accept the
+      grids to execute. All other parameters can be set via new setters/getters
+      on the executable class interface.
+    - Added an explicit copy constructor to both executables which shallow
+      copies all LLVM constructors but deep copies the executable settings.
+    - Exposed the tree value level iterator on the VolumeExecutable to allow
+      OpenVDB node level selection
+    - Exposed the threading grain size options on both executables
+    - Removed the public constructors from the executables. These should only be
+      created by the Compiler.
+    - Improved both Volume and Point executable internal compute function
+      bindings
 
     AST:
     - New AST Nodes for Comma and Ternary operators and corresponding visitor
