@@ -146,6 +146,7 @@ Version 1.0.0 - In Development
     - Started re-factor of auto-generated integration tests and considerably
       improved test coverage. AX tests can be regenerated with the -g argument
       to the unit test binary.
+    - Removed travis CI in favour of github actions
 
 Version 0.2.0 - March 5, 2020
 

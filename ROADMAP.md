@@ -41,4 +41,4 @@ This section is where we talk about other longer term ambitions we have for Open
 * Neighbouring voxel/point lookups.
 * Windows CMake support and continuous integration.
 * Sampling and rasterisation functionality.
-* Travis and hython test support for OpenVDB AX Houdini
+* CI hython test support for OpenVDB AX Houdini
