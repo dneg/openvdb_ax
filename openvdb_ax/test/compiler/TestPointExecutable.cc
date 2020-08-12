@@ -87,7 +87,7 @@ TestPointExecutable::testConstructionDestruction()
     openvdb::ax::AttributeRegistry::ConstPtr emptyReg =
         openvdb::ax::AttributeRegistry::create(tree);
     openvdb::ax::PointExecutable::Ptr pointExecutable
-        (new openvdb::ax::PointExecutable(E, C, emptyReg, nullptr, {}));
+        (new openvdb::ax::PointExecutable(C, E, emptyReg, nullptr, {}));
 
     CPPUNIT_ASSERT_EQUAL(2, int(wE.use_count()));
     CPPUNIT_ASSERT_EQUAL(2, int(wC.use_count()));
@@ -109,10 +109,6 @@ TestPointExecutable::testConstructionDestruction()
 void
 TestPointExecutable::testCreateMissingAttributes()
 {
-    openvdb::ax::Compiler::UniquePtr compiler = openvdb::ax::Compiler::create();
-    openvdb::ax::PointExecutable::Ptr executable =
-        compiler->compile<openvdb::ax::PointExecutable>("@a=v@b.x;");
-
     openvdb::math::Transform::Ptr defaultTransform =
         openvdb::math::Transform::createLinearTransform();
 
@@ -120,13 +116,18 @@ TestPointExecutable::testCreateMissingAttributes()
     openvdb::points::PointDataGrid::Ptr
         grid = openvdb::points::createPointDataGrid
             <openvdb::points::NullCodec, openvdb::points::PointDataGrid>(singlePointZero, *defaultTransform);
-    CPPUNIT_ASSERT_THROW(executable->execute(*grid, nullptr, false),
-        openvdb::LookupError);
 
-    executable->execute(*grid, nullptr, true);
+    openvdb::ax::Compiler::UniquePtr compiler = openvdb::ax::Compiler::create();
+    openvdb::ax::PointExecutable::Ptr executable =
+        compiler->compile<openvdb::ax::PointExecutable>("@a=v@b.x;");
+
+    executable->setCreateMissing(false);
+    CPPUNIT_ASSERT_THROW(executable->execute(*grid), openvdb::LookupError);
+
+    executable->setCreateMissing(true);
+    executable->execute(*grid);
 
     const auto leafIter = grid->tree().cbeginLeaf();
-
     const auto& descriptor = leafIter->attributeSet().descriptor();
 
     CPPUNIT_ASSERT_EQUAL(size_t(3), descriptor.size());
@@ -190,19 +191,20 @@ TestPointExecutable::testGroupExecution()
     const std::string group = "test";
 
     // non existent group
-    CPPUNIT_ASSERT_THROW(executable->execute(*grid, &group), openvdb::LookupError);
+    executable->setGroupExecution(group);
+    CPPUNIT_ASSERT_THROW(executable->execute(*grid), openvdb::LookupError);
     checkValues(0);
 
     openvdb::points::appendGroup(grid->tree(), group);
 
     // false group
-    executable->execute(*grid, &group);
+    executable->execute(*grid);
     checkValues(0);
 
     openvdb::points::setGroup(grid->tree(), group, true);
 
     // true group
-    executable->execute(*grid, &group);
+    executable->execute(*grid);
     checkValues(1);
 }
 

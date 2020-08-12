@@ -367,19 +367,18 @@ inline void convertASTKnownLookups(openvdb::ax::ast::Tree& tree)
 
 /// @brief  Custom derived metadata for ramp channel expressions to be used
 ///         with codegen::ax::CustomData
-template <typename ValueType>
 struct RampDataCache : public openvdb::Metadata
 {
 public:
-    using RampType = std::map<float, ValueType>;
-    using Ptr = openvdb::SharedPtr<RampDataCache<ValueType>>;
-    using ConstPtr = openvdb::SharedPtr<const RampDataCache<ValueType>>;
+    using RampData = std::map<float, openvdb::math::Vec3<float>>;
+    using Ptr = openvdb::SharedPtr<RampDataCache>;
+    using ConstPtr = openvdb::SharedPtr<const RampDataCache>;
 
     RampDataCache() : mData() {}
     virtual ~RampDataCache() {}
     virtual openvdb::Name typeName() const { return str(); }
     virtual openvdb::Metadata::Ptr copy() const {
-        openvdb::Metadata::Ptr metadata(new RampDataCache<ValueType>());
+        openvdb::Metadata::Ptr metadata(new RampDataCache());
         metadata->copy(*this);
         return metadata;
     }
@@ -390,22 +389,13 @@ public:
     }
     virtual std::string str() const { return "<compiler ramp data>"; }
     virtual bool asBool() const { return true; }
-    virtual openvdb::Index32 size() const {
-        return static_cast<openvdb::Index32>(mData.size());
-    }
+    virtual openvdb::Index32 size() const { return 0; }
 
     //////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////
 
-    inline void insertRampPoint(const float pos, const ValueType& value)
-    {
-        mData[pos] = value;
-    }
-
-    inline void clearRampPoints() { mData.clear(); }
-
-    RampType& value() { return mData; }
-    const RampType& value() const { return mData; }
+    UT_Ramp& value() { return mData; }
+    const UT_Ramp& value() const { return mData; }
 
 protected:
     virtual void readValue(std::istream&s, openvdb::Index32 numBytes) {
@@ -416,7 +406,7 @@ protected:
     }
 
 private:
-    RampType mData;
+    UT_Ramp mData;
 };
 
 inline openvdb::ax::codegen::FunctionGroup::Ptr
@@ -428,91 +418,19 @@ hax_chramp(const openvdb::ax::FunctionOptions& op)
            float position,
            const void* const data)
     {
-        using FloatRampCacheType = RampDataCache<float>;
-        using FloatRamp = FloatRampCacheType::RampType;
-        using VectorRampCacheType = RampDataCache<openvdb::math::Vec3<float>>;
-        using VectorRamp = VectorRampCacheType::RampType;
-
         const openvdb::ax::CustomData* const customData =
             static_cast<const openvdb::ax::CustomData* const>(data);
-
-        // clamp
-        position = position > 0.0f ? position < 1.0f ? position : 1.0f : 0.0f;
-
         const std::string nameString(name);
 
-        const FloatRampCacheType* const floatRampData =
-            customData->getData<FloatRampCacheType>(nameString);
+        const openvdb::Metadata::ConstPtr& meta = customData->getData(nameString);
+        assert(meta.get());
+        assert(dynamic_cast<const RampDataCache*>(meta.get()));
+        const RampDataCache* const rampdata =
+            static_cast<const RampDataCache*>(meta.get());
 
-        if (floatRampData) {
-            const FloatRamp& ramp = floatRampData->value();
-            auto upper = ramp.upper_bound(position);
-
-            if (upper == ramp.begin()) {
-                (*out)[0] = upper->second;
-                (*out)[1] = (*out)[0];
-                (*out)[2] = (*out)[0];
-            }
-            else if (upper == ramp.end()) {
-                (*out)[0] = (--upper)->second;
-                (*out)[1] = (*out)[0];
-                (*out)[2] = (*out)[0];
-            }
-            else {
-                const float maxPos = upper->first;
-                const float maxVal = upper->second;
-
-                --upper;
-
-                const float minPos = upper->first;
-                const float minVal = upper->second;
-                const float coef = (position - minPos) / (maxPos - minPos);
-
-                // lerp
-                (*out)[0] = (minVal * (1.0f - coef)) + (maxVal * coef);
-                (*out)[1] = (*out)[0];
-                (*out)[2] = (*out)[0];
-            }
-
-            return;
-        }
-
-        const VectorRampCacheType* const vectorRampData =
-            customData->getData<VectorRampCacheType>(nameString);
-
-        if (vectorRampData) {
-            const VectorRamp& ramp = vectorRampData->value();
-            auto upper = ramp.upper_bound(position);
-
-            if (upper == ramp.begin()) {
-                const openvdb::Vec3f& value = upper->second;
-                (*out)[0] = value[0];
-                (*out)[1] = value[1];
-                (*out)[2] = value[2];
-            }
-            else if (upper == ramp.end()) {
-                const openvdb::Vec3f& value = (--upper)->second;
-                (*out)[0] = value[0];
-                (*out)[1] = value[1];
-                (*out)[2] = value[2];
-            }
-            else {
-                const float maxPos = upper->first;
-                const openvdb::Vec3f& maxVal = upper->second;
-
-                --upper;
-
-                const float minPos = upper->first;
-                const openvdb::Vec3f& minVal = upper->second;
-                const float coef = (position - minPos) / (maxPos - minPos);
-
-                // lerp
-                const openvdb::Vec3f value = (minVal * (1.0f - coef)) + (maxVal * coef);
-                (*out)[0] = value[0];
-                (*out)[1] = value[1];
-                (*out)[2] = value[2];
-            }
-        }
+        float fvals[4];
+        rampdata->value().getColor(position, fvals);
+        std::memcpy(out, fvals, 3*sizeof(float));
     };
 
     using Sample = void(float(*)[3], const char* const, float,
@@ -548,6 +466,8 @@ haxchramp(const openvdb::ax::FunctionOptions& op)
 
         std::vector<llvm::Value*> inputs(args);
         inputs.emplace_back(arg);
+
+        // call
         hax_chramp(op)->execute(inputs, B);
         return nullptr;
     };

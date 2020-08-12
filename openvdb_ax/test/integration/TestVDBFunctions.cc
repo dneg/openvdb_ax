@@ -31,6 +31,7 @@
 #include "TestHarness.h"
 #include "util.h"
 
+#include <openvdb_ax/ax.h>
 #include <openvdb_ax/codegen/Types.h>
 #include <openvdb_ax/codegen/Functions.h>
 #include <openvdb_ax/codegen/FunctionRegistry.h>
@@ -105,7 +106,8 @@ TestVDBFunctions::addremovefromgroup()
     openvdb::points::appendGroup(dataTree, "existingTestGroup2");
     openvdb::points::setGroup(dataTree, "existingTestGroup2", false);
 
-    unittest_util::wrapExecution(*dataGrid, "test/snippets/vdb_functions/addremovefromgroup");
+    const std::string code = unittest_util::loadText("test/snippets/vdb_functions/addremovefromgroup");
+    openvdb::ax::run(code.c_str(), *dataGrid);
 
     auto leafIter = dataTree.cbeginLeaf();
 
@@ -212,12 +214,12 @@ TestVDBFunctions::getcoord()
         ++i;
     }
 
-    // convert to GridBase::Ptr to call wrapExecution
+    // convert to GridBase::Ptr
     openvdb::GridPtrVec testGridsBase(3);
-
     std::copy(testGrids.begin(), testGrids.end(), testGridsBase.begin());
 
-    unittest_util::wrapExecution(testGridsBase, "test/snippets/vdb_functions/getcoord");
+    const std::string code = unittest_util::loadText("test/snippets/vdb_functions/getcoord");
+    openvdb::ax::run(code.c_str(), testGridsBase);
 
     // each grid has 3 active voxels.  These vectors hold the expected values of those voxels
     // for each grid
