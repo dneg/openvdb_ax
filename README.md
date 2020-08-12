@@ -1,4 +1,4 @@
-# OpenVDB AX [![Build Status](https://travis-ci.com/dneg/openvdb_ax.svg?branch=master)](https://travis-ci.com/dneg/openvdb_ax)
+# OpenVDB AX [![ci](https://github.com/dneg/openvdb_ax/workflows/ci/badge.svg)](https://github.com/dneg/openvdb_ax/actions)
 
 * [Introduction](#introduction)
 * [Development Repository](#development-repository)
