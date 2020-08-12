@@ -85,7 +85,8 @@ public:
     ///   into the AX function using the ingroup("mygroup") method.
     /// @warning  If the group does not exist during execute, a runtime error
     ///   will be thrown.
-    void setGroupExecution(const std::string&);
+    /// @param name  The name of the group to execute over
+    void setGroupExecution(const std::string& name);
     /// @return  The points group to be processed. Default is empty, which is
     ///   all points.
     const std::string& getGroupExecution() const;
@@ -94,12 +95,14 @@ public:
     ///    Default behaviour is true, which creates them with default initial
     ///    values. If false, a missing attribute runtime error will be thrown
     ///    on missing accesses.
-    void setCreateMissing(const bool);
+    /// @param flag  Enables or disables the creation of missing attributes
+    void setCreateMissing(const bool flag);
     /// @return  Whether this executable will generate new point attributes.
     bool getCreateMissing() const;
 
     /// @brief  Set the threading grain size. Default is 1. A value of 0 has the
     ///   effect of disabling multi-threading.
+    /// @param grain The grain size
     void setGrainSize(const size_t grain);
     /// @return  The current grain size
     size_t getGrainSize() const;

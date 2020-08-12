@@ -12,8 +12,8 @@ Version 1.0.0 - In Development
     - Added full AX type support for matching VDB Point/Volume types which may
       or may not be registered. Registration of these types still depends on
       on downstream software.
-    - Introduce new single header singles which expose new ax::run() pipeline
-      methods. These provide easier access to running a full ax pipeline
+    - Introduced a single header which exposes new ax::run() pipeline methods.
+      These provide easier access to running a full ax pipeline
     - The AX VolumeExecutable can now optionally run over any active tile level
       of an OpenVDB Tree.
 

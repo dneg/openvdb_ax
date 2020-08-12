@@ -84,7 +84,8 @@ public:
     /// @brief  Set the behaviour when missing grids are accessed. Default
     ///    behaviour is true, which creates them with default transforms and
     ///    background values
-    void setCreateMissing(const bool);
+    /// @param flag  Enables or disables the creation of missing attributes
+    void setCreateMissing(const bool flag);
     /// @return  Whether this executable will generate new grids.
     bool getCreateMissing() const;
 
@@ -98,19 +99,22 @@ public:
     ///   level access may produce incorrect results. This is typically the
     ///   case when accessing VDBs with mismatching topology. Consider
     ///   voxelizing tiles where necessary.
-    void setTreeExecutionLevel(const Index);
+    /// @param level The tree execution level to set
+    void setTreeExecutionLevel(const Index level);
     /// @return  The tree execution level. Default is 0 i.e. the leaf level
     Index getTreeExecutionLevel() const;
 
     enum class IterType { ON, OFF, ALL };
     /// @brief  Set the value iterator type to use with this executable. Options
     ///  are ON, OFF, ALL. Default is ON.
-    void setValueIterator(const IterType&);
+    /// @param iter The value iterator type to set
+    void setValueIterator(const IterType& iter);
     /// @return  The current value iterator type
     IterType getValueIterator() const;
 
     /// @brief  Set the threading grain size. Default is 1. A value of 0 has the
     ///   effect of disabling multi-threading.
+    /// @param grain The grain size
     void setGrainSize(const size_t grain);
     /// @return  The current grain size
     size_t getGrainSize() const;
