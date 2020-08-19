@@ -1,12 +1,12 @@
 OpenVDB AX Version History
 ==========================
 
-Version 1.0.0 - In Development
+Version 0.3.0 - August 20, 2020
 
     New Features:
     - New and improved doxygen and language reference material. NOTE: Work on
       this is still in progress. Incremental changes will continue to be made
-      up to release.
+      up to a 1.0.0 release.
     - Added ternary conditional operator 'a ? b : c' (and "Elvis" operator
       'a ?: c') support
     - Added full AX type support for matching VDB Point/Volume types which may
