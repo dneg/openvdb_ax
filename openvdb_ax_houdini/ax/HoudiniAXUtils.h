@@ -54,6 +54,8 @@
 #include <openvdb/Exceptions.h>
 #include <openvdb/openvdb.h>
 
+#include <UT/UT_Ramp.h>
+
 #include <map>
 #include <set>
 #include <utility>

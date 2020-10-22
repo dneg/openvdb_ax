@@ -28,17 +28,17 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-#include <cppunit/extensions/HelperMacros.h>
+#include "test/util.h"
 
-#include <openvdb_ax/compiler/Compiler.h>
-#include <openvdb_ax/Exceptions.h>
+#include "../compiler/Compiler.h"
+#include "../Exceptions.h"
 
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <functional>
 
-#include "test/util.h"
+#include <cppunit/extensions/HelperMacros.h>
 
 namespace {
 

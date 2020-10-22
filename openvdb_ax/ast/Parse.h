@@ -28,66 +28,62 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-/// @file ast/AST.cc
+/// @file ast/Parse.h
+///
+/// @authors Nick Avramoussis, Richard Jones
+///
+/// @brief Parsing methods for creating abstract syntax trees out of AX code
+///
 
-#include "AST.h"
+#ifndef OPENVDB_AX_PARSE_HAS_BEEN_INCLUDED
+#define OPENVDB_AX_PARSE_HAS_BEEN_INCLUDED
 
-#include <openvdb_ax/Exceptions.h>
-// @note We need to include this to get access to axlloc. Should look to
-//   re-work this so we don't have to.
-#include <openvdb_ax/grammar/axparser.h>
+#include <openvdb/version.h>
 
-#include <tbb/mutex.h>
-#include <sstream>
+#include "../ast/AST.h"
+#include "../compiler/Logger.h"
 
-namespace {
-// Declare this at file scope to ensure thread-safe initialization.
-tbb::mutex sInitMutex;
-std::string sLastParsingError;
+namespace openvdb {
+OPENVDB_USE_VERSION_NAMESPACE
+namespace OPENVDB_VERSION_NAME {
+
+namespace ax {
+
+namespace ast {
+
+/// @brief  Construct an abstract syntax tree from a code snippet. If the code is
+///         not well formed, as defined by the AX grammar, this will simply return
+///         nullptr, with the logger collecting the errors.
+/// @note   The returned AST is const as the logger uses this to determine line
+///         and column numbers of errors/warnings in later stages. If you need to
+///         modify the tree, take a copy.
+///
+/// @return A shared pointer to a valid const AST, or nullptr if errored.
+///
+/// @param code    The code to parse
+/// @param logger  The logger to collect syntax errors
+///
+openvdb::ax::ast::Tree::ConstPtr parse(const char* code, ax::Logger& logger);
+
+/// @brief  Construct an abstract syntax tree from a code snippet.
+///         A runtime exception will be thrown with the first syntax error.
+///
+/// @return A shared pointer to a valid AST.
+///
+/// @param code The code to parse
+///
+openvdb::ax::ast::Tree::Ptr parse(const char* code);
+
+} // namespace ast
+} // namespace ax
+
 }
+} // namespace openvdb
 
-using YY_BUFFER_STATE = struct yy_buffer_state*;
-extern int axparse(openvdb::ax::ast::Tree**);
-extern YY_BUFFER_STATE ax_scan_string(const char * str);
-extern void ax_delete_buffer(YY_BUFFER_STATE buffer);
+extern openvdb::ax::Logger* axlog;
 
-/// On a parsing error we store the error string in a global
-/// variable so that we can access it later. Note that this does
-/// not get called for invalid character lexical errors - we
-/// immediate throw in the lexer in this case
-extern void axerror (openvdb::ax::ast::Tree**, char const *s) {
-    std::ostringstream os;
-    os << axlloc.first_line << ":" << axlloc.first_column
-       << " '" << s << "'";
-    sLastParsingError = os.str();
-}
+#endif // OPENVDB_AX_AST_HAS_BEEN_INCLUDED
 
-openvdb::ax::ast::Tree::Ptr
-openvdb::ax::ast::parse(const char* code)
-{
-    tbb::mutex::scoped_lock lock(sInitMutex);
-
-    // reset all locations
-    axlloc.first_line = axlloc.last_line = 1;
-    axlloc.first_column = axlloc.last_column = 0;
-
-    YY_BUFFER_STATE buffer = ax_scan_string(code);
-
-    openvdb::ax::ast::Tree* tree(nullptr);
-    const int result = axparse(&tree);
-
-    openvdb::ax::ast::Tree::Ptr ptr(tree);
-
-    ax_delete_buffer(buffer);
-
-    if (result) {
-        OPENVDB_THROW(openvdb::LLVMSyntaxError, sLastParsingError)
-    }
-
-    assert(ptr);
-    return ptr;
-}
-
-// Copyright (c) 2015-2020 DNEG
+// Copyright (c) 2015-2019 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

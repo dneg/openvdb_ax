@@ -30,10 +30,11 @@
 
 #]=======================================================================]
 
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 project(OpenVDBAX LANGUAGES CXX)
 
 include(CMakeDependentOption)
+include(GNUInstallDirs)
 
 option(OPENVDB_BUILD_AX "Build the OpenVDB AX library" ON)
 option(OPENVDB_BUILD_AX_BINARIES "Build the OpenVDB AX command line binary" ON)

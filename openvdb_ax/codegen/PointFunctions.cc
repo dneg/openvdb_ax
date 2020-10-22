@@ -44,14 +44,13 @@
 #include "Types.h"
 #include "Utils.h"
 
+#include "../ast/Tokens.h"
+#include "../compiler/CompilerOptions.h"
+#include "../compiler/LeafLocalData.h"
+#include "../Exceptions.h"
+
 #include <openvdb/openvdb.h>
 #include <openvdb/points/PointDataGrid.h>
-
-#include <openvdb_ax/ast/Tokens.h>
-#include <openvdb_ax/compiler/CompilerOptions.h>
-#include <openvdb_ax/compiler/LeafLocalData.h>
-#include <openvdb_ax/Exceptions.h>
-#include <openvdb_ax/version.h>
 
 #include <unordered_map>
 

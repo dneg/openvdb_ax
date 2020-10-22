@@ -39,10 +39,12 @@
 #ifndef OPENVDB_AX_VOLUME_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_VOLUME_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 
+#include <openvdb/version.h>
+
 #include "ComputeGenerator.h"
 #include "FunctionTypes.h"
 
-#include <openvdb_ax/compiler/AttributeRegistry.h>
+#include "../compiler/AttributeRegistry.h"
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -99,12 +101,11 @@ struct VolumeComputeGenerator : public ComputeGenerator
     /// @param options          Options for the function registry behaviour
     /// @param functionRegistry Function registry object which will be used when generating IR
     ///                         for function calls
-    /// @param warnings         Vector which will hold compiler warnings.  If null, no warnings will
-    ///                         be stored.
+    /// @param logger           Logger for collecting logical errors and warnings
     VolumeComputeGenerator(llvm::Module& module,
         const FunctionOptions& options,
         FunctionRegistry& functionRegistry,
-        std::vector<std::string>* const warnings = nullptr);
+        Logger& logger);
 
     ~VolumeComputeGenerator() override = default;
 
@@ -115,9 +116,8 @@ struct VolumeComputeGenerator : public ComputeGenerator
     bool visit(const ast::Attribute*) override;
 
 private:
-
-    void getAccessorValue(const std::string&, llvm::Value*);
     llvm::Value* accessorHandleFromToken(const std::string&);
+    void getAccessorValue(const std::string&, llvm::Value*);
 };
 
 }

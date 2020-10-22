@@ -47,7 +47,7 @@ void PointExecutableWrap::execute(const boost::python::object& gridObj) {
     openvdb::points::PointDataGrid::Ptr points =
             openvdb::gridPtrCast<openvdb::points::PointDataGrid>(grid);
     if (!points) return;
-    mPointExecutable->execute(*points);
+    if (mPointExecutable) mPointExecutable->execute(*points);
 }
 
 void PointExecutableWrap::execute(const boost::python::list& gridObjs) {
@@ -58,7 +58,8 @@ void PointExecutableWrap::execute(const boost::python::list& gridObjs) {
         openvdb::GridBase::Ptr grid = pyopenvdb::getGridFromPyObject(gridObj);
         openvdb::points::PointDataGrid::Ptr points =
                 openvdb::gridPtrCast<openvdb::points::PointDataGrid>(grid);
-        if (points) mPointExecutable->execute(*points);
+        if (!points) continue;
+        if (mPointExecutable) mPointExecutable->execute(*points);
     }
 }
 

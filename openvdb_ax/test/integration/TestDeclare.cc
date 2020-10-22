@@ -30,7 +30,7 @@
 
 #include "TestHarness.h"
 
-#include <openvdb_ax/test/util.h>
+#include "../test/util.h"
 
 #include <openvdb/Exceptions.h>
 
@@ -143,7 +143,7 @@ TestDeclare::testNewAttributes()
     mHarness.addInputVolumes<int64_t>({"long_test"}, {int64_t(3)});
     mHarness.addInputVolumes<double>({"double_test"}, {0.3});
 
-    mHarness.executeCode("test/snippets/declare/declareAttributes", nullptr, nullptr, true);
+    mHarness.executeCode("test/snippets/declare/declareAttributes", nullptr, true);
 
     AXTESTS_STANDARD_ASSERT();
 }
@@ -164,7 +164,7 @@ TestDeclare::testNewVectorAttributes()
         {openvdb::Vec3i::zero(), openvdb::Vec3i(5, 6, 7)});
     mHarness.addInputVolumes<openvdb::Vec3d>({"vec_double_test"}, {openvdb::Vec3d(0.3, 0.4, 0.5)});
 
-    mHarness.executeCode("test/snippets/declare/declareNewVectorAttributes", nullptr, nullptr, true);
+    mHarness.executeCode("test/snippets/declare/declareNewVectorAttributes", nullptr, true);
 
     AXTESTS_STANDARD_ASSERT();
 }
@@ -195,29 +195,29 @@ TestDeclare::testVectorAttributeImplicit()
 void
 TestDeclare::testAmbiguousScalarAttributes()
 {
-    CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarAttributes"),
-        openvdb::AXCompilerError);
+    const bool success = mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarAttributes");
+    CPPUNIT_ASSERT(!success);
 }
 
 void
 TestDeclare::testAmbiguousVectorAttributes()
 {
-    CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarAttributes"),
-        openvdb::AXCompilerError);
+    const bool success = mHarness.executeCode("test/snippets/declare/declareAmbiguousVectorAttributes");
+    CPPUNIT_ASSERT(!success);
 }
 
 void
 TestDeclare::testAmbiguousScalarExternals()
 {
-    CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarExternals"),
-        openvdb::AXCompilerError);
+    const bool success = mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarExternals");
+    CPPUNIT_ASSERT(!success);
 }
 
 void
 TestDeclare::testAmbiguousVectorExternals()
 {
-    CPPUNIT_ASSERT_THROW(mHarness.executeCode("test/snippets/declare/declareAmbiguousScalarExternals"),
-        openvdb::AXCompilerError);
+    const bool success = mHarness.executeCode("test/snippets/declare/declareAmbiguousVectorExternals");
+    CPPUNIT_ASSERT(!success);
 }
 
 // Copyright (c) 2015-2020 DNEG

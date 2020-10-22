@@ -39,6 +39,7 @@
 #define OPENVDB_AX_COMPILER_COMPILER_OPTIONS_HAS_BEEN_INCLUDED
 
 #include <openvdb/openvdb.h>
+#include <openvdb/version.h>
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE

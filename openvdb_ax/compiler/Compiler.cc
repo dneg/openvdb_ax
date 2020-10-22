@@ -35,11 +35,11 @@
 #include "PointExecutable.h"
 #include "VolumeExecutable.h"
 
-#include <openvdb_ax/ast/Scanners.h>
-#include <openvdb_ax/codegen/Functions.h>
-#include <openvdb_ax/codegen/PointComputeGenerator.h>
-#include <openvdb_ax/codegen/VolumeComputeGenerator.h>
-#include <openvdb_ax/Exceptions.h>
+#include "../ast/Scanners.h"
+#include "../codegen/Functions.h"
+#include "../codegen/PointComputeGenerator.h"
+#include "../codegen/VolumeComputeGenerator.h"
+#include "../Exceptions.h"
 
 #include <openvdb/Exceptions.h>
 
@@ -49,8 +49,6 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Config/llvm-config.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/InitializePasses.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Mangler.h>
@@ -61,12 +59,10 @@
 #include <llvm/MC/SubtargetFeature.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/Host.h>
-#include <llvm/Support/ManagedStatic.h> // llvm_shutdown
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/SourceMgr.h> // SMDiagnostic
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
@@ -84,8 +80,6 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
-#include <tbb/mutex.h>
-
 #include <unordered_map>
 
 namespace openvdb {
@@ -93,107 +87,6 @@ OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
-
-
-namespace {
-// Declare this at file scope to ensure thread-safe initialization.
-tbb::mutex sInitMutex;
-bool sIsInitialized = false;
-bool sShutdown = false;
-}
-
-
-bool isInitialized()
-{
-    tbb::mutex::scoped_lock lock(sInitMutex);
-    return sIsInitialized;
-}
-
-void initialize()
-{
-    tbb::mutex::scoped_lock lock(sInitMutex);
-    if (sIsInitialized) return;
-
-    if (sShutdown) {
-        OPENVDB_THROW(LLVMInitialisationError, "Unable to re-initialize after uninitialize has been called.");
-    }
-
-    // Init JIT
-
-    if (llvm::InitializeNativeTarget() ||
-        llvm::InitializeNativeTargetAsmPrinter() ||
-        llvm::InitializeNativeTargetAsmParser()) {
-        OPENVDB_THROW(LLVMInitialisationError, "Failed to initialize for JIT");
-    }
-
-    LLVMLinkInMCJIT();
-
-    // Initialize passes
-    llvm::PassRegistry& registry = *llvm::PassRegistry::getPassRegistry();
-    llvm::initializeCore(registry);
-    llvm::initializeScalarOpts(registry);
-    llvm::initializeObjCARCOpts(registry);
-    llvm::initializeVectorization(registry);
-    llvm::initializeIPO(registry);
-    llvm::initializeAnalysis(registry);
-    llvm::initializeTransformUtils(registry);
-    llvm::initializeInstCombine(registry);
-#if LLVM_VERSION_MAJOR > 6
-    llvm::initializeAggressiveInstCombine(registry);
-#endif
-    llvm::initializeInstrumentation(registry);
-    llvm::initializeTarget(registry);
-    // For codegen passes, only passes that do IR to IR transformation are
-    // supported.
-#if LLVM_VERSION_MAJOR > 5
-    llvm::initializeExpandMemCmpPassPass(registry);
-#endif
-    llvm::initializeScalarizeMaskedMemIntrinPass(registry);
-    llvm::initializeCodeGenPreparePass(registry);
-    llvm::initializeAtomicExpandPass(registry);
-    llvm::initializeRewriteSymbolsLegacyPassPass(registry);
-    llvm::initializeWinEHPreparePass(registry);
-    llvm::initializeDwarfEHPreparePass(registry);
-    llvm::initializeSafeStackLegacyPassPass(registry);
-    llvm::initializeSjLjEHPreparePass(registry);
-    llvm::initializePreISelIntrinsicLoweringLegacyPassPass(registry);
-    llvm::initializeGlobalMergePass(registry);
-#if LLVM_VERSION_MAJOR > 6
-    llvm::initializeIndirectBrExpandPassPass(registry);
-#endif
-#if LLVM_VERSION_MAJOR > 7
-    llvm::initializeInterleavedLoadCombinePass(registry);
-#endif
-    llvm::initializeInterleavedAccessPass(registry);
-#if LLVM_VERSION_MAJOR > 5
-    llvm::initializeEntryExitInstrumenterPass(registry);
-    llvm::initializePostInlineEntryExitInstrumenterPass(registry);
-#else
-    llvm::initializeCountingFunctionInserterPass(registry);
-#endif
-    llvm::initializeUnreachableBlockElimLegacyPassPass(registry);
-    llvm::initializeExpandReductionsPass(registry);
-#if LLVM_VERSION_MAJOR > 6
-    llvm::initializeWasmEHPreparePass(registry);
-#endif
-#if LLVM_VERSION_MAJOR > 5
-    llvm::initializeWriteBitcodePassPass(registry);
-#endif
-
-    sIsInitialized = true;
-}
-
-void uninitialize()
-{
-    tbb::mutex::scoped_lock lock(sInitMutex);
-    if (!sIsInitialized) return;
-
-    // @todo consider replacing with storage to Support/InitLLVM
-    llvm::llvm_shutdown();
-
-    sIsInitialized = false;
-    sShutdown = true;
-}
 
 namespace
 {
@@ -425,7 +318,7 @@ void optimiseAndVerify(llvm::Module* module,
     if (verify) {
         llvm::raw_os_ostream out(std::cout);
         if (llvm::verifyModule(*module, &out)) {
-            OPENVDB_THROW(LLVMIRError, "LLVM IR is not valid.");
+            OPENVDB_THROW(AXCompilerError, "Generated LLVM IR is not valid.");
         }
     }
 
@@ -521,7 +414,7 @@ void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
 
             const uint64_t address = binding->address();
             if (address == 0) {
-                OPENVDB_THROW(LLVMFunctionError, "No available mapping for C Binding "
+                OPENVDB_THROW(AXCompilerError, "No available mapping for C Binding "
                     "with symbol \"" << decl->symbol() << "\"");
             }
             const std::string mangled =
@@ -531,15 +424,35 @@ void initializeGlobalFunctions(const codegen::FunctionRegistry& registry,
             // we've overwritten something
             const uint64_t oldAddress = engine.updateGlobalMapping(mangled, address);
             if (oldAddress != 0 && oldAddress != address) {
-                OPENVDB_THROW(LLVMFunctionError, "Function registry mapping error - "
+                OPENVDB_THROW(AXCompilerError, "Function registry mapping error - "
                     "multiple functions are using the same symbol \"" << decl->symbol()
                     << "\".");
             }
         }
     }
+
+#ifndef NDEBUG
+    // Loop through all functions and check to see if they have valid engine mappings.
+    // This can occur if lazy functions don't initialize their dependencies properly.
+    // @todo  Really we should just loop through the module functions to begin with
+    //  to init engine mappings - it would probably be faster but we'd have to do
+    //  some string manip and it would assume function names have been set up
+    //  correctly
+    const auto& list = module.getFunctionList();
+    for (const auto& F : list) {
+        if (F.size() > 0) continue;
+        // Some LLVM functions may also not be defined at this stage which is expected
+        if (!F.getName().startswith("ax")) continue;
+        const std::string mangled =
+            getMangledName(llvm::cast<llvm::GlobalValue>(&F), engine);
+        const uint64_t address =
+            engine.getAddressToGlobalIfAvailable(mangled);
+        assert(address != 0 && "Unbound function!");
+    }
+#endif
 }
 
-void verifyTypedAccesses(const ast::Tree& tree)
+void verifyTypedAccesses(const ast::Tree& tree, openvdb::ax::Logger& logger)
 {
     // verify the attributes and external variables requested in the syntax tree
     // only have a single type. Note that the executer will also throw a runtime
@@ -550,14 +463,14 @@ void verifyTypedAccesses(const ast::Tree& tree)
     std::unordered_map<std::string, std::string> nameType;
 
     auto attributeOp =
-        [&nameType](const ast::Attribute& node) -> bool {
+        [&nameType, &logger](const ast::Attribute& node) -> bool {
             auto iter = nameType.find(node.name());
             if (iter == nameType.end()) {
                 nameType[node.name()] = node.typestr();
             }
             else if (iter->second != node.typestr()) {
-                OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous @ parameters. "
-                    "\"" + node.name() + "\" has been accessed with different types.");
+                logger.error("failed to compile ambiguous @ parameters. "
+                    "\"" + node.name() + "\" has been accessed with different type elsewhere.", &node);
             }
             return true;
         };
@@ -567,14 +480,14 @@ void verifyTypedAccesses(const ast::Tree& tree)
     nameType.clear();
 
     auto externalOp =
-        [&nameType](const ast::ExternalVariable& node) -> bool {
+        [&nameType, &logger](const ast::ExternalVariable& node) -> bool {
             auto iter = nameType.find(node.name());
             if (iter == nameType.end()) {
                 nameType[node.name()] = node.typestr();
             }
             else if (iter->second != node.typestr()) {
-                OPENVDB_THROW(AXCompilerError, "Failed to compile ambiguous $ parameters. "
-                    "\"" + node.name() + "\" has been accessed with different types.");
+                logger.error("failed to compile ambiguous $ parameters. "
+                   "\"" + node.name() + "\" has been accessed with different type elsewhere.", &node);
             }
             return true;
         };
@@ -658,7 +571,7 @@ registerExternalGlobals(const codegen::SymbolTable& globals, CustomData::Ptr& da
             case ast::tokens::UNKNOWN :
             default      : {
                 // grammar guarantees this is unreachable as long as all types are supported
-                OPENVDB_THROW(LLVMTypeError, "Attribute Type unsupported or not recognised");
+                OPENVDB_THROW(AXCompilerError, "Attribute type unsupported or not recognised");
             }
         }
     };
@@ -701,6 +614,7 @@ struct PointDefaultModifier :
     using openvdb::ax::ast::Visitor<PointDefaultModifier, false>::visit;
 
     PointDefaultModifier() = default;
+
     virtual ~PointDefaultModifier() = default;
 
     const std::set<std::string> autoVecAttribs {"P", "v", "N", "Cd"};
@@ -712,7 +626,7 @@ struct PointDefaultModifier :
         openvdb::ax::ast::Attribute::UniquePtr
             replacement(new openvdb::ax::ast::Attribute(attrib->name(), ast::tokens::VEC3F, true));
         if (!attrib->replace(replacement.get())) {
-            OPENVDB_THROW(AXExecutionError,
+            OPENVDB_THROW(AXCompilerError,
                 "Auto conversion of inferred attributes failed.");
         }
         replacement.release();
@@ -745,21 +659,18 @@ void Compiler::setFunctionRegistry(std::unique_ptr<codegen::FunctionRegistry>&& 
     mFunctionRegistry = std::move(functionRegistry);
 }
 
-
 template<>
 PointExecutable::Ptr
 Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
-                                   const CustomData::Ptr customData,
-                                   std::vector<std::string>* warnings)
+                                   Logger& logger,
+                                   const CustomData::Ptr customData)
 {
     openvdb::SharedPtr<ast::Tree> tree(syntaxTree.copy());
     PointDefaultModifier modifier;
     modifier.traverse(tree.get());
 
-    verifyTypedAccesses(*tree);
-
+    verifyTypedAccesses(*tree, logger);
     // initialize the module and generate LLVM IR
-
     std::unique_ptr<llvm::Module> module(new llvm::Module("module", *mContext));
     std::unique_ptr<llvm::TargetMachine> TM = initializeTargetMachine();
     if (TM) {
@@ -769,13 +680,17 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
 
     codegen::PointComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,
-            *mFunctionRegistry, warnings);
+            *mFunctionRegistry, logger);
+    AttributeRegistry::Ptr attributes = codeGenerator.generate(*tree);
 
-    AttributeRegistry::Ptr registry = codeGenerator.generate(*tree);
+    // if there has been a compilation error through user error, exit
+    if (!attributes) {
+        assert(logger.hasError());
+        return nullptr;
+    }
 
     // map accesses (always do this prior to optimising as globals may be removed)
-
-    registerAccesses(codeGenerator.globals(), *registry);
+    registerAccesses(codeGenerator.globals(), *attributes);
 
     CustomData::Ptr validCustomData(customData);
     registerExternalGlobals(codeGenerator.globals(), validCustomData, *mContext);
@@ -803,7 +718,7 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
             .create());
 
     if (!executionEngine) {
-        OPENVDB_THROW(AXExecutionError, "Failed to create ExecutionEngine: " + error);
+        OPENVDB_THROW(AXCompilerError, "Failed to create LLVMExecutionEngine: " + error);
     }
 
     // map functions
@@ -835,19 +750,20 @@ Compiler::compile<PointExecutable>(const ast::Tree& syntaxTree,
     PointExecutable::Ptr
         executable(new PointExecutable(mContext,
             executionEngine,
-            registry,
+            attributes,
             validCustomData,
             functionMap));
+
     return executable;
 }
 
 template<>
 VolumeExecutable::Ptr
 Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
-                                    const CustomData::Ptr customData,
-                                    std::vector<std::string>* warnings)
+                                    Logger& logger,
+                                    const CustomData::Ptr customData)
 {
-    verifyTypedAccesses(syntaxTree);
+    verifyTypedAccesses(syntaxTree, logger);
 
     // initialize the module and generate LLVM IR
 
@@ -860,13 +776,17 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
 
     codegen::VolumeComputeGenerator
         codeGenerator(*module, mCompilerOptions.mFunctionOptions,
-            *mFunctionRegistry, warnings);
+            *mFunctionRegistry, logger);
+    AttributeRegistry::Ptr attributes = codeGenerator.generate(syntaxTree);
 
-    AttributeRegistry::Ptr registry = codeGenerator.generate(syntaxTree);
+    // if there has been a compilation error through user error, exit
+    if (!attributes) {
+        assert(logger.hasError());
+        return nullptr;
+    }
 
     // map accesses (always do this prior to optimising as globals may be removed)
-
-    registerAccesses(codeGenerator.globals(), *registry);
+    registerAccesses(codeGenerator.globals(), *attributes);
 
     CustomData::Ptr validCustomData(customData);
     registerExternalGlobals(codeGenerator.globals(), validCustomData, *mContext);
@@ -881,10 +801,10 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
             .setErrorStr(&error)
             .create());
 
-    if (!executionEngine) {
-        OPENVDB_THROW(AXExecutionError, "Failed to create ExecutionEngine: " + error);
-    }
 
+    if (!executionEngine) {
+        OPENVDB_THROW(AXCompilerError, "Failed to create LLVMExecutionEngine: " + error);
+    }
     // map functions
 
     initializeGlobalFunctions(*mFunctionRegistry, *executionEngine,
@@ -907,7 +827,7 @@ Compiler::compile<VolumeExecutable>(const ast::Tree& syntaxTree,
     VolumeExecutable::Ptr
         executable(new VolumeExecutable(mContext,
             executionEngine,
-            registry,
+            attributes,
             validCustomData,
             functionMap));
     return executable;

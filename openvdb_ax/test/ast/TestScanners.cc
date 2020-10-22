@@ -28,9 +28,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-#include <openvdb_ax/ast/AST.h>
-#include <openvdb_ax/ast/Scanners.h>
-#include <openvdb_ax/test/util.h>
+#include "../ast/AST.h"
+#include "../ast/Scanners.h"
+#include "../test/util.h"
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -258,7 +258,7 @@ void TestScanners::testFirstLastLocation()
 
     for (const auto& samples : snippets) {
         for (const std::string& code : *samples) {
-            const Tree::Ptr tree = parse(code.c_str());
+            const Tree::ConstPtr tree = parse(code.c_str());
             CPPUNIT_ASSERT(tree);
             const Variable* first = firstUse(*tree, "@a");
             const Variable* last = lastUse(*tree, "@a");
@@ -366,7 +366,7 @@ void TestScanners::testFirstLastLocation()
 void TestScanners::testAttributeDependencyTokens()
 {
     for (const std::string& code : none) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         std::vector<std::string> dependencies;
         attributeDependencyTokens(*tree, "a", tokens::CoreType::FLOAT, dependencies);
@@ -376,7 +376,7 @@ void TestScanners::testAttributeDependencyTokens()
     }
 
     for (const std::string& code : self) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         std::vector<std::string> dependencies;
         attributeDependencyTokens(*tree, "a", tokens::CoreType::FLOAT, dependencies);
@@ -386,7 +386,7 @@ void TestScanners::testAttributeDependencyTokens()
     }
 
     for (const std::string& code : direct) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         std::vector<std::string> dependencies;
         attributeDependencyTokens(*tree, "a", tokens::CoreType::FLOAT, dependencies);
@@ -396,7 +396,7 @@ void TestScanners::testAttributeDependencyTokens()
     }
 
     for (const std::string& code : directvec) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         std::vector<std::string> dependencies;
         attributeDependencyTokens(*tree, "a", tokens::CoreType::FLOAT, dependencies);
@@ -406,7 +406,7 @@ void TestScanners::testAttributeDependencyTokens()
     }
 
     for (const std::string& code : indirect) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         std::vector<std::string> dependencies;
         attributeDependencyTokens(*tree, "a", tokens::CoreType::FLOAT, dependencies);
@@ -438,7 +438,7 @@ void TestScanners::testAttributeDependencyTokens()
         "    }"
         "}";
 
-    const Tree::Ptr tree = parse(complex.c_str());
+    const Tree::ConstPtr tree = parse(complex.c_str());
     CPPUNIT_ASSERT(tree);
     std::vector<std::string> dependencies;
     attributeDependencyTokens(*tree, "b", tokens::CoreType::FLOAT, dependencies);
@@ -489,7 +489,7 @@ void TestScanners::testAttributeDependencyTokens()
 void TestScanners::testVariableDependencies()
 {
     for (const std::string& code : none) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         const Variable* last = lastUse(*tree, "@a");
         CPPUNIT_ASSERT(last);
@@ -501,7 +501,7 @@ void TestScanners::testVariableDependencies()
     }
 
     for (const std::string& code : self) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         const Variable* last = lastUse(*tree, "@a");
         CPPUNIT_ASSERT(last);
@@ -517,7 +517,7 @@ void TestScanners::testVariableDependencies()
     }
 
     for (const std::string& code : direct) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         const Variable* last = lastUse(*tree, "@a");
         CPPUNIT_ASSERT(last);
@@ -533,7 +533,7 @@ void TestScanners::testVariableDependencies()
     }
 
     for (const std::string& code : indirect) {
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT(tree);
         const Variable* last = lastUse(*tree, "@a");
         CPPUNIT_ASSERT(last);
@@ -579,7 +579,7 @@ void TestScanners::testVariableDependencies()
         "    }"
         "}";
 
-    const Tree::Ptr tree = parse(complex.c_str());
+    const Tree::ConstPtr tree = parse(complex.c_str());
     CPPUNIT_ASSERT(tree);
     const Variable* lasta = lastUse(*tree, "@a");
     const Variable* lastb = lastUse(*tree, "@b");

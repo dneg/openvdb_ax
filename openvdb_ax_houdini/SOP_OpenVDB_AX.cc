@@ -39,9 +39,12 @@
 #define __STDC_LIMIT_MACROS
 #endif
 
+#include "ax/HoudiniAXUtils.h"
+
 #include <openvdb_ax/ast/AST.h>
 #include <openvdb_ax/ast/Literals.h>
 #include <openvdb_ax/compiler/Compiler.h>
+#include <openvdb_ax/compiler/Logger.h>
 #include <openvdb_ax/compiler/CustomData.h>
 #include <openvdb_ax/compiler/PointExecutable.h>
 #include <openvdb_ax/compiler/VolumeExecutable.h>
@@ -71,7 +74,7 @@
 
 #include <tbb/mutex.h>
 
-#include "ax/HoudiniAXUtils.h"
+#include <sstream>
 
 namespace hvdb = openvdb_houdini;
 namespace hax =  openvdb_ax_houdini;
@@ -81,6 +84,8 @@ using namespace openvdb;
 
 
 ////////////////////////////////////////
+
+
 
 /// @brief OpPolicy for OpenVDB operator types from DNEG
 class DnegVDBOpPolicy: public hutil::OpPolicy
@@ -101,7 +106,6 @@ public:
     std::string getLowercaseName(const std::string& english)
     {
         UT_String s(english);
-        // Lowercase
         s.toLower();
         return s.toStdString();
     }
@@ -128,7 +132,7 @@ public:
 
     std::string getTabSubMenuPath(const houdini_utils::OpFactory&) override
     {
-        return "VDB";
+        return "VDB/ASWF";
     }
 };
 
@@ -169,13 +173,13 @@ void addSimpleFolder(hutil::ParmList* templates,
     addSimpleFolder(templates, name, token, parms);
 }
 
-
 ////////////////////////////////////////
 
 
 struct CompilerCache
 {
     ax::Compiler::Ptr mCompiler = nullptr;
+    ax::Logger::Ptr mLogger = nullptr;
     ax::ast::Tree::Ptr mSyntaxTree = nullptr;
     ax::CustomData::Ptr mCustomData = nullptr;
     ax::PointExecutable::Ptr mPointExecutable = nullptr;
@@ -267,7 +271,6 @@ public:
 
         hax::ChannelExpressionSet mChExpressionSet;
         hax::ChannelExpressionSet mDollarExpressionSet;
-        std::vector<std::string> mWarnings;
     };
 
 protected:
@@ -774,14 +777,15 @@ For an up-to-date list of available functions, see AX documentation or call `vdb
 
     // Add backward compatible support if building against VDB 6.2
     // copy the implementation in vdb in regards to the vdb and houdini
-    // version string, but also append the ax version
+    // version string, but also append the ax version (which as of merger
+    // into VDB is the same as the VDB version)
 
 #if (OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER > 6 || \
     (OPENVDB_LIBRARY_MAJOR_VERSION_NUMBER >= 6 && OPENVDB_LIBRARY_MINOR_VERSION_NUMBER >= 2))
     std::stringstream ss;
     ss << "vdb" << OPENVDB_LIBRARY_VERSION_STRING << " ";
     ss << "houdini" << SYS_Version::full() << " ";
-    ss << "vdb_ax" << OPENVDB_AX_LIBRARY_VERSION_STRING;
+    ss << "vdb_ax" << OPENVDB_LIBRARY_VERSION_STRING;
     factory.addSpareData({{"operatorversion", ss.str()}});
 #endif
 
@@ -810,10 +814,19 @@ SOP_OpenVDB_AX::Cache::Cache()
     , mCompilerCache()
     , mChExpressionSet()
     , mDollarExpressionSet()
-    , mWarnings()
 {
     mCompilerCache.mCompiler = ax::Compiler::create();
     mCompilerCache.mCustomData.reset(new ax::CustomData);
+    mCompilerCache.mLogger.reset(new ax::Logger(
+        [this](const std::string& str) {
+            this->addError(SOP_MESSAGE, str.c_str());
+        },
+        [this](const std::string& str) {
+            this->addWarning(SOP_MESSAGE, str.c_str());
+        })
+    );
+    mCompilerCache.mLogger->setErrorPrefix("");
+    mCompilerCache.mLogger->setWarningPrefix("");
 
     // initialize the function registry with VEX support as default
     initializeFunctionRegistry(*mCompilerCache.mCompiler, /*allow vex*/true);
@@ -1008,7 +1021,7 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
 
             mHash = 0;
 
-            mWarnings.clear();
+            mCompilerCache.mLogger->clear();
             mChExpressionSet.clear();
             mDollarExpressionSet.clear();
 
@@ -1020,7 +1033,24 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
 
             // build the AST from the provided snippet
 
-            mCompilerCache.mSyntaxTree = ax::ast::parse(snippet.nonNullBuffer());
+            openvdb::ax::ast::Tree::ConstPtr tree = ax::ast::parse(snippet.nonNullBuffer(), *mCompilerCache.mLogger);
+            // current only catches single syntax error but could be updated to catch multiple
+            // further still can be updated to encounter syntax errors AND output a valid tree
+            // @todo: update to catch multiple errors and output tree when possible
+
+            if (!tree) {
+                const size_t numSyntaxErrors = mCompilerCache.mLogger->errors();
+                std::stringstream os;
+               const bool multi = numSyntaxErrors > 1;
+                if (multi) os << numSyntaxErrors << " ";
+                os <<"AX syntax error";
+                if (multi) os <<"s";
+                os <<"!"<<"\n";
+                addError(SOP_MESSAGE, os.str().c_str());
+                return error();
+            }
+            // store a copy of the AST to modify, the logger will store the original for error printing
+            mCompilerCache.mSyntaxTree.reset(tree->copy());
 
             // find all externally accessed data - do this before conversion from VEX
             // so identify HScript tokens which have been explicitly requested with $
@@ -1062,23 +1092,47 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
             evaluateExternalExpressions(time, mDollarExpressionSet, parmCache.mHScriptSupport, evaluationNode);
 
             if (parmCache.mTargetType == hax::TargetType::POINTS) {
-
                 mCompilerCache.mRequiresDeletion =
                     openvdb::ax::ast::callsFunction(*mCompilerCache.mSyntaxTree, "deletepoint");
 
                 mCompilerCache.mPointExecutable =
                     mCompilerCache.mCompiler->compile<ax::PointExecutable>
-                        (*mCompilerCache.mSyntaxTree, mCompilerCache.mCustomData, &mWarnings);
+                        (*mCompilerCache.mSyntaxTree, *mCompilerCache.mLogger, mCompilerCache.mCustomData);
             }
             else if (parmCache.mTargetType == hax::TargetType::VOLUMES) {
                 mCompilerCache.mVolumeExecutable =
                     mCompilerCache.mCompiler->compile<ax::VolumeExecutable>
-                        (*mCompilerCache.mSyntaxTree, mCompilerCache.mCustomData, &mWarnings);
+                        (*mCompilerCache.mSyntaxTree, *mCompilerCache.mLogger, mCompilerCache.mCustomData);
             }
 
             // update the parameter cache
 
             mParameterCache = parmCache;
+
+            // add compilation warnings/errors
+
+            if (mCompilerCache.mLogger->hasWarning()) {
+                const size_t numWarnings = mCompilerCache.mLogger->warnings();
+                std::stringstream os;
+                 const bool multi = numWarnings > 1;
+                if (multi) os << numWarnings << " ";
+                os <<"AX syntax warning";
+                if (multi) os <<"s";
+                os <<"! "<<"\n";
+                addWarning(SOP_MESSAGE, os.str().c_str());
+            }
+
+            if (mCompilerCache.mLogger->hasError()) {
+                const size_t numErrors = mCompilerCache.mLogger->errors();
+                std::stringstream os;
+                const bool multi = numErrors > 1;
+                if (multi) os << numErrors << " ";
+                os <<"AX syntax error";
+                if (multi) os <<"s";
+                os <<"!"<<"\n";
+                addError(SOP_MESSAGE, os.str().c_str());
+                return error();
+            }
 
             // set the hash only if compilation was successful - Houdini sops tend to cook
             // multiple times, especially on fail. If we assign the hash prior to this it will
@@ -1092,10 +1146,6 @@ SOP_OpenVDB_AX::Cache::cookVDBSop(OP_Context& context)
         }
 
         snippet.clear();
-
-        for (const std::string& warning : mWarnings) {
-            addWarning(SOP_MESSAGE, warning.c_str());
-        }
 
         const bool createMissing = static_cast<bool>(evalInt("createmissing", 0, time));
 

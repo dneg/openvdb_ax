@@ -1,6 +1,56 @@
 OpenVDB AX Version History
 ==========================
 
+Version 1.0.0 - In Development
+
+    New Features:
+    - Introduced new error logging framework for AX syntax errors/warnings,
+      allowing capture and reporting of syntax errors in AX code beyond the
+      first error, as well as graceful breaking of the compilation process if it
+      cannot continue. This allows for more useful error messages and other
+      quality of life improvements such as printing of the offending lines of
+      code.
+    - Synced AX library version to VDB version. The library version now matches
+      the version of VDB it is built against. This is in preparation for porting
+      into the OpenVDB repository.
+    - Added sign() to return -1, 0 or 1 depending on the sign of a scalar input
+
+    Improvements:
+    - Update various API methods and objects to use Logger including Compiler
+      and ComputeGenerators
+    - Moved initialization methods to ax.cc
+    - Reworked all existing exception types with the majority being converted to
+      logger errors. Remaining exception are consolidated library faults.
+    - Updated command line binary to use Logger and report more than one error
+      message and print error locations.
+    - Added --werror and --max-errors options to the command line binary
+
+    Compiler:
+    - Added new compile methods using Logger/deprecated old compile methods
+      taking vectors of strings. Methods that don't take a logger collect all
+      possible errors before throwing (on error).
+    - Added debug checks to ensure functions are registered correctly
+
+    AST:
+    - Moved parse methods from AST.h to new Parse.h
+    - Added new parse method returning const AST for use with line/col tracking
+      in codegen by Logger
+
+    Houdini:
+    - Move OpenVDB AX SOP into VDB/ASWF folder
+    - Updated to use new Logger, can now report more than one error message at a
+      time.
+
+    CMake / Build / Testing:
+    - Increased the minimum CMake version requirement to 3.12
+    - Increased the minimum LLVM version requirement to 6.0.0
+    - Switch to use GNU Install Dirs
+    - Fixed github actions not running on branches with slashes
+    - Removed deprecated openvdb_ax_houdini CMake var
+    - Updated to use relative includes
+    - Added Logger to collect and report errors and warnings
+    - Switched to CMake doxygen support and removed doxygen-config
+
 Version 0.3.0 - August 20, 2020
 
     New Features:
@@ -62,6 +112,25 @@ Version 0.3.0 - August 20, 2020
     - The AX SOP automatically drops unsupported grid types with a warning.
     - Improved the performance of the chramp() method. Evaluation is now 2x
       faster and supports all Houdini ramp parameter interpolation modes.
+
+    Compiler:
+    - Removed unnecessary parser callback members from the Compiler
+    - Reverse the LLVM context and engine constructor order on the executables
+
+    Executables:
+    - Added a single openvdb::GridBase execute method to the VolumeExecutable
+    - Reworked the executables execute signatures. These now only accept the
+      grids to execute. All other parameters can be set via new setters/getters
+      on the executable class interface.
+    - Added an explicit copy constructor to both executables which shallow
+      copies all LLVM constructors but deep copies the executable settings.
+    - Exposed the tree value level iterator on the VolumeExecutable to allow
+      OpenVDB node level selection
+    - Exposed the threading grain size options on both executables
+    - Removed the public constructors from the executables. These should only be
+      created by the Compiler.
+    - Improved both Volume and Point executable internal compute function
+      bindings
 
     Compiler:
     - Removed unnecessary parser callback members from the Compiler

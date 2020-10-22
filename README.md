@@ -1,4 +1,4 @@
-# OpenVDB AX [![ci](https://github.com/dneg/openvdb_ax/workflows/ci/badge.svg)](https://github.com/dneg/openvdb_ax/actions)
+# OpenVDB AX [![ax](https://github.com/dneg/openvdb_ax/workflows/ax/badge.svg)](https://github.com/dneg/openvdb_ax/actions)
 
 * [Introduction](#introduction)
 * [Development Repository](#development-repository)
@@ -32,7 +32,7 @@ OpenVDB AX follows the same requirements as OpenVDB. For more information on req
 
  * A C++ 14 Compiler
  * [OpenVDB 6.2.1](https://github.com/AcademySoftwareFoundation/openvdb/releases/tag/v6.2.1) or later
- * [LLVM](https://llvm.org/). Though OpenVDB AX supports versions of LLVM >= 5.0, we recommend LLVM 8.0 which is the current version most used and tested against.
+ * [LLVM](https://llvm.org/). Though OpenVDB AX supports versions of LLVM >= 6.0, we recommend LLVM 8.0 which is the current version most used and tested against.
 
 ### Documentation
 

@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////
 //
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 //
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )
@@ -28,11 +28,11 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-#include <openvdb_ax/ast/AST.h>
-#include <openvdb_ax/ast/Scanners.h>
-#include <openvdb_ax/ast/PrintTree.h>
-#include <openvdb_ax/Exceptions.h>
-#include <openvdb_ax/test/util.h>
+#include "../ast/AST.h"
+#include "../ast/Scanners.h"
+#include "../ast/PrintTree.h"
+#include "../Exceptions.h"
+#include "../test/util.h"
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -128,7 +128,7 @@ void TestTernaryOperatorNode::testASTNode()
     for (const auto& test : tests) {
         const std::string& code = test.first;
         const Node* expected = test.second.get();
-        const Tree::Ptr tree = parse(code.c_str());
+        const Tree::ConstPtr tree = parse(code.c_str());
         CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("No AST returned", code), static_cast<bool>(tree));
 
         // get the first statement
@@ -152,6 +152,6 @@ void TestTernaryOperatorNode::testASTNode()
     }
 }
 
-// Copyright (c) 2015-2019 DNEG
+// Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the
 // Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

@@ -38,15 +38,15 @@
 ///   Also includes the definitions for the volume value retrieval and setting.
 ///
 
+#include <openvdb/version.h>
+
 #include "Functions.h"
 #include "FunctionTypes.h"
 #include "Types.h"
 #include "Utils.h"
 
-#include <openvdb_ax/compiler/CompilerOptions.h>
-#include <openvdb_ax/Exceptions.h>
-
-#include <openvdb_ax/version.h>
+#include "../compiler/CompilerOptions.h"
+#include "../Exceptions.h"
 
 #include <unordered_map>
 

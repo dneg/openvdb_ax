@@ -8,8 +8,8 @@
 // Redistributions of source code must retain the above copyright
 // and license notice and the following restrictions and disclaimer.
 //
-// *     Neither the name of DNEG nor the names of
-// its contributors may be used to endorse or promote products derived
+// *     Neither the name of DNEG nor the names
+// of its contributors may be used to endorse or promote products derived
 // from this software without specific prior written permission.
 //
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
@@ -34,7 +34,7 @@
 #include "Functions.h"
 #include "FunctionTypes.h"
 
-#include <openvdb_ax/Exceptions.h>
+#include "../Exceptions.h"
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -49,7 +49,7 @@ void FunctionRegistry::insert(const std::string& identifier,
     if (!mMap.emplace(std::piecewise_construct,
               std::forward_as_tuple(identifier),
               std::forward_as_tuple(creator, internal)).second) {
-        OPENVDB_THROW(LLVMFunctionError, "A function already exists"
+        OPENVDB_THROW(AXCompilerError, "A function already exists"
             " with the provided identifier: \"" + identifier + "\"");
     }
 }
@@ -63,7 +63,7 @@ void FunctionRegistry::insertAndCreate(const std::string& identifier,
               std::forward_as_tuple(identifier),
               std::forward_as_tuple(creator, internal));
     if (!inserted.second) {
-        OPENVDB_THROW(LLVMFunctionError, "A function already exists"
+        OPENVDB_THROW(AXCompilerError, "A function already exists"
             " with the provided token: \"" + identifier + "\"");
     }
     inserted.first->second.create(op);
