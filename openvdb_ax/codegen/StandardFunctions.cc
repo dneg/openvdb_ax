@@ -1847,7 +1847,7 @@ inline FunctionGroup::Ptr ax_external(const FunctionOptions& op)
     {
         using ValueType = typename std::remove_pointer<decltype(out)>::type;
         const ax::CustomData* const customData =
-            static_cast<const ax::CustomData* const>(data);
+            static_cast<const ax::CustomData*>(data);
         const std::string nameStr(name->ptr, name->size);
         const TypedMetadata<ValueType>* const metaData =
             customData->getData<TypedMetadata<ValueType>>(nameStr);

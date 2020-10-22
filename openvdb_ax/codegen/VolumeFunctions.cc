@@ -142,7 +142,7 @@ inline FunctionGroup::Ptr axsetvoxel(const FunctionOptions& op)
 
         // set value only to avoid changing topology
         const openvdb::Coord* ijk = reinterpret_cast<const openvdb::Coord*>(coord);
-        AccessorType* const accessorPtr = static_cast<AccessorType* const>(accessor);
+        AccessorType* const accessorPtr = static_cast<AccessorType*>(accessor);
 
         // Check the depth to avoid creating voxel topology for higher levels
         // @todo  As this option is not configurable outside of the executable, we
@@ -272,9 +272,9 @@ inline FunctionGroup::Ptr axgetvoxel(const FunctionOptions& op)
         assert(wspos);
         assert(transform);
 
-        const AccessorType* const accessorPtr = static_cast<const AccessorType* const>(accessor);
+        const AccessorType* const accessorPtr = static_cast<const AccessorType*>(accessor);
         const openvdb::math::Transform* const transformPtr =
-                static_cast<const openvdb::math::Transform* const>(transform);
+                static_cast<const openvdb::math::Transform*>(transform);
         const openvdb::Coord coordIS = transformPtr->worldToIndexCellCentered(*wspos);
         (*value) = accessorPtr->getValue(coordIS);
     };
@@ -295,9 +295,9 @@ inline FunctionGroup::Ptr axgetvoxel(const FunctionOptions& op)
         assert(wspos);
         assert(transform);
 
-        const AccessorType* const accessorPtr = static_cast<const AccessorType* const>(accessor);
+        const AccessorType* const accessorPtr = static_cast<const AccessorType*>(accessor);
         const openvdb::math::Transform* const transformPtr =
-                static_cast<const openvdb::math::Transform* const>(transform);
+                static_cast<const openvdb::math::Transform*>(transform);
         openvdb::Coord coordIS = transformPtr->worldToIndexCellCentered(*wspos);
         const std::string& str = accessorPtr->getValue(coordIS);
         value->ptr = str.c_str();
