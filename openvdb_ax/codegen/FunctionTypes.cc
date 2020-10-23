@@ -35,7 +35,7 @@
 #include "Types.h"
 #include "Utils.h"
 
-#include <openvdb_ax/Exceptions.h>
+#include "../Exceptions.h"
 
 #include <openvdb/util/Name.h>
 
@@ -50,6 +50,7 @@ namespace OPENVDB_VERSION_NAME {
 namespace ax {
 namespace codegen {
 
+namespace {
 
 inline void
 printType(const llvm::Type* type, llvm::raw_os_ostream& stream, const bool axTypes)
@@ -89,6 +90,8 @@ printTypes(llvm::raw_os_ostream& stream,
             stream << ' ' << *nameIter;
         }
     }
+}
+
 }
 
 void
@@ -425,37 +428,9 @@ FunctionGroup::execute(const std::vector<llvm::Value*>& args,
     Function::SignatureMatch match;
     const Function::Ptr target = this->match(inputTypes, C, &match);
 
-    if (!target) {
-        if (this->list().empty()) {
-            OPENVDB_THROW(LLVMFunctionError, "FunctionGroup \"" << mName << "\" "
-                "has no function declarations.");
-        }
-
-        std::ostringstream os;
-        if (match == Function::SignatureMatch::None) {
-            os << "Wrong number of arguments. \"" << mName << "\""
-               << " was called with: (";
-            llvm::raw_os_ostream stream(os);
-            printTypes(stream, inputTypes);
-            stream << ")";
-        }
-        else {
-            // match == Function::SignatureMatch::Size
-            os << "No matching function for ";
-            printSignature(os, inputTypes, LLVMType<void>::get(C), mName, {}, true);
-            os << ".";
-        }
-
-        os << " Candidates are: ";
-        for (const auto& function : mFunctionList) {
-            os << std::endl;
-            function->print(C, os, mName);
-            os << ", ";
-        }
-        OPENVDB_THROW(LLVMFunctionError, os.str());
-    }
-
     llvm::Value* result = nullptr;
+    if (!target) return result;
+
     if (match == Function::SignatureMatch::Implicit) {
         result = target->call(args, B, /*cast=*/true);
     }
@@ -463,12 +438,7 @@ FunctionGroup::execute(const std::vector<llvm::Value*>& args,
         // match == Function::SignatureMatch::Explicit
         result = target->call(args, B, /*cast=*/false);
     }
-
-    if (!result) {
-        OPENVDB_THROW(LLVMFunctionError, "Function \"" << mName <<
-            "\" has been invoked with no valid llvm Value return.");
-    }
-
+    assert(result);
     return result;
 }
 

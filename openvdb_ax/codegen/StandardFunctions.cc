@@ -39,14 +39,13 @@
 
 #include "Functions.h"
 
-#include <openvdb_ax/version.h>
-#include <openvdb_ax/Exceptions.h>
-#include <openvdb_ax/math/OpenSimplexNoise.h>
-#include <openvdb_ax/compiler/CompilerOptions.h>
-#include <openvdb_ax/compiler/CustomData.h>
-#include <openvdb_ax/codegen/FunctionTypes.h>
-#include <openvdb_ax/codegen/Types.h>
-#include <openvdb_ax/codegen/Utils.h>
+#include "../Exceptions.h"
+#include "../math/OpenSimplexNoise.h"
+#include "../compiler/CompilerOptions.h"
+#include "../compiler/CustomData.h"
+#include "../codegen/FunctionTypes.h"
+#include "../codegen/Types.h"
+#include "../codegen/Utils.h"
 
 #include <boost/functional/hash.hpp>
 #include <boost/random/mersenne_twister.hpp>
@@ -815,6 +814,52 @@ inline FunctionGroup::Ptr axrand(const FunctionOptions& op)
         .get();
 }
 
+inline FunctionGroup::Ptr axsign(const FunctionOptions& op)
+{
+    static auto generate =
+        [](const std::vector<llvm::Value*>& args,
+            llvm::IRBuilder<>& B) -> llvm::Value*
+    {
+        // int r = (T(0) < val) - (val < T(0));
+        assert(args.size() == 1);
+        llvm::Value* arg = args.front();
+        llvm::Type* type = arg->getType();
+        llvm::Value* zero;
+        if (type->isIntegerTy()) {
+            zero = llvm::ConstantInt::get(type, static_cast<uint64_t>(0), /*signed*/true);
+        }
+        else {
+            assert(type->isFloatingPointTy());
+            zero = llvm::ConstantFP::get(type, static_cast<double>(0.0));
+        }
+
+        llvm::Value* c1 = binaryOperator(zero, arg, ast::tokens::LESSTHAN, B);
+        c1 = arithmeticConversion(c1, LLVMType<int32_t>::get(B.getContext()), B);
+        llvm::Value* c2 = binaryOperator(arg, zero, ast::tokens::LESSTHAN, B);
+        c2 = arithmeticConversion(c2, LLVMType<int32_t>::get(B.getContext()), B);
+        llvm::Value* r = binaryOperator(c1, c2, ast::tokens::MINUS, B);
+        return arithmeticConversion(r, LLVMType<int32_t>::get(B.getContext()), B);
+    };
+
+    return FunctionBuilder("sign")
+        .addSignature<int32_t(double)>(generate)
+        .addSignature<int32_t(float)>(generate)
+        .addSignature<int32_t(int64_t)>(generate)
+        .addSignature<int32_t(int32_t)>(generate)
+        .setArgumentNames({"n"})
+        .addFunctionAttribute(llvm::Attribute::ReadOnly)
+        .addFunctionAttribute(llvm::Attribute::NoRecurse)
+        .addFunctionAttribute(llvm::Attribute::NoUnwind)
+        .addFunctionAttribute(llvm::Attribute::AlwaysInline)
+        .setConstantFold(op.mConstantFoldCBindings)
+        .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
+        .setDocumentation("Implements signum, determining if the input is negative, zero "
+            "or positive. Returns -1 for a negative number, 0 for the number zero, and +1 "
+            "for a positive number. Note that this function does not check the sign of "
+            "floating point +/-0.0 values. See signbit().")
+        .get();
+}
+
 inline FunctionGroup::Ptr axsignbit(const FunctionOptions& op)
 {
     return FunctionBuilder("signbit")
@@ -827,7 +872,9 @@ inline FunctionGroup::Ptr axsignbit(const FunctionOptions& op)
         .addFunctionAttribute(llvm::Attribute::AlwaysInline)
         .setConstantFold(op.mConstantFoldCBindings)
         .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
-        .setDocumentation("Determines if the given floating point number input is negative.")
+        .setDocumentation("Determines if the given floating point number input is negative. "
+            "Returns true if arg is negative, false otherwise. Will return true for -0.0, "
+            "false for +0.0")
         .get();
 }
 
@@ -1800,7 +1847,7 @@ inline FunctionGroup::Ptr ax_external(const FunctionOptions& op)
     {
         using ValueType = typename std::remove_pointer<decltype(out)>::type;
         const ax::CustomData* const customData =
-            static_cast<const ax::CustomData* const>(data);
+            static_cast<const ax::CustomData*>(data);
         const std::string nameStr(name->ptr, name->size);
         const TypedMetadata<ValueType>* const metaData =
             customData->getData<TypedMetadata<ValueType>>(nameStr);
@@ -1948,6 +1995,7 @@ void insertStandardFunctions(FunctionRegistry& registry,
     add("min", axmin);
     add("normalize", axnormalize);
     add("rand", axrand);
+    add("sign", axsign);
     add("signbit", axsignbit);
 
     // matrix math

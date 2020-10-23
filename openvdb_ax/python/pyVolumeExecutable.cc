@@ -46,7 +46,7 @@ void VolumeExecutableWrap::execute(const boost::python::object& gridObj) {
     if (!grid) return;
     openvdb::GridPtrVec grids;
     grids.emplace_back(grid);
-    mVolumeExecutable->execute(grids);
+    if (mVolumeExecutable) mVolumeExecutable->execute(grids);
 }
 
 void VolumeExecutableWrap::execute(const boost::python::list& gridObjs) {
@@ -60,7 +60,7 @@ void VolumeExecutableWrap::execute(const boost::python::list& gridObjs) {
         if (grid) grids.emplace_back(grid);
     }
 
-    mVolumeExecutable->execute(grids);
+    if (mVolumeExecutable) mVolumeExecutable->execute(grids);
 }
 
 void exportVolumeExecutable() {

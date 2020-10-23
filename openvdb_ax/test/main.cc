@@ -29,7 +29,7 @@
 ///////////////////////////////////////////////////////////////////////////
 
 #include <openvdb/points/PointDataGrid.h>
-#include <openvdb_ax/compiler/Compiler.h>
+#include "../compiler/Compiler.h"
 
 #include <openvdb/openvdb.h>
 #include <openvdb/util/CpuTimer.h>

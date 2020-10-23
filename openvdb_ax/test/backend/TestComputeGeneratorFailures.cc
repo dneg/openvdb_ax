@@ -33,11 +33,13 @@
 #include "util.h"
 #include "../util.h"
 
-#include <openvdb_ax/compiler/CompilerOptions.h>
-#include <openvdb_ax/codegen/Functions.h>
-#include <openvdb_ax/codegen/FunctionRegistry.h>
-#include <openvdb_ax/codegen/ComputeGenerator.h>
-#include <openvdb_ax/ast/AST.h>
+#include "../compiler/CompilerOptions.h"
+#include "../compiler/Logger.h"
+#include "../codegen/Functions.h"
+#include "../codegen/FunctionRegistry.h"
+#include "../codegen/ComputeGenerator.h"
+#include "../ast/AST.h"
+
 #include <cppunit/extensions/HelperMacros.h>
 
 static const std::vector<std::string> tests {
@@ -224,9 +226,6 @@ static const std::vector<std::string> tests {
     "true ? 1.0f : \"foo\";",
     "string a; true ? a : 1;"
     "string a; true ? 1.0f : a;"
-    /// attrib access - this test only tests the base
-    // generator which has no attribute access support
-    "@a;"
 };
 
 class TestComputeGeneratorFailures : public CppUnit::TestCase
@@ -242,22 +241,28 @@ public:
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestComputeGeneratorFailures);
 
+
 void
 TestComputeGeneratorFailures::testFailures()
 {
     openvdb::ax::FunctionOptions opts;
-    // empty reg
     openvdb::ax::codegen::FunctionRegistry reg;
 
+    // create logger that suppresses all messages, but still logs number of errors/warnings
+    openvdb::ax::Logger logger([](const std::string&) {});
+    logger.setMaxErrors(1);
+
     for (const auto& code : tests) {
-        const openvdb::ax::ast::Tree::Ptr ast =
-            openvdb::ax::ast::parse(code.c_str());
+        const openvdb::ax::ast::Tree::ConstPtr ast =
+            openvdb::ax::ast::parse(code.c_str(), logger);
         CPPUNIT_ASSERT(ast.get());
 
         unittest_util::LLVMState state;
-        openvdb::ax::codegen::ComputeGenerator gen(state.module(), opts, reg);
-        CPPUNIT_ASSERT_THROW_MESSAGE(ERROR_MSG("Expected Compiler Error", code),
-            gen.generate(*ast), openvdb::Exception);
+        openvdb::ax::codegen::ComputeGenerator gen(state.module(), opts, reg, logger);
+        gen.generate(*ast);
+
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Expected Compiler Error", code), logger.hasError());
+        logger.clear();
     }
 }
 

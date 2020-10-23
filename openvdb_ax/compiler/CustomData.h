@@ -39,10 +39,11 @@
 #ifndef OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_CUSTOM_DATA_HAS_BEEN_INCLUDED
 
-#include <openvdb_ax/ast/Literals.h>
-
+#include <openvdb/version.h>
 #include <openvdb/Metadata.h>
 #include <openvdb/Types.h>
+
+#include "../ast/Literals.h"
 
 #include <unordered_map>
 #include <memory>

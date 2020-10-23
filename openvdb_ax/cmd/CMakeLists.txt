@@ -30,7 +30,7 @@
 
 #]=======================================================================]
 
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 project(OpenVDBAXBinaries LANGUAGES CXX)
 
 #########################################################################
@@ -74,4 +74,4 @@ if(OPENVDB_ENABLE_RPATH)
   unset(RPATHS)
 endif()
 
-install(TARGETS vdb_ax DESTINATION bin)
+install(TARGETS vdb_ax RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

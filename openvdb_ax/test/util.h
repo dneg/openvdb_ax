@@ -37,8 +37,11 @@
 #ifndef OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 
-#include <openvdb_ax/ast/AST.h>
-#include <openvdb_ax/ast/Tokens.h>
+#include "../ast/AST.h"
+#include "../ast/Parse.h"
+#include "../ast/Tokens.h"
+#include "../compiler/Logger.h"
+
 #include <openvdb/Types.h>
 
 #include <memory>
@@ -51,25 +54,29 @@
 
 #define TEST_SYNTAX_PASSES(Tests) \
 { \
+    openvdb::ax::Logger logger;\
     for (const auto& test : Tests) { \
+        logger.clear();\
         const std::string& code = test.first; \
-        CPPUNIT_ASSERT_NO_THROW_MESSAGE(ERROR_MSG("Unexpected parsing error", code), \
-            openvdb::ax::ast::parse(code.c_str())); \
+        openvdb::ax::ast::Tree::ConstPtr tree = openvdb::ax::ast::parse(code.c_str(), logger);\
+        std::stringstream str; \
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Unexpected parsing error(s)\n", str.str()), tree); \
     } \
 } \
 
 #define TEST_SYNTAX_FAILS(Tests) \
 { \
+    openvdb::ax::Logger logger([](const std::string&) {});\
     for (const auto& test : Tests) { \
+        logger.clear();\
         const std::string& code = test.first; \
-        CPPUNIT_ASSERT_THROW_MESSAGE(ERROR_MSG("Expected LLVMSyntaxError", code), \
-            openvdb::ax::ast::parse(code.c_str()), openvdb::LLVMSyntaxError); \
+        openvdb::ax::ast::Tree::ConstPtr tree = openvdb::ax::ast::parse(code.c_str(), logger);\
+        CPPUNIT_ASSERT_MESSAGE(ERROR_MSG("Expected parsing error", code), logger.hasError()); \
     } \
 } \
 
 namespace unittest_util
 {
-
 // Use shared pointers rather than unique pointers so initializer lists can easily
 // be used. Could easily introduce some move semantics to work around this if
 // necessary.
@@ -246,7 +253,6 @@ nameSequence(const std::string& base, const size_t number)
 
     return names;
 }
-
 }
 
 #endif // OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED

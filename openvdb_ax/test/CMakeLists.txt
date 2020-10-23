@@ -30,7 +30,7 @@
 
 #]=======================================================================]
 
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 project(OpenVDBAXUnitTests LANGUAGES CXX)
 
 option(OPENVDB_AX_TEST_PROFILE "Switch on profiling for some of the unit tests." OFF)
@@ -58,6 +58,7 @@ set(TEST_SOURCE_FILES
   backend/TestFunctionGroup.cc
   backend/TestFunctionRegistry.cc
   backend/TestFunctionTypes.cc
+  backend/TestLogger.cc
   backend/TestSymbolTable.cc
   backend/TestTypes.cc
   compiler/TestPointExecutable.cc

@@ -38,14 +38,15 @@
 #ifndef OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 
-#include <openvdb_ax/ast/Tokens.h>
-#include <openvdb_ax/ast/Literals.h>
-#include <openvdb_ax/Exceptions.h>
-
+#include <openvdb/version.h>
+#include <openvdb/Types.h>
 #include <openvdb/math/Mat3.h>
 #include <openvdb/math/Mat4.h>
 #include <openvdb/math/Vec3.h>
-#include <openvdb/Types.h>
+
+#include "../ast/Tokens.h"
+#include "../ast/Literals.h"
+#include "../Exceptions.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
@@ -104,7 +105,7 @@ struct LLVMType
                 case 64: return llvm::Type::getDoubleTy(C);
             }
         }
-        OPENVDB_THROW(LLVMTypeError, "LLVMType called with an unsupported type \"" +
+        OPENVDB_THROW(AXCodeGenError, "LLVMType called with an unsupported type \"" +
             std::string(typeNameAsString<T>()) + "\".");
 #endif
     }
@@ -355,7 +356,8 @@ llvmFloatType(const uint32_t size, llvm::LLVMContext& C)
     switch (size) {
         case 32 : return LLVMType<float>::get(C);
         case 64 : return LLVMType<double>::get(C);
-        default : OPENVDB_THROW(LLVMTypeError, "Invalid float size");
+        default : OPENVDB_THROW(AXCodeGenError,
+            "Invalid float size requested from LLVM Context");
     }
 }
 
@@ -393,7 +395,8 @@ llvmTypeFromToken(const ast::tokens::CoreType& type,
         case ast::tokens::STRING  : return LLVMType<AXString>::get(C);
         case ast::tokens::UNKNOWN :
         default      :
-            OPENVDB_THROW(LLVMTypeError, "Attribute Type not recognised");
+            OPENVDB_THROW(AXCodeGenError,
+                "Token type not recognised in request for LLVM type");
     }
 }
 

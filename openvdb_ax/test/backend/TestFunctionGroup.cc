@@ -30,7 +30,7 @@
 
 #include "util.h"
 
-#include <openvdb_ax/codegen/FunctionTypes.h>
+#include "../codegen/FunctionTypes.h"
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -439,19 +439,16 @@ TestFunctionGroup::testExecute()
     // test invalid arguments throws
 
     FunctionGroup::Ptr group(new FunctionGroup("empty", "", {}));
-    CPPUNIT_ASSERT_THROW(group->execute(/*args*/{}, B),
-        openvdb::LLVMFunctionError);
+    CPPUNIT_ASSERT(!group->execute(/*args*/{}, B));
 
     group = axtestscalar(C);
     const std::vector<Function::Ptr>* list = &group->list();
 
-    CPPUNIT_ASSERT_THROW(group->execute({}, B),
-        openvdb::LLVMFunctionError);
-    CPPUNIT_ASSERT_THROW(group->execute({
+    CPPUNIT_ASSERT(!group->execute({}, B));
+    CPPUNIT_ASSERT(!group->execute({
             B.getTrue(),
             B.getTrue()
-        }, B),
-        openvdb::LLVMFunctionError);
+        }, B));
 
     args.resize(1);
 

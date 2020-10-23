@@ -39,6 +39,8 @@
 #ifndef OPENVDB_AX_COMPILER_AST_SCANNERS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_AST_SCANNERS_HAS_BEEN_INCLUDED
 
+#include <openvdb/version.h>
+
 #include "AST.h"
 #include "Visitor.h"
 

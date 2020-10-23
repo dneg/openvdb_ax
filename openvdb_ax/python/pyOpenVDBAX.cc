@@ -56,7 +56,7 @@ namespace {
 ///
 void printASTFromCode(const std::string& code)
 {
-    openvdb::ax::ast::Tree::Ptr
+    openvdb::ax::ast::Tree::ConstPtr
         syntaxTree = openvdb::ax::ast::parse(code.c_str());
     openvdb::ax::ast::print(*syntaxTree);
 }

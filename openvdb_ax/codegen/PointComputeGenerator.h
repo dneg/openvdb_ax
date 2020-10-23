@@ -39,12 +39,14 @@
 #ifndef OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 
+#include <openvdb/version.h>
+
 #include "ComputeGenerator.h"
 #include "FunctionTypes.h"
 #include "Types.h"
 #include "Utils.h"
 
-#include <openvdb_ax/compiler/AttributeRegistry.h>
+#include "../compiler/AttributeRegistry.h"
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -112,12 +114,11 @@ struct PointComputeGenerator : public ComputeGenerator
     /// @param options          Options for the function registry behaviour
     /// @param functionRegistry Function registry object which will be used when generating IR
     ///                         for function calls
-    /// @param warnings         Vector which will hold compiler warnings.  If null, no warnings will
-    ///                         be stored.
+    /// @param logger           Logger for collecting logical errors and warnings
     PointComputeGenerator(llvm::Module& module,
        const FunctionOptions& options,
        FunctionRegistry& functionRegistry,
-       std::vector<std::string>* const warnings = nullptr);
+       Logger& logger);
 
     ~PointComputeGenerator() override = default;
 

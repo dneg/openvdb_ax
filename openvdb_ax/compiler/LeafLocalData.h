@@ -39,6 +39,7 @@
 #define OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
 
 #include <openvdb/openvdb.h>
+#include <openvdb/version.h>
 #include <openvdb/points/AttributeArray.h>
 #include <openvdb/points/PointAttribute.h>
 #include <openvdb/points/PointDataGrid.h>

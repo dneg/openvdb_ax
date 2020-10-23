@@ -28,8 +28,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-#include <openvdb_ax/ast/AST.h>
-#include <openvdb_ax/ast/PrintTree.h>
+#include "../ast/AST.h"
+#include "../ast/Parse.h"
+#include "../ast/PrintTree.h"
 
 #include <cppunit/extensions/HelperMacros.h>
 
@@ -81,7 +82,7 @@ void TestPrinters::testReprint()
     // Test binary ops
     std::string in = "a + b * c / d % e << f >> g = h & i | j ^ k && l || m;";
     std::string expected = "(((a + (((b * c) / d) % e)) << f) >> g = ((((h & i) | (j ^ k)) && l) || m));\n";
-    Tree::Ptr tree = parse(in.c_str());
+    Tree::ConstPtr tree = parse(in.c_str());
     CPPUNIT_ASSERT(tree.get());
     reprint(*tree, os, "");
     check(os.str(), ("{\n" + expected + "}\n"));

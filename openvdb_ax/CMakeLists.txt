@@ -31,7 +31,7 @@
 #]=======================================================================]
 
 # @note  Version 3.4 is required for re-generation of AX Grammar
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 project(OpenVDBAXCore LANGUAGES CXX)
 
 option(OPENVDB_AX_SHARED "Build dynamically linked version of the ax library." ON)
@@ -103,7 +103,7 @@ endif()
 #########################################################################
 
 # Configure LLVM
-set(MINIMUM_LLVM_VERSION 5.0.0)
+set(MINIMUM_LLVM_VERSION 6.0.0)
 
 find_package(LLVM REQUIRED)
 find_library(found_LLVM LLVM HINTS ${LLVM_LIBRARY_DIRS})
@@ -133,12 +133,12 @@ find_package(Boost REQUIRED COMPONENTS random)
 #########################################################################
 
 set(OPENVDB_AX_LIBRARY_SOURCE_FILES
-  ax.cc
-  ast/AST.cc
-  ast/PrintTree.cc
-  ast/Scanners.cc
   ${OPENVDB_AX_GRAMMAR_DIR}/axlexer.cc
   ${OPENVDB_AX_GRAMMAR_DIR}/axparser.cc
+  ast/Parse.cc
+  ast/PrintTree.cc
+  ast/Scanners.cc
+  ax.cc
   codegen/ComputeGenerator.cc
   codegen/FunctionRegistry.cc
   codegen/FunctionTypes.cc
@@ -150,11 +150,13 @@ set(OPENVDB_AX_LIBRARY_SOURCE_FILES
   compiler/Compiler.cc
   compiler/PointExecutable.cc
   compiler/VolumeExecutable.cc
+  compiler/Logger.cc
   math/OpenSimplexNoise.cc
-  )
+)
 
 set(OPENVDB_AX_AST_INCLUDE_FILES
   ast/AST.h
+  ast/Parse.h
   ast/Literals.h
   ast/PrintTree.h
   ast/Scanners.h
@@ -184,6 +186,7 @@ set(OPENVDB_AX_COMPILER_INCLUDE_FILES
   compiler/PointExecutable.h
   compiler/AttributeRegistry.h
   compiler/VolumeExecutable.h
+  compiler/Logger.h
 )
 
 # @todo CMake >= 3.12, use an object library to consolidate shared/static
@@ -232,7 +235,7 @@ if(OPENVDB_AX_STATIC)
 
   target_include_directories(openvdb_ax_static
     PUBLIC ../
-    PRIVATE . ${CMAKE_CURRENT_BINARY_DIR}
+    PRIVATE . ${OPENVDB_AX_GRAMMAR_DIR}
   )
   target_include_directories(openvdb_ax_static
     SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS}
@@ -258,21 +261,19 @@ if(OPENVDB_AX_SHARED)
 
   target_include_directories(openvdb_ax_shared
     PUBLIC ../
-    PRIVATE . ${CMAKE_CURRENT_BINARY_DIR}
+    PRIVATE . ${OPENVDB_AX_GRAMMAR_DIR}
   )
   target_include_directories(openvdb_ax_shared
     SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS}
   )
 
-  # @TODO - Use a similar system to vdb to extract the version number from version.h
-
   set_target_properties(
     openvdb_ax_shared
     PROPERTIES
       OUTPUT_NAME openvdb_ax
-      SOVERSION 0.3
-      VERSION 0.3.0
-    )
+      SOVERSION ${OpenVDB_MAJOR_VERSION}.${OpenVDB_MINOR_VERSION}
+      VERSION ${OpenVDB_MAJOR_VERSION}.${OpenVDB_MINOR_VERSION}.${OpenVDB_PATCH_VERSION}
+  )
 
   if(OPENVDB_ENABLE_RPATH)
     # @todo There is probably a better way to do this for imported targets
@@ -299,15 +300,23 @@ if(OPENVDB_AX_SHARED)
   endif()
 endif()
 
-install(FILES ax.h Exceptions.h version.h DESTINATION include/openvdb_ax/)
-install(FILES ${OPENVDB_AX_AST_INCLUDE_FILES} DESTINATION include/openvdb_ax/ast)
-install(FILES ${OPENVDB_AX_CODEGEN_INCLUDE_FILES} DESTINATION include/openvdb_ax/codegen)
-install(FILES ${OPENVDB_AX_COMPILER_INCLUDE_FILES} DESTINATION include/openvdb_ax/compiler)
+install(FILES ax.h Exceptions.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/openvdb_ax/)
+install(FILES ${OPENVDB_AX_AST_INCLUDE_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/openvdb_ax/ast)
+install(FILES ${OPENVDB_AX_CODEGEN_INCLUDE_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/openvdb_ax/codegen)
+install(FILES ${OPENVDB_AX_COMPILER_INCLUDE_FILES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/openvdb_ax/compiler)
 
 if(OPENVDB_AX_STATIC)
-  install(TARGETS openvdb_ax_static DESTINATION lib)
+  install(TARGETS openvdb_ax_static
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  )
 endif()
 
 if(OPENVDB_AX_SHARED)
-  install(TARGETS openvdb_ax_shared DESTINATION lib)
+  install(TARGETS openvdb_ax_shared
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  )
 endif()

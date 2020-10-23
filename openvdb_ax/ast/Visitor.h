@@ -41,11 +41,11 @@
 #ifndef OPENVDB_AX_AST_VISITOR_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_VISITOR_HAS_BEEN_INCLUDED
 
+#include <openvdb/version.h>
+
 #include "Tokens.h"
 #include "Literals.h"
-
-#include <openvdb_ax/version.h>
-#include <openvdb_ax/ast/AST.h>
+#include "../ast/AST.h"
 
 #include <type_traits>
 

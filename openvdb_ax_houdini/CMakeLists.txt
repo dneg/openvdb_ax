@@ -30,7 +30,7 @@
 
 #]=======================================================================]
 
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 project(OpenVDBAXHoudini LANGUAGES CXX)
 
 option(USE_DEFAULT_HOUDINI_INSTALL [=[
@@ -51,18 +51,11 @@ message(STATUS "----------------------------------------------------")
 
 # Configure prefix
 
-if(OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
-  message(DEPRECATION "OPENVDB_AX_HOUDINI_INSTALL_PREFIX option is deprecated")
-  set(HOUDINI_INSTALL_LOCATION OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
-endif()
-
-if(NOT OPENVDB_AX_HOUDINI_INSTALL_PREFIX)
-  if(USE_DEFAULT_HOUDINI_INSTALL)
-    # Function from the Houdini CMake which is brought in by OpenVDBHoudiniSetup.cmake
-    houdini_get_default_install_dir(HOUDINI_INSTALL_LOCATION)
-  else()
-    set(HOUDINI_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX})
-  endif()
+if(USE_DEFAULT_HOUDINI_INSTALL)
+  # Function from the Houdini CMake which is brought in by OpenVDBHoudiniSetup.cmake
+  houdini_get_default_install_dir(HOUDINI_INSTALL_LOCATION)
+else()
+  set(HOUDINI_INSTALL_LOCATION ${CMAKE_INSTALL_PREFIX})
 endif()
 
 set(OPENVDB_AX_HOUDINI_LIB_INSTALL_PREFIX ${HOUDINI_INSTALL_LOCATION}

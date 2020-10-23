@@ -30,20 +30,78 @@
 
 #]=======================================================================]
 
+cmake_minimum_required(VERSION 3.9)
 project(OpenVDBAXDocs LANGUAGES NONE)
 
-find_package(Doxygen REQUIRED)
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/doxygen-config DOXYGEN_CONFIG_CONTENT)
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/cmake-doxygen-config ${DOXYGEN_CONFIG_CONTENT})
-file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/cmake-doxygen-config
-  "QUIET=YES\nOUTPUT_DIRECTORY=${CMAKE_CURRENT_BINARY_DIR}\n"
-)
+find_package(Doxygen REQUIRED dot)
 
-add_custom_target(doc ALL
-  COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/cmake-doxygen-config
-  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-  COMMENT "Generating API documentation with Doxygen" VERBATIM
-  )
+set(DOXY_FILES
+  ../
+  ../ast
+  ../cmd
+  ../codegen
+  ../compiler
+  ../math
+  ../python
+  ../grammar
+  ../grammar/generated
+  ../test
+  ax.txt
+  axexamples.txt
+  axfunctionlist.txt
+  doc.txt
+  openvdbax.txt
+  openvdbaxbuild.txt)
+
+set(DOXYGEN_PROJECT_NAME "OpenVDB AX")
+set(DOXYGEN_PROJECT_NUMBER "0.3.0")
+set(DOXYGEN_PROJECT_BRIEF "")
+set(DOXYGEN_FILE_PATTERNS "*.h") # headers only
+
+set(DOXYGEN_GENERATE_HTML YES)
+set(DOXYGEN_GENERATE_MAN NO)
+set(DOXYGEN_GENERATE_LATEX NO)
+
+set(DOXYGEN_EXTRA_PACKAGES amsmath) # for math formatting
+set(DOXYGEN_FORMULA_FONTSIZE 14)
+
+set(DOXYGEN_HTML_COLORSTYLE_HUE 4)
+set(DOXYGEN_HTML_COLORSTYLE_SAT 222)
+set(DOXYGEN_HTML_TIMESTAMP NO) # for simpler website diffs
+
+set(DOXYGEN_EXTRACT_ALL YES)
+set(DOXYGEN_EXTRACT_STATIC YES)
+set(DOXYGEN_EXTRACT_LOCAL_CLASSES NO)
+
+set(DOXYGEN_ALPHABETICAL_INDEX NO)
+set(DOXYGEN_DISTRIBUTE_GROUP_DOC YES)
+set(DOXYGEN_FULL_PATH_NAMES NO)
+set(DOXYGEN_GENERATE_TODOLIST NO)
+set(DOXYGEN_HIDE_IN_BODY_DOCS YES)
+set(DOXYGEN_HIDE_SCOPE_NAMES YES)
+set(DOXYGEN_INLINE_INHERITED_MEMB YES)
+set(DOXYGEN_MACRO_EXPANSION YES)
+
+set(DOXYGEN_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set(DOXYGEN_QUIET YES)
+
+set(DOXYGEN_ALIASES
+  [[ijk="(<i>i</i>,&nbsp;<i>j</i>,&nbsp;<i>k</i>)"]]
+  [[xyz="(<i>x</i>,&nbsp;<i>y</i>,&nbsp;<i>z</i>)"]]
+  [[const="<tt>const</tt>"]]
+  [[vdblink="@link @vdbnamespace"]]
+  [[vdbnamespace="openvdb::v7_0"]])
+set(DOXYGEN_VERBATIM_VARS DOXYGEN_ALIASES)
+
+set(DOXYGEN_PREDEFINED
+  "OPENVDB_VERSION_NAME=v7_0"
+  "__declspec(x):= __attribute__(x):=")
+
+# Always add to build target (can't use USE_STAMP_FILE as we include
+# complete directories in DOXY_FILES)
+doxygen_add_docs(doc ${DOXY_FILES}
+  ALL WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMENT "Generating API documentation with Doxygen")
 
 # Suppress "Installing..." messages for all but one of the hundreds of generated files.
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/html/index.html DESTINATION doc/html)

@@ -30,7 +30,7 @@
 
 #]=======================================================================]
 
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.12)
 project(OpenVDBAXPython LANGUAGES CXX)
 
 #########################################################################
@@ -76,5 +76,5 @@ if(UNIX)
 endif()
 
 install(TARGETS pyopenvdbax
-  DESTINATION lib/python
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/python
 )

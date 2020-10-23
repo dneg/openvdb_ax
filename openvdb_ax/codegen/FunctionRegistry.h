@@ -39,11 +39,11 @@
 #ifndef OPENVDB_AX_CODEGEN_FUNCTION_REGISTRY_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_FUNCTION_REGISTRY_HAS_BEEN_INCLUDED
 
+#include <openvdb/version.h>
+
 #include "FunctionTypes.h"
 #include "Types.h"
-
-#include <openvdb_ax/version.h>
-#include <openvdb_ax/compiler/CompilerOptions.h>
+#include "../compiler/CompilerOptions.h"
 
 #include <unordered_map>
 

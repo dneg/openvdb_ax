@@ -58,6 +58,33 @@
 /* Pull parsers.  */
 #define YYPULL 1
 
+/* "%code top" blocks.  */
+
+
+    #include <stdio.h>
+    #include <vector>
+
+    #include <openvdb/Platform.h> // for OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
+
+    #include "openvdb_ax/ast/AST.h"
+    #include "openvdb_ax/ast/Parse.h"
+    #include "openvdb_ax/ast/Tokens.h"
+
+    #include "openvdb_ax/compiler/Logger.h"
+
+    /// @note  Bypasses bison conversion warnings in yyparse
+    OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
+
+    extern int axlex();
+
+    using namespace openvdb::ax::ast;
+    using namespace openvdb::ax;
+
+    void axerror(Tree** tree, const char* s);
+
+    using ExpList = std::vector<openvdb::ax::ast::Expression*>;
+
+
 /* Substitute the type names.  */
 #define YYSTYPE         AXSTYPE
 #define YYLTYPE         AXLTYPE
@@ -73,25 +100,6 @@
 #define yylloc          axlloc
 
 /* Copy the first part of user declarations.  */
-
-
-    #include <stdio.h>
-    #include <vector>
-
-    #include <openvdb/Platform.h> // for OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
-    #include <openvdb_ax/ast/AST.h>
-    #include <openvdb_ax/ast/Tokens.h>
-
-    /// @note  Bypasses bison conversion warnings in yyparse
-    OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
-
-    extern int axlex();
-
-    using namespace openvdb::ax::ast;
-
-    void yyerror(Tree** tree, const char* s);
-
-    using ExpList = std::vector<openvdb::ax::ast::Expression*>;
 
 
 
@@ -295,6 +303,19 @@ int axparse (openvdb::ax::ast::Tree** tree);
 #endif /* !YY_AX_OPENVDB_AX_GRAMMAR_AXPARSER_H_INCLUDED  */
 
 /* Copy the second part of user declarations.  */
+
+
+/* Unqualified %code blocks.  */
+
+
+
+    template<typename T, typename... Args>
+    T* newNode(YYLTYPE* loc, const Args&... args) {
+        T* ptr = new T(args...);
+        assert(axlog);
+        axlog->addNodeLocation(ptr, {loc->first_line, loc->first_column});
+        return ptr;
+    }
 
 
 
@@ -605,22 +626,22 @@ static const yytype_uint8 yytranslate[] =
   /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   208,   208,   209,   213,   214,   215,   216,   220,   221,
-     227,   228,   229,   230,   231,   232,   233,   234,   238,   239,
-     244,   245,   251,   252,   253,   254,   255,   256,   257,   258,
-     259,   260,   261,   266,   267,   274,   280,   285,   293,   304,
-     305,   310,   311,   317,   318,   323,   324,   328,   329,   334,
-     335,   336,   341,   342,   347,   349,   350,   355,   356,   361,
-     362,   363,   368,   369,   370,   371,   372,   373,   374,   375,
-     376,   377,   378,   384,   385,   386,   387,   388,   389,   390,
-     391,   392,   393,   394,   395,   396,   397,   398,   399,   400,
-     401,   405,   406,   411,   412,   413,   414,   418,   419,   423,
-     424,   429,   430,   431,   432,   433,   434,   435,   447,   453,
-     454,   459,   460,   461,   462,   463,   464,   465,   466,   471,
-     472,   473,   474,   475,   476,   483,   490,   491,   492,   493,
-     494,   495,   496,   497,   501,   502,   503,   504,   509,   510,
-     511,   512,   517,   518,   519,   520,   521,   522,   527,   528,
-     529,   530,   531,   532,   533,   534,   535
+       0,   234,   234,   237,   243,   244,   245,   248,   254,   255,
+     261,   262,   263,   264,   265,   266,   267,   268,   271,   272,
+     277,   278,   284,   285,   286,   287,   288,   289,   290,   291,
+     292,   293,   294,   299,   301,   307,   312,   317,   323,   334,
+     335,   340,   341,   347,   348,   353,   354,   358,   359,   364,
+     365,   366,   371,   372,   377,   379,   380,   385,   386,   391,
+     392,   393,   398,   399,   400,   401,   402,   403,   404,   405,
+     406,   407,   408,   414,   415,   416,   417,   418,   419,   420,
+     421,   422,   423,   424,   425,   426,   427,   428,   429,   430,
+     431,   435,   436,   441,   442,   443,   444,   448,   449,   453,
+     454,   459,   460,   461,   462,   463,   464,   465,   477,   483,
+     484,   489,   490,   491,   492,   493,   494,   495,   496,   501,
+     502,   503,   504,   505,   506,   513,   520,   521,   522,   523,
+     524,   525,   526,   527,   531,   532,   533,   534,   539,   540,
+     541,   542,   547,   548,   549,   550,   551,   552,   557,   558,
+     559,   560,   561,   562,   563,   564,   565
 };
 #endif
 
@@ -2071,13 +2092,17 @@ yyreduce:
     {
         case 2:
 
-    { *tree = new Tree(); (yyval.tree) = *tree; }
+    {  *tree = newNode<Tree>(&(yyloc));
+                    (yyval.tree) = *tree;
+                 }
 
     break;
 
   case 3:
 
-    { *tree = new Tree((yyvsp[0].block)); (yyval.tree) = *tree; }
+    {  *tree = newNode<Tree>(&(yylsp[0]), (yyvsp[0].block));
+                    (yyval.tree) = *tree;
+                 }
 
     break;
 
@@ -2095,13 +2120,17 @@ yyreduce:
 
   case 6:
 
-    { (yyval.block) = new Block(); (yyval.block)->addStatement((yyvsp[0].statement)); }
+    { (yyval.block) = newNode<Block>(&(yyloc));
+                        (yyval.block)->addStatement((yyvsp[0].statement));
+                      }
 
     break;
 
   case 7:
 
-    { (yyval.block) = new Block(); (yyval.block)->addStatement((yyvsp[0].block)); }
+    { (yyval.block) = newNode<Block>(&(yyloc));
+                        (yyval.block)->addStatement((yyvsp[0].block));
+                      }
 
     break;
 
@@ -2143,19 +2172,19 @@ yyreduce:
 
   case 14:
 
-    { (yyval.statement) = new Keyword(tokens::RETURN); }
+    { (yyval.statement) = newNode<Keyword>(&(yyloc), tokens::RETURN); }
 
     break;
 
   case 15:
 
-    { (yyval.statement) = new Keyword(tokens::BREAK); }
+    { (yyval.statement) = newNode<Keyword>(&(yyloc), tokens::BREAK); }
 
     break;
 
   case 16:
 
-    { (yyval.statement) = new Keyword(tokens::CONTINUE); }
+    { (yyval.statement) = newNode<Keyword>(&(yyloc), tokens::CONTINUE); }
 
     break;
 
@@ -2257,24 +2286,23 @@ yyreduce:
 
   case 33:
 
-    { (yyval.declare_local) = new DeclareLocal(static_cast<tokens::CoreType>((yyvsp[-1].index)), new Local((yyvsp[0].string))); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.declare_local)  = newNode<DeclareLocal>(&(yylsp[-1]), static_cast<tokens::CoreType>((yyvsp[-1].index)), newNode<Local>(&(yylsp[0]), (yyvsp[0].string)));
+                                            free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 34:
 
-    { (yyval.declare_local) = new DeclareLocal(static_cast<tokens::CoreType>((yyvsp[-3].index)),
-                                                                new Local((yyvsp[-2].string)),
-                                                                (yyvsp[0].expression)); free(const_cast<char*>((yyvsp[-2].string))); }
+    { (yyval.declare_local) = newNode<DeclareLocal>(&(yylsp[-3]), static_cast<tokens::CoreType>((yyvsp[-3].index)), newNode<Local>(&(yylsp[-2]), (yyvsp[-2].string)), (yyvsp[0].expression));
+                                            free(const_cast<char*>((yyvsp[-2].string))); }
 
     break;
 
   case 35:
 
-    { (yyval.statementlist) = new StatementList((yyvsp[-4].declare_local));
+    { (yyval.statementlist) = newNode<StatementList>(&(yyloc), (yyvsp[-4].declare_local));
                                                               const tokens::CoreType type = static_cast<const DeclareLocal*>((yyvsp[-4].declare_local))->type();
-                                                              (yyval.statementlist)->addStatement(
-                                                                  new DeclareLocal(type, new Local((yyvsp[-2].string)), (yyvsp[0].expression)));
+                                                              (yyval.statementlist)->addStatement(newNode<DeclareLocal>(&(yylsp[-4]), type, newNode<Local>(&(yylsp[-2]), (yyvsp[-2].string)), (yyvsp[0].expression)));
                                                               free(const_cast<char*>((yyvsp[-2].string)));
                                                             }
 
@@ -2282,9 +2310,9 @@ yyreduce:
 
   case 36:
 
-    { (yyval.statementlist) = new StatementList((yyvsp[-2].declare_local));
+    { (yyval.statementlist) = newNode<StatementList>(&(yyloc), (yyvsp[-2].declare_local));
                                                               const tokens::CoreType type = static_cast<const DeclareLocal*>((yyvsp[-2].declare_local))->type();
-                                                              (yyval.statementlist)->addStatement(new DeclareLocal(type, new Local((yyvsp[0].string))));
+                                                              (yyval.statementlist)->addStatement(newNode<DeclareLocal>(&(yylsp[-2]), type, newNode<Local>(&(yylsp[0]), (yyvsp[0].string))));
                                                               free(const_cast<char*>((yyvsp[0].string)));
                                                             }
 
@@ -2295,9 +2323,7 @@ yyreduce:
     { const auto firstNode = (yyvsp[-4].statementlist)->child(0);
                                                               assert(firstNode);
                                                               const tokens::CoreType type = static_cast<const DeclareLocal*>(firstNode)->type();
-                                                              (yyval.statementlist)->addStatement(
-                                                                  new DeclareLocal(type, new Local((yyvsp[-2].string)), (yyvsp[0].expression)));
-                                                              free(const_cast<char*>((yyvsp[-2].string)));
+                                                              (yyval.statementlist)->addStatement(newNode<DeclareLocal>(&(yylsp[-4]), type, newNode<Local>(&(yylsp[-2]), (yyvsp[-2].string)), (yyvsp[0].expression)));
                                                               (yyval.statementlist) = (yyvsp[-4].statementlist);
                                                             }
 
@@ -2308,7 +2334,7 @@ yyreduce:
     { const auto firstNode = (yyvsp[-2].statementlist)->child(0);
                                                               assert(firstNode);
                                                               const tokens::CoreType type =  static_cast<const DeclareLocal*>(firstNode)->type();
-                                                              (yyval.statementlist)->addStatement(new DeclareLocal(type, new Local((yyvsp[0].string))));
+                                                              (yyval.statementlist)->addStatement(newNode<DeclareLocal>(&(yylsp[-2]), type, newNode<Local>(&(yylsp[0]), (yyvsp[0].string))));
                                                               free(const_cast<char*>((yyvsp[0].string)));
                                                               (yyval.statementlist) = (yyvsp[-2].statementlist);
                                                             }
@@ -2335,19 +2361,19 @@ yyreduce:
 
   case 42:
 
-    { (yyval.block) = new Block(); (yyval.block)->addStatement((yyvsp[0].statement)); }
+    { (yyval.block) = newNode<Block>(&(yyloc)); (yyval.block)->addStatement((yyvsp[0].statement)); }
 
     break;
 
   case 43:
 
-    { (yyval.statement) = new ConditionalStatement((yyvsp[-2].expression), (yyvsp[0].block)); }
+    { (yyval.statement) = newNode<ConditionalStatement>(&(yyloc), (yyvsp[-2].expression), (yyvsp[0].block)); }
 
     break;
 
   case 44:
 
-    { (yyval.statement) = new ConditionalStatement((yyvsp[-4].expression), (yyvsp[-2].block), (yyvsp[0].block)); }
+    { (yyval.statement) = newNode<ConditionalStatement>(&(yyloc), (yyvsp[-4].expression), (yyvsp[-2].block), (yyvsp[0].block)); }
 
     break;
 
@@ -2407,25 +2433,25 @@ yyreduce:
 
   case 54:
 
-    { (yyval.statement) = new Loop(tokens::FOR, ((yyvsp[-4].statement) ? (yyvsp[-4].statement) : new Value<bool>(true)), (yyvsp[0].block), (yyvsp[-6].statement), (yyvsp[-2].expression)); }
+    { (yyval.statement) = newNode<Loop>(&(yyloc), tokens::FOR, ((yyvsp[-4].statement) ? (yyvsp[-4].statement) : newNode<Value<bool>>(&(yyloc), true)), (yyvsp[0].block), (yyvsp[-6].statement), (yyvsp[-2].expression)); }
 
     break;
 
   case 55:
 
-    { (yyval.statement) = new Loop(tokens::DO, (yyvsp[-1].statement), (yyvsp[-4].block)); }
+    { (yyval.statement) = newNode<Loop>(&(yyloc), tokens::DO, (yyvsp[-1].statement), (yyvsp[-4].block)); }
 
     break;
 
   case 56:
 
-    { (yyval.statement) = new Loop(tokens::WHILE, (yyvsp[-2].statement), (yyvsp[0].block)); }
+    { (yyval.statement) = newNode<Loop>(&(yyloc), tokens::WHILE, (yyvsp[-2].statement), (yyvsp[0].block)); }
 
     break;
 
   case 57:
 
-    { (yyval.function) = new FunctionCall((yyvsp[-2].string)); (yyval.function)->append((yyvsp[0].expression)); free(const_cast<char*>((yyvsp[-2].string))); }
+    { (yyval.function) = newNode<FunctionCall>(&(yylsp[-2]), (yyvsp[-2].string)); (yyval.function)->append((yyvsp[0].expression)); free(const_cast<char*>((yyvsp[-2].string))); }
 
     break;
 
@@ -2437,7 +2463,7 @@ yyreduce:
 
   case 59:
 
-    { (yyval.expression) = new FunctionCall((yyvsp[-2].string)); free(const_cast<char*>((yyvsp[-2].string))); }
+    { (yyval.expression) = newNode<FunctionCall>(&(yylsp[-2]), (yyvsp[-2].string)); free(const_cast<char*>((yyvsp[-2].string))); }
 
     break;
 
@@ -2449,241 +2475,241 @@ yyreduce:
 
   case 61:
 
-    { (yyval.expression) = new Cast((yyvsp[-1].expression), static_cast<tokens::CoreType>((yyvsp[-3].index))); }
+    { (yyval.expression) = newNode<Cast>(&(yylsp[-3]), (yyvsp[-1].expression), static_cast<tokens::CoreType>((yyvsp[-3].index))); }
 
     break;
 
   case 62:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression)); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression)); }
 
     break;
 
   case 63:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::PLUS); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::PLUS); }
 
     break;
 
   case 64:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MINUS); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MINUS); }
 
     break;
 
   case 65:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MULTIPLY); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MULTIPLY); }
 
     break;
 
   case 66:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::DIVIDE); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::DIVIDE); }
 
     break;
 
   case 67:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MODULO); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MODULO); }
 
     break;
 
   case 68:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITAND); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITAND); }
 
     break;
 
   case 69:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITXOR); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITXOR); }
 
     break;
 
   case 70:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITOR); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITOR); }
 
     break;
 
   case 71:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTLEFT); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTLEFT); }
 
     break;
 
   case 72:
 
-    { (yyval.expression) = new AssignExpression((yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTRIGHT); }
+    { (yyval.expression) = newNode<AssignExpression>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTRIGHT); }
 
     break;
 
   case 73:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::PLUS); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::PLUS); }
 
     break;
 
   case 74:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MINUS); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MINUS); }
 
     break;
 
   case 75:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MULTIPLY); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MULTIPLY); }
 
     break;
 
   case 76:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::DIVIDE); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::DIVIDE); }
 
     break;
 
   case 77:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MODULO); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MODULO); }
 
     break;
 
   case 78:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTLEFT); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTLEFT); }
 
     break;
 
   case 79:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTRIGHT); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::SHIFTRIGHT); }
 
     break;
 
   case 80:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITAND); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITAND); }
 
     break;
 
   case 81:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITOR); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITOR); }
 
     break;
 
   case 82:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITXOR); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::BITXOR); }
 
     break;
 
   case 83:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::AND); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::AND); }
 
     break;
 
   case 84:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::OR); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::OR); }
 
     break;
 
   case 85:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::EQUALSEQUALS); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::EQUALSEQUALS); }
 
     break;
 
   case 86:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::NOTEQUALS); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::NOTEQUALS); }
 
     break;
 
   case 87:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MORETHAN); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MORETHAN); }
 
     break;
 
   case 88:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::LESSTHAN); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::LESSTHAN); }
 
     break;
 
   case 89:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::MORETHANOREQUAL); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::MORETHANOREQUAL); }
 
     break;
 
   case 90:
 
-    { (yyval.expression) = new BinaryOperator((yyvsp[-2].expression), (yyvsp[0].expression), tokens::LESSTHANOREQUAL); }
+    { (yyval.expression) = newNode<BinaryOperator>(&(yylsp[-2]), (yyvsp[-2].expression), (yyvsp[0].expression), tokens::LESSTHANOREQUAL); }
 
     break;
 
   case 91:
 
-    { (yyval.expression) = new TernaryOperator((yyvsp[-4].expression), (yyvsp[-2].expression), (yyvsp[0].expression)); }
+    { (yyval.expression) = newNode<TernaryOperator>(&(yylsp[-4]), (yyvsp[-4].expression), (yyvsp[-2].expression), (yyvsp[0].expression)); }
 
     break;
 
   case 92:
 
-    { (yyval.expression) = new TernaryOperator((yyvsp[-3].expression), nullptr, (yyvsp[0].expression)); }
+    { (yyval.expression) = newNode<TernaryOperator>(&(yylsp[-3]), (yyvsp[-3].expression), nullptr, (yyvsp[0].expression)); }
 
     break;
 
   case 93:
 
-    { (yyval.expression) = new UnaryOperator((yyvsp[0].expression), tokens::PLUS); }
+    { (yyval.expression) = newNode<UnaryOperator>(&(yylsp[-1]), (yyvsp[0].expression), tokens::PLUS); }
 
     break;
 
   case 94:
 
-    { (yyval.expression) = new UnaryOperator((yyvsp[0].expression), tokens::MINUS); }
+    { (yyval.expression) = newNode<UnaryOperator>(&(yylsp[-1]), (yyvsp[0].expression), tokens::MINUS); }
 
     break;
 
   case 95:
 
-    { (yyval.expression) = new UnaryOperator((yyvsp[0].expression), tokens::BITNOT); }
+    { (yyval.expression) = newNode<UnaryOperator>(&(yylsp[-1]), (yyvsp[0].expression), tokens::BITNOT); }
 
     break;
 
   case 96:
 
-    { (yyval.expression) = new UnaryOperator((yyvsp[0].expression), tokens::NOT); }
+    { (yyval.expression) = newNode<UnaryOperator>(&(yylsp[-1]), (yyvsp[0].expression), tokens::NOT); }
 
     break;
 
   case 97:
 
-    { (yyval.expression) = new Crement((yyvsp[0].expression), Crement::Increment, /*post*/false); }
+    { (yyval.expression) = newNode<Crement>(&(yylsp[-1]), (yyvsp[0].expression), Crement::Increment, /*post*/false); }
 
     break;
 
   case 98:
 
-    { (yyval.expression) = new Crement((yyvsp[0].expression), Crement::Decrement, /*post*/false); }
+    { (yyval.expression) = newNode<Crement>(&(yylsp[-1]), (yyvsp[0].expression), Crement::Decrement, /*post*/false); }
 
     break;
 
   case 99:
 
-    { (yyval.expression) = new Crement((yyvsp[-1].expression), Crement::Increment, /*post*/true); }
+    { (yyval.expression) = newNode<Crement>(&(yylsp[-1]), (yyvsp[-1].expression), Crement::Increment, /*post*/true); }
 
     break;
 
   case 100:
 
-    { (yyval.expression) = new Crement((yyvsp[-1].expression), Crement::Decrement, /*post*/true); }
+    { (yyval.expression) = newNode<Crement>(&(yylsp[-1]), (yyvsp[-1].expression), Crement::Decrement, /*post*/true); }
 
     break;
 
@@ -2701,37 +2727,37 @@ yyreduce:
 
   case 103:
 
-    { (yyval.expression) = new ArrayUnpack((yyvsp[-1].variable), new Value<int32_t>(0)); }
+    { (yyval.expression) = newNode<ArrayUnpack>(&(yylsp[-1]), (yyvsp[-1].variable), newNode<Value<int32_t>>(&(yylsp[0]), 0));  }
 
     break;
 
   case 104:
 
-    { (yyval.expression) = new ArrayUnpack((yyvsp[-1].variable), new Value<int32_t>(1)); }
+    { (yyval.expression) = newNode<ArrayUnpack>(&(yylsp[-1]), (yyvsp[-1].variable), newNode<Value<int32_t>>(&(yylsp[0]), 1)); }
 
     break;
 
   case 105:
 
-    { (yyval.expression) = new ArrayUnpack((yyvsp[-1].variable), new Value<int32_t>(2)); }
+    { (yyval.expression) = newNode<ArrayUnpack>(&(yylsp[-1]), (yyvsp[-1].variable), newNode<Value<int32_t>>(&(yylsp[0]), 2));  }
 
     break;
 
   case 106:
 
-    { (yyval.expression) = new ArrayUnpack((yyvsp[-3].variable), (yyvsp[-1].expression)); }
+    { (yyval.expression) = newNode<ArrayUnpack>(&(yylsp[-3]), (yyvsp[-3].variable), (yyvsp[-1].expression)); }
 
     break;
 
   case 107:
 
-    { (yyval.expression) = new ArrayUnpack((yyvsp[-5].variable), (yyvsp[-3].expression), (yyvsp[-1].expression)); }
+    { (yyval.expression) = newNode<ArrayUnpack>(&(yylsp[-5]), (yyvsp[-5].variable), (yyvsp[-3].expression), (yyvsp[-1].expression));  }
 
     break;
 
   case 108:
 
-    { (yyval.expression) = new ArrayPack(*(yyvsp[-1].explist)); }
+    { (yyval.expression) = newNode<ArrayPack>(&(yylsp[-2]), *(yyvsp[-1].explist)); }
 
     break;
 
@@ -2749,139 +2775,139 @@ yyreduce:
 
   case 111:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), static_cast<tokens::CoreType>((yyvsp[-2].index))); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), static_cast<tokens::CoreType>((yyvsp[-2].index))); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 112:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::INT); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::INT); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 113:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::FLOAT); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::FLOAT); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 114:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::VEC3F); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::VEC3F); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 115:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::STRING); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::STRING); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 116:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::MAT3F); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::MAT3F); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 117:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::MAT4F); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::MAT4F); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 118:
 
-    { (yyval.attribute) = new Attribute((yyvsp[0].string), tokens::FLOAT, true); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.attribute) = newNode<Attribute>(&(yyloc), (yyvsp[0].string), tokens::FLOAT, true); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 119:
 
-    { (yyval.external) = new ExternalVariable((yyvsp[0].string), static_cast<tokens::CoreType>((yyvsp[-2].index))); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.external) = newNode<ExternalVariable>(&(yyloc), (yyvsp[0].string), static_cast<tokens::CoreType>((yyvsp[-2].index))); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 120:
 
-    { (yyval.external) = new ExternalVariable((yyvsp[0].string), tokens::INT); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.external) = newNode<ExternalVariable>(&(yyloc), (yyvsp[0].string), tokens::INT); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 121:
 
-    { (yyval.external) = new ExternalVariable((yyvsp[0].string), tokens::FLOAT); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.external) = newNode<ExternalVariable>(&(yyloc), (yyvsp[0].string), tokens::FLOAT); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 122:
 
-    { (yyval.external) = new ExternalVariable((yyvsp[0].string), tokens::VEC3F); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.external) = newNode<ExternalVariable>(&(yyloc), (yyvsp[0].string), tokens::VEC3F); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 123:
 
-    { (yyval.external) = new ExternalVariable((yyvsp[0].string), tokens::STRING); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.external) = newNode<ExternalVariable>(&(yyloc), (yyvsp[0].string), tokens::STRING); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 124:
 
-    { (yyval.external) = new ExternalVariable((yyvsp[0].string), tokens::FLOAT); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.external) = newNode<ExternalVariable>(&(yyloc), (yyvsp[0].string), tokens::FLOAT); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 125:
 
-    { (yyval.local) = new Local((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.local) = newNode<Local>(&(yyloc), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 126:
 
-    { (yyval.value) = new Value<int16_t>((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.value) = newNode<Value<int16_t>>(&(yylsp[0]), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 127:
 
-    { (yyval.value) = new Value<int32_t>((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.value) = newNode<Value<int32_t>>(&(yylsp[0]), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 128:
 
-    { (yyval.value) = new Value<int64_t>((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.value) = newNode<Value<int64_t>>(&(yylsp[0]), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 129:
 
-    { (yyval.value) = new Value<float>((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.value) = newNode<Value<float>>(&(yylsp[0]), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 130:
 
-    { (yyval.value) = new Value<double>((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.value) = newNode<Value<double>>(&(yylsp[0]), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 131:
 
-    { (yyval.value) = new Value<std::string>((yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
+    { (yyval.value) = newNode<Value<std::string>>(&(yylsp[0]), (yyvsp[0].string)); free(const_cast<char*>((yyvsp[0].string))); }
 
     break;
 
   case 132:
 
-    { (yyval.value) = new Value<bool>(true); }
+    { (yyval.value) = newNode<Value<bool>>(&(yylsp[0]), true); }
 
     break;
 
   case 133:
 
-    { (yyval.value) = new Value<bool>(false); }
+    { (yyval.value) = newNode<Value<bool>>(&(yylsp[0]), false); }
 
     break;
 

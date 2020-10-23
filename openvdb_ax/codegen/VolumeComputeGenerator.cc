@@ -37,8 +37,8 @@
 #include "Types.h"
 #include "Utils.h"
 
-#include <openvdb_ax/Exceptions.h>
-#include <openvdb_ax/ast/Scanners.h>
+#include "../Exceptions.h"
+#include "../ast/Scanners.h"
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -73,8 +73,8 @@ std::string VolumeKernel::getDefaultName() { return "ax.compute.voxel"; }
 VolumeComputeGenerator::VolumeComputeGenerator(llvm::Module& module,
                                                const FunctionOptions& options,
                                                FunctionRegistry& functionRegistry,
-                                               std::vector<std::string>* const warnings)
-    : ComputeGenerator(module, options, functionRegistry, warnings) {}
+                                               Logger& logger)
+    : ComputeGenerator(module, options, functionRegistry, logger) {}
 
 AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
 {
@@ -128,8 +128,9 @@ AttributeRegistry::Ptr VolumeComputeGenerator::generate(const ast::Tree& tree)
     }
 
     // full code generation
+    // errors can stop traversal, but dont always, so check the log
 
-    this->traverse(&tree);
+    if (!this->traverse(&tree) || mLog.hasError()) return nullptr;
 
     // insert set code
 
