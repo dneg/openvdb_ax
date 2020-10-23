@@ -24,6 +24,7 @@ Version 1.0.0 - In Development
     - Updated command line binary to use Logger and report more than one error
       message and print error locations.
     - Added --werror and --max-errors options to the command line binary
+    - Fixed various warnings when building with GCC 9.3.1
 
     Compiler:
     - Added new compile methods using Logger/deprecated old compile methods
@@ -50,6 +51,9 @@ Version 1.0.0 - In Development
     - Updated to use relative includes
     - Added Logger to collect and report errors and warnings
     - Switched to CMake doxygen support and removed doxygen-config
+    - Switched to vfxall clang docker containers for github actions and added a
+      vfx 2021 platform test
+    - Removed LLVM 6 macos test as it's been removed from brew
 
 Version 0.3.0 - August 20, 2020
 
