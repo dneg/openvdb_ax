@@ -33,7 +33,6 @@
 #include "VolumeExecutable.h"
 
 #include "../Exceptions.h"
-
 // @TODO refactor so we don't have to include VolumeComputeGenerator.h,
 // but still have the functions defined in one place
 #include "../codegen/VolumeComputeGenerator.h"
@@ -682,9 +681,9 @@ size_t VolumeExecutable::getGrainSize() const
 }
 
 
-}
-}
-}
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

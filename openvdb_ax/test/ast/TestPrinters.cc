@@ -28,9 +28,9 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-#include "../ast/AST.h"
-#include "../ast/Parse.h"
-#include "../ast/PrintTree.h"
+#include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Parse.h>
+#include <openvdb_ax/ast/PrintTree.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 

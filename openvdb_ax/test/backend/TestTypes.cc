@@ -30,7 +30,8 @@
 
 #include "util.h"
 
-#include "../codegen/Types.h"
+#include <openvdb_ax/codegen/Types.h>
+
 #include <openvdb/math/Vec2.h>
 #include <openvdb/math/Vec3.h>
 #include <openvdb/math/Vec4.h>

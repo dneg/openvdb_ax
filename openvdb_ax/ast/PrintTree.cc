@@ -30,8 +30,8 @@
 
 /// @file ast/PrintTree.cc
 
-#include "PrintTree.h"
 #include "AST.h"
+#include "PrintTree.h"
 #include "Tokens.h"
 #include "Visitor.h"
 
@@ -924,7 +924,7 @@ void reprint(const ast::Node& node, std::ostream& os, const char* indent)
 } // namespace ast
 } // namespace ax
 
-}
+} // namespace OPENVDB_VERSION_NAME
 } // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG

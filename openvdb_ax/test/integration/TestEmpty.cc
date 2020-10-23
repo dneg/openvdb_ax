@@ -30,7 +30,7 @@
 
 #include "TestHarness.h"
 
-#include "../Exceptions.h"
+#include <openvdb_ax/Exceptions.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 

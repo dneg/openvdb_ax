@@ -28,8 +28,8 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-#include "../compiler/Compiler.h"
-#include "../compiler/PointExecutable.h"
+#include <openvdb_ax/compiler/Compiler.h>
+#include <openvdb_ax/compiler/PointExecutable.h>
 
 #include <openvdb/points/PointDataGrid.h>
 #include <openvdb/points/PointConversion.h>

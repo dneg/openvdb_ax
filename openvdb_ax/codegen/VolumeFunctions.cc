@@ -38,8 +38,6 @@
 ///   Also includes the definitions for the volume value retrieval and setting.
 ///
 
-#include <openvdb/version.h>
-
 #include "Functions.h"
 #include "FunctionTypes.h"
 #include "Types.h"
@@ -47,6 +45,8 @@
 
 #include "../compiler/CompilerOptions.h"
 #include "../Exceptions.h"
+
+#include <openvdb/version.h>
 
 #include <unordered_map>
 
@@ -386,10 +386,10 @@ void insertVDBVolumeFunctions(FunctionRegistry& registry,
     add("setvoxel", axsetvoxel, true);
 }
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

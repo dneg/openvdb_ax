@@ -39,9 +39,11 @@
 #ifndef OPENVDB_AX_AST_TOKENS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_TOKENS_HAS_BEEN_INCLUDED
 
+#include "../Exceptions.h"
+
 #include <openvdb/version.h>
 #include <openvdb/Types.h>
-#include "../Exceptions.h"
+
 #include <stdexcept>
 
 namespace openvdb {
@@ -380,12 +382,12 @@ inline std::string keywordNameFromToken(const KeywordToken keyw)
 }
 
 
-}
+} // namespace tokens
 
-}
-}
-}
-}
+} // namespace ast
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_AST_TOKENS_HAS_BEEN_INCLUDED
 

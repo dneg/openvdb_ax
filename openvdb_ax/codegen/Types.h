@@ -38,15 +38,15 @@
 #ifndef OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 
+#include "../ast/Tokens.h"
+#include "../ast/Literals.h"
+#include "../Exceptions.h"
+
 #include <openvdb/version.h>
 #include <openvdb/Types.h>
 #include <openvdb/math/Mat3.h>
 #include <openvdb/math/Mat4.h>
 #include <openvdb/math/Vec3.h>
-
-#include "../ast/Tokens.h"
-#include "../ast/Literals.h"
-#include "../Exceptions.h"
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
@@ -446,10 +446,10 @@ tokenFromLLVMType(const llvm::Type* type)
     return ast::tokens::UNKNOWN;
 }
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_CODEGEN_TYPES_HAS_BEEN_INCLUDED
 

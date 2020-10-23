@@ -31,7 +31,6 @@
 /// @file codegen/ComputeGenerator.cc
 
 #include "ComputeGenerator.h"
-
 #include "FunctionRegistry.h"
 #include "FunctionTypes.h"
 #include "Types.h"
@@ -1588,10 +1587,10 @@ bool ComputeGenerator::binaryExpression(llvm::Value*& result, llvm::Value* lhs, 
 }
 
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

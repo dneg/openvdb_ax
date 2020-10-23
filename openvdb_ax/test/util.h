@@ -37,10 +37,10 @@
 #ifndef OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_UNITTEST_UTIL_HAS_BEEN_INCLUDED
 
-#include "../ast/AST.h"
-#include "../ast/Parse.h"
-#include "../ast/Tokens.h"
-#include "../compiler/Logger.h"
+#include <openvdb_ax/ast/AST.h>
+#include <openvdb_ax/ast/Parse.h>
+#include <openvdb_ax/ast/Tokens.h>
+#include <openvdb_ax/compiler/Logger.h>
 
 #include <openvdb/Types.h>
 

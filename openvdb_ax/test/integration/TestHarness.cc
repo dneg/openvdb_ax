@@ -31,8 +31,8 @@
 #include "TestHarness.h"
 #include "util.h"
 
-#include "../compiler/PointExecutable.h"
-#include "../compiler/VolumeExecutable.h"
+#include <openvdb_ax/compiler/PointExecutable.h>
+#include <openvdb_ax/compiler/VolumeExecutable.h>
 
 #include <openvdb/points/PointConversion.h>
 

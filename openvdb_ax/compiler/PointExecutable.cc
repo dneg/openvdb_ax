@@ -31,15 +31,14 @@
 /// @file compiler/PointExecutable.cc
 
 #include "PointExecutable.h"
-
-#include <openvdb/Types.h>
+#include "LeafLocalData.h"
 
 #include "../Exceptions.h"
-
 // @TODO refactor so we don't have to include PointComputeGenerator.h,
 // but still have the functions defined in one place
 #include "../codegen/PointComputeGenerator.h"
-#include "../compiler/LeafLocalData.h"
+
+#include <openvdb/Types.h>
 
 #include <openvdb/points/AttributeArray.h>
 #include <openvdb/points/PointAttribute.h>
@@ -748,9 +747,9 @@ const std::string& PointExecutable::getGroupExecution() const
     return mSettings->mGroup;
 }
 
-}
-}
-}
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

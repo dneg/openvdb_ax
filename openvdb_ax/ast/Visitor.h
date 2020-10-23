@@ -41,11 +41,11 @@
 #ifndef OPENVDB_AX_AST_VISITOR_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_AST_VISITOR_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
-
-#include "Tokens.h"
+#include "AST.h"
 #include "Literals.h"
-#include "../ast/AST.h"
+#include "Tokens.h"
+
+#include <openvdb/version.h>
 
 #include <type_traits>
 
@@ -492,7 +492,7 @@ private:
 } // namespace ast
 } // namespace ax
 
-}
+} // namespace OPENVDB_VERSION_NAME
 } // namespace openvdb
 
 #endif // OPENVDB_AX_AST_VISITOR_HAS_BEEN_INCLUDED

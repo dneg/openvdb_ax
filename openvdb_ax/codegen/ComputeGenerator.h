@@ -38,8 +38,6 @@
 #ifndef OPENVDB_AX_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
-
 #include "FunctionRegistry.h"
 #include "FunctionTypes.h"
 #include "SymbolTable.h"
@@ -48,6 +46,8 @@
 #include "../ast/Visitor.h"
 #include "../compiler/CompilerOptions.h"
 #include "../compiler/Logger.h"
+
+#include <openvdb/version.h>
 
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/BasicBlock.h>
@@ -237,10 +237,10 @@ private:
     FunctionRegistry& mFunctionRegistry;
 };
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 

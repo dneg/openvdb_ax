@@ -93,11 +93,11 @@
 #ifndef OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
+#include "Types.h"
+#include "Utils.h" // isValidCast
+#include "ConstantFolding.h"
 
-#include "../codegen/Types.h"
-#include "../codegen/Utils.h" // isValidCast
-#include "../codegen/ConstantFolding.h"
+#include <openvdb/version.h>
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
@@ -1139,10 +1139,10 @@ private:
     Settings::Ptr mCurrentSettings = nullptr;
 };
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_CODEGEN_FUNCTION_TYPES_HAS_BEEN_INCLUDED
 

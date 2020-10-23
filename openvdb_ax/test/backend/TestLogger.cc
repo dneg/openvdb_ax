@@ -30,10 +30,10 @@
 
 #include "util.h"
 
-#include "../ast/Parse.h"
-#include "../compiler/Logger.h"
+#include <openvdb_ax/ast/Parse.h>
+#include <openvdb_ax/compiler/Logger.h>
 // @note needed for AXLTYPE
-#include "../grammar/generated/axparser.cc"
+#include <openvdb_ax/grammar/generated/axparser.cc>
 
 #include <cppunit/extensions/HelperMacros.h>
 

@@ -38,14 +38,14 @@
 ///   intrinsics.
 
 #include "Functions.h"
+#include "FunctionTypes.h"
+#include "Types.h"
+#include "Utils.h"
 
 #include "../Exceptions.h"
 #include "../math/OpenSimplexNoise.h"
 #include "../compiler/CompilerOptions.h"
 #include "../compiler/CustomData.h"
-#include "../codegen/FunctionTypes.h"
-#include "../codegen/Types.h"
-#include "../codegen/Utils.h"
 
 #include <boost/functional/hash.hpp>
 #include <boost/random/mersenne_twister.hpp>
@@ -1236,8 +1236,9 @@ inline FunctionGroup::Ptr axpolardecompose(const FunctionOptions& op)
         .addFunctionAttribute(llvm::Attribute::NoUnwind)
         .setConstantFold(op.mConstantFoldCBindings)
         .setPreferredImpl(op.mPrioritiseIR ? FunctionBuilder::IR : FunctionBuilder::C)
-        .setDocumentation("Decompose an invertible 3x3 matrix into its orthogonal matrix "
-            "and symmetric matrix components.")
+        .setDocumentation("Decompose an invertible 3x3 matrix into its orthogonal (unitary) "
+            "matrix and symmetric matrix components. If the determinant of the unitary matrix "
+            "is 1 it is a rotation, otherwise if it is -1 there is some part reflection.")
         .get();
 }
 
@@ -2050,10 +2051,10 @@ void insertStandardFunctions(FunctionRegistry& registry,
 }
 
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

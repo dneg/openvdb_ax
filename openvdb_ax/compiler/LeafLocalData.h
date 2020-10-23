@@ -248,10 +248,10 @@ private:
     StringArrayMap mStringMap;
 };
 
-}
-}
-}
-}
+} // namespace compiler
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_COMPILER_LEAF_LOCAL_DATA_HAS_BEEN_INCLUDED
 
