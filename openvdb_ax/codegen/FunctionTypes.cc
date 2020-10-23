@@ -31,7 +31,6 @@
 /// @file codegen/FunctionTypes.cc
 
 #include "FunctionTypes.h"
-
 #include "Types.h"
 #include "Utils.h"
 
@@ -442,10 +441,10 @@ FunctionGroup::execute(const std::vector<llvm::Value*>& args,
     return result;
 }
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

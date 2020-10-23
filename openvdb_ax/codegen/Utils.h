@@ -39,12 +39,12 @@
 #ifndef OPENVDB_AX_CODEGEN_UTILS_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_UTILS_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
-
 #include "Types.h"
 
 #include "../ast/Tokens.h"
 #include "../Exceptions.h"
+
+#include <openvdb/version.h>
 
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -846,10 +846,10 @@ scalarToMatrix(llvm::Value* scalar,
     return array;
 }
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_CODEGEN_UTILS_HAS_BEEN_INCLUDED
 

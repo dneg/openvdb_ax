@@ -42,13 +42,14 @@
 #ifndef OPENVDB_AX_COMPILER_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_COMPILER_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
+#include "CompilerOptions.h"
+#include "CustomData.h"
+#include "Logger.h"
 
 #include "../ax.h" // backward compat support for initialize()
 #include "../ast/Parse.h"
-#include "../compiler/CompilerOptions.h"
-#include "../compiler/CustomData.h"
-#include "../compiler/Logger.h"
+
+#include <openvdb/version.h>
 
 #include <memory>
 #include <sstream>
@@ -251,9 +252,9 @@ private:
 };
 
 
-}
-}
-}
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_COMPILER_HAS_BEEN_INCLUDED
 

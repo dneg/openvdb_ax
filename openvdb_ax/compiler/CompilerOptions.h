@@ -94,9 +94,9 @@ struct CompilerOptions
     FunctionOptions mFunctionOptions = FunctionOptions();
 };
 
-}
-}
-}
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_COMPILER_FUNCTION_REGISTRY_OPTIONS_HAS_BEEN_INCLUDED
 

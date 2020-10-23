@@ -39,14 +39,14 @@
 #ifndef OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
-
 #include "ComputeGenerator.h"
 #include "FunctionTypes.h"
 #include "Types.h"
 #include "Utils.h"
 
 #include "../compiler/AttributeRegistry.h"
+
+#include <openvdb/version.h>
 
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
@@ -133,10 +133,10 @@ private:
     void getAttributeValue(const std::string& globalName, llvm::Value* location);
 };
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_POINT_COMPUTE_GENERATOR_HAS_BEEN_INCLUDED
 

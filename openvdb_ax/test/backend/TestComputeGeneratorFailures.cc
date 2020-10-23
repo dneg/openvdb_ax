@@ -33,12 +33,12 @@
 #include "util.h"
 #include "../util.h"
 
-#include "../compiler/CompilerOptions.h"
-#include "../compiler/Logger.h"
-#include "../codegen/Functions.h"
-#include "../codegen/FunctionRegistry.h"
-#include "../codegen/ComputeGenerator.h"
-#include "../ast/AST.h"
+#include <openvdb_ax/compiler/CompilerOptions.h>
+#include <openvdb_ax/compiler/Logger.h>
+#include <openvdb_ax/codegen/Functions.h>
+#include <openvdb_ax/codegen/FunctionRegistry.h>
+#include <openvdb_ax/codegen/ComputeGenerator.h>
+#include <openvdb_ax/ast/AST.h>
 
 #include <cppunit/extensions/HelperMacros.h>
 

@@ -588,10 +588,10 @@ void linearize(const ast::Node& node, std::vector<const ast::Node*>& list)
     collectNodeType<ast::Node>(node, list);
 }
 
-}
-}
-}
-}
+} // namespace ast
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 // Copyright (c) 2015-2020 DNEG
 // All rights reserved. This software is distributed under the

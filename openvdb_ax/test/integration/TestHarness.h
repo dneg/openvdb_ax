@@ -39,9 +39,9 @@
 
 #include "CompareGrids.h"
 
-#include "../ast/Tokens.h"
-#include "../compiler/Compiler.h"
-#include "../compiler/CustomData.h"
+#include <openvdb_ax/ast/Tokens.h>
+#include <openvdb_ax/compiler/Compiler.h>
+#include <openvdb_ax/compiler/CustomData.h>
 
 #include <openvdb/points/PointAttribute.h>
 #include <openvdb/points/PointScatter.h>

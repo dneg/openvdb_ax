@@ -114,8 +114,12 @@ void run(const char* ax, openvdb::GridBase& grid);
 /// @param  grids  The grids to which to apply the compiled AX function
 void run(const char* ax, openvdb::GridPtrVec& grids);
 
-}
-}
-}
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_AX_HAS_BEEN_INCLUDED
+
+// Copyright (c) 2015-2020 DNEG
+// All rights reserved. This software is distributed under the
+// Mozilla Public License 2.0 ( http://www.mozilla.org/MPL/2.0/ )

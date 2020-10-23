@@ -30,8 +30,8 @@
 
 #include "test/util.h"
 
-#include "../compiler/Compiler.h"
-#include "../Exceptions.h"
+#include <openvdb_ax/compiler/Compiler.h>
+#include <openvdb_ax/Exceptions.h>
 
 #include <string>
 #include <vector>

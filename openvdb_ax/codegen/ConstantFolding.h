@@ -38,9 +38,9 @@
 #ifndef OPENVDB_AX_CODEGEN_CONSTANT_FOLDING_HAS_BEEN_INCLUDED
 #define OPENVDB_AX_CODEGEN_CONSTANT_FOLDING_HAS_BEEN_INCLUDED
 
-#include <openvdb/version.h>
+#include "Types.h"
 
-#include "../codegen/Types.h"
+#include <openvdb/version.h>
 
 #include <llvm/IR/Constants.h>
 
@@ -186,10 +186,10 @@ private:
     }
 };
 
-}
-}
-}
-}
+} // namespace codegen
+} // namespace ax
+} // namespace OPENVDB_VERSION_NAME
+} // namespace openvdb
 
 #endif // OPENVDB_AX_CODEGEN_CONSTANT_FOLDING_HAS_BEEN_INCLUDED
 
