@@ -267,14 +267,14 @@ find_package(OpenVDB REQUIRED COMPONENTS ${REQUIRED_OPENVDB_COMPONENTS})
 
 execute_process(COMMAND ${CMAKE_COMMAND} -E echo_append "-- Detecting support for OpenVDB Matrix Grids...")
 
-if(NOT DEFINED MATRIX_SUPPORT)
+if(NOT DEFINED OPENVDB_HAS_MATRIX_SUPPORT)
   # Try and build a file which instantiates a mat3f grid
   set(MAT_GRID_CODE_TEST "#include <openvdb/openvdb.h>
     using T = openvdb::BoolGrid::ValueConverter<openvdb::math::Mat3<float>>::Type\;
     int main() { T grid\; return 0\; }")
   set(MAT_GRID_TEST ${CMAKE_CURRENT_BINARY_DIR}/tmp.cc)
   file(WRITE ${MAT_GRID_TEST} ${MAT_GRID_CODE_TEST})
-  try_compile(MATRIX_SUPPORT ${CMAKE_CURRENT_BINARY_DIR} ${MAT_GRID_TEST}
+  try_compile(OPENVDB_HAS_MATRIX_SUPPORT ${CMAKE_CURRENT_BINARY_DIR} ${MAT_GRID_TEST}
     CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${OpenVDB_INCLUDE_DIRS};${IlmBase_INCLUDE_DIRS};${Tbb_INCLUDE_DIRS}"
     LINK_LIBRARIES ${OpenVDB_openvdb_LIBRARY} ${IlmBase_LIBRARIES} ${Tbb_LIBRARIES}
     COMPILE_DEFINITIONS ${OpenVDB_DEFINITIONS}
@@ -283,7 +283,7 @@ if(NOT DEFINED MATRIX_SUPPORT)
     CXX_EXTENSIONS OFF)
 endif()
 
-execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ${MATRIX_SUPPORT}")
+execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ${OPENVDB_HAS_MATRIX_SUPPORT}")
 
 #########################################################################
 

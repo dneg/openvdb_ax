@@ -57,7 +57,7 @@ namespace OPENVDB_VERSION_NAME {
 /// If no matrix support exists in the core library, enable these
 /// inline operators for this translation unit to allow AX to build
 /// the volume executable with matrix support
-#ifdef OPENVDB_AX_NO_MATRIX
+#ifndef OPENVDB_HAS_MATRIX_SUPPORT
 namespace math {
 #define MATRIX_OPS(TYPE) \
 inline TYPE operator+(const TYPE&, const float&) { throw std::runtime_error("Invalid Matrix op+ called."); } \
@@ -71,7 +71,7 @@ MATRIX_OPS(Mat4<double>)
 MATRIX_OPS(Mat4<float>)
 #undef MATRIX_OPS
 }
-#endif // OPENVDB_AX_NO_MATRIX
+#endif // OPENVDB_HAS_MATRIX_SUPPORT
 
 
 namespace ax {

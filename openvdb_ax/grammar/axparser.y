@@ -51,6 +51,7 @@
     OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
 
     extern int axlex();
+    extern openvdb::ax::Logger* axlog;
 
     using namespace openvdb::ax::ast;
     using namespace openvdb::ax;

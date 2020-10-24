@@ -32,20 +32,15 @@
 
 #include <openvdb_ax/ast/Parse.h>
 #include <openvdb_ax/compiler/Logger.h>
-// @note needed for AXLTYPE
-#include <openvdb_ax/grammar/generated/axparser.cc>
 
 #include <cppunit/extensions/HelperMacros.h>
 
-namespace {
-
-}
 class TestLogger : public CppUnit::TestCase
 {
 public:
 
     CPPUNIT_TEST_SUITE(TestLogger);
-    CPPUNIT_TEST(testParseNewNode);
+    //CPPUNIT_TEST(testParseNewNode);
     CPPUNIT_TEST(testParseSetsTree);
     CPPUNIT_TEST(testAddError);
     CPPUNIT_TEST(testAddWarning);
@@ -54,7 +49,7 @@ public:
 
     CPPUNIT_TEST_SUITE_END();
 
-    void testParseNewNode();
+    //void testParseNewNode();
     void testParseSetsTree();
     void testAddError();
     void testAddWarning();
@@ -64,6 +59,14 @@ public:
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestLogger);
 
+/*
+extern openvdb::ax::Logger* axlog;
+/// @note We don't deploy the grammar c files as part of the AX install.
+///  Because the unit tests are structured to be able to build against
+///  an existing version of AX we can't include the parser.cc here for
+///  access to newNode. It's tested through other methods, but we
+///  should restructure how this code is shared by perhaps moving it to
+///  a shared header (including the definition of AXLTYPE)
 void
 TestLogger::testParseNewNode()
 {
@@ -75,13 +78,15 @@ TestLogger::testParseNewNode()
     const auto& nodeToLineColMap = logger.mNodeToLineColMap;
     CPPUNIT_ASSERT(nodeToLineColMap.empty());
 
-    const openvdb::ax::ast::Local* testLocal = newNode<openvdb::ax::ast::Local>(&location, "test");
+    const openvdb::ax::ast::Local* testLocal =
+        newNode<openvdb::ax::ast::Local>(&location, "test");
 
     CPPUNIT_ASSERT_EQUAL(nodeToLineColMap.size(),static_cast<size_t>(1));
     openvdb::ax::Logger::CodeLocation lineCol = nodeToLineColMap.at(testLocal);
     CPPUNIT_ASSERT_EQUAL(lineCol.first, static_cast<size_t>(100));
     CPPUNIT_ASSERT_EQUAL(lineCol.second, static_cast<size_t>(65));
 }
+*/
 
 void
 TestLogger::testParseSetsTree()
@@ -136,7 +141,7 @@ TestLogger::testAddError()
     // test that add error finds code location
     {
         openvdb::ax::ast::Tree::ConstPtr tree = openvdb::ax::ast::parse(" a;", logger);
-        const Node* local = tree->child(0)->child(0);
+        const openvdb::ax::ast::Node* local = tree->child(0)->child(0);
         CPPUNIT_ASSERT(local);
 
         logger.error(message, local);
@@ -152,9 +157,9 @@ TestLogger::testAddError()
     {
         openvdb::ax::ast::Tree::ConstPtr tree = openvdb::ax::ast::parse("a;", logger);
         openvdb::ax::ast::Tree::ConstPtr treeCopy(tree->copy());
-        const Node* local = tree->child(0)->child(0);
+        const openvdb::ax::ast::Node* local = tree->child(0)->child(0);
         CPPUNIT_ASSERT(local);
-        const Node* localCopy = treeCopy->child(0)->child(0);
+        const openvdb::ax::ast::Node* localCopy = treeCopy->child(0)->child(0);
         CPPUNIT_ASSERT(localCopy);
         // add referring to copy
         logger.error(message, localCopy);
@@ -210,7 +215,7 @@ TestLogger::testAddWarning()
     // test that add warning finds code location
     {
         openvdb::ax::ast::Tree::ConstPtr tree = openvdb::ax::ast::parse(" a;", logger);
-        const Node* local = tree->child(0)->child(0);
+        const openvdb::ax::ast::Node* local = tree->child(0)->child(0);
         CPPUNIT_ASSERT(local);
 
         logger.warning(message, local);
@@ -226,9 +231,9 @@ TestLogger::testAddWarning()
     {
         openvdb::ax::ast::Tree::ConstPtr tree = openvdb::ax::ast::parse("a;", logger);
         openvdb::ax::ast::Tree::ConstPtr treeCopy(tree->copy());
-        const Node* local = tree->child(0)->child(0);
+        const openvdb::ax::ast::Node* local = tree->child(0)->child(0);
         CPPUNIT_ASSERT(local);
-        const Node* localCopy = treeCopy->child(0)->child(0);
+        const openvdb::ax::ast::Node* localCopy = treeCopy->child(0)->child(0);
         CPPUNIT_ASSERT(localCopy);
         // add referring to copy
         logger.warning(message, localCopy);
