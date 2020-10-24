@@ -34,7 +34,7 @@
 
 #include <openvdb/points/PointDataGrid.h>
 
-#ifdef OPENVDB_AX_NO_MATRIX
+#ifndef OPENVDB_HAS_MATRIX_SUPPORT
 namespace openvdb {
 OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
@@ -61,7 +61,7 @@ template <> bool isApproxEqual<Mat4d>(const Mat4d& a, const Mat4d& b, const Mat4
 }
 }
 }
-#endif // OPENVDB_AX_NO_MATRIX
+#endif // OPENVDB_HAS_MATRIX_SUPPORT
 
 namespace unittest_util
 {

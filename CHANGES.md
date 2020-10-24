@@ -25,6 +25,7 @@ Version 1.0.0 - In Development
       message and print error locations.
     - Added --werror and --max-errors options to the command line binary
     - Fixed various warnings when building with GCC 9.3.1
+    - Added some missing int64_t function signatures
 
     Compiler:
     - Added new compile methods using Logger/deprecated old compile methods
@@ -54,6 +55,11 @@ Version 1.0.0 - In Development
     - Switched to vfxall clang docker containers for github actions and added a
       vfx 2021 platform test
     - Removed LLVM 6 macos test as it's been removed from brew
+    - Changed the way in which the AX grammar is included through CMake depending
+      on if it is being rebuilt
+    - Flipped the compile time matrix support check. Changed the MATRIX_SUPPORT
+      CMake variable to OPENVDB_HAS_MATRIX_SUPPORT. If not defined, implies
+      OpenVDB does not have matrix grid support
 
 Version 0.3.0 - August 20, 2020
 

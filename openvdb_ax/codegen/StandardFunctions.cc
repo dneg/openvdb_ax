@@ -567,6 +567,7 @@ inline FunctionGroup::Ptr axmin(const FunctionOptions& op)
     return FunctionBuilder("min")
         .addSignature<double(double,double)>(generate, (double(*)(double,double))(min))
         .addSignature<float(float,float)>(generate, (float(*)(float,float))(min))
+        .addSignature<int64_t(int64_t,int64_t)>(generate, (int64_t(*)(int64_t,int64_t))(min))
         .addSignature<int32_t(int32_t,int32_t)>(generate, (int32_t(*)(int32_t,int32_t))(min))
         .setArgumentNames({"a", "b"})
         .addFunctionAttribute(llvm::Attribute::ReadOnly)
@@ -597,6 +598,7 @@ inline FunctionGroup::Ptr axmax(const FunctionOptions& op)
     return FunctionBuilder("max")
         .addSignature<double(double,double)>(generate, (double(*)(double,double))(max))
         .addSignature<float(float,float)>(generate, (float(*)(float,float))(max))
+        .addSignature<int64_t(int64_t,int64_t)>(generate, (int64_t(*)(int64_t,int64_t))(max))
         .addSignature<int32_t(int32_t,int32_t)>(generate, (int32_t(*)(int32_t,int32_t))(max))
         .setArgumentNames({"a", "b"})
         .addFunctionAttribute(llvm::Attribute::ReadOnly)
@@ -623,10 +625,12 @@ inline FunctionGroup::Ptr axclamp(const FunctionOptions& op)
     using ClampD = double(double, double, double);
     using ClampF = float(float, float, float);
     using ClampI = int32_t(int32_t, int32_t, int32_t);
+    using ClampL = int64_t(int64_t, int64_t, int64_t);
 
     return FunctionBuilder("clamp")
         .addSignature<ClampD>(generate, &openvdb::math::Clamp<double>)
         .addSignature<ClampF>(generate, &openvdb::math::Clamp<float>)
+        .addSignature<ClampL>(generate, &openvdb::math::Clamp<int64_t>)
         .addSignature<ClampI>(generate, &openvdb::math::Clamp<int32_t>)
         .addDependency("min")
         .addDependency("max")
@@ -708,11 +712,13 @@ inline FunctionGroup::Ptr axfit(const FunctionOptions& op)
 
     using FitD = double(double, double, double, double, double);
     using FitF = float(float, float, float, float, float);
+    using FitL = double(int64_t, int64_t, int64_t, int64_t, int64_t);
     using FitI = double(int32_t, int32_t, int32_t, int32_t, int32_t);
 
     return FunctionBuilder("fit")
         .addSignature<FitD>(generate)
         .addSignature<FitF>(generate)
+        .addSignature<FitL>(generate)
         .addSignature<FitI>(generate)
         .addDependency("clamp")
         .setArgumentNames({"value", "omin", "omax", "nmin", "nmax"})
@@ -1805,6 +1811,7 @@ inline FunctionGroup::Ptr axprint(const FunctionOptions& op)
     return FunctionBuilder("print")
         .addSignature<void(double)>((void(*)(double))(print))
         .addSignature<void(float)>((void(*)(float))(print))
+        .addSignature<void(int64_t)>((void(*)(int64_t))(print))
         .addSignature<void(int32_t)>((void(*)(int32_t))(print))
             .setArgumentNames({"n"})
             .addFunctionAttribute(llvm::Attribute::ReadOnly)

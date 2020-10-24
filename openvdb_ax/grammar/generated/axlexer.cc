@@ -945,6 +945,8 @@ LIABILITY FOR ALL CLAIMS REGARDLESS OF THEIR BASIS EXCEED US$250.00.
     ///        -Wnull-conversion
     OPENVDB_NO_TYPE_CONVERSION_WARNING_BEGIN
 
+    extern openvdb::ax::Logger* axlog;
+
     /// @note  Location tracking macro for axlloc token locations.
     ///   YY_USER_ACTION is called before any and each lexer action
 

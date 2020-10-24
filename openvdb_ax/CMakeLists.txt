@@ -61,17 +61,15 @@ set(OPENVDB_AX_GRAMMAR_DIR ${CMAKE_CURRENT_BINARY_DIR}/openvdb_ax/grammar)
 file(MAKE_DIRECTORY ${OPENVDB_AX_GRAMMAR_DIR})
 
 if(OPENVDB_BUILD_AX_GRAMMAR)
-  cmake_minimum_required(VERSION 3.4)
   find_package(FLEX REQUIRED)
   find_package(BISON 3.0 REQUIRED)
 
-  # @note CMake lists don't seem to work with these options
-  SET(BISON_COMPILE_FLAGS "${BISON_COMPILE_FLAGS} -Werror")
+  set(BISON_COMPILE_FLAGS "${BISON_COMPILE_FLAGS} -Werror")
 
   if(OPENVDB_AX_GRAMMAR_NO_LINES)
     # Suppress #line directives
-    SET(FLEX_COMPILE_FLAGS "${FLEX_COMPILE_FLAGS} -L")
-    SET(BISON_COMPILE_FLAGS "${BISON_COMPILE_FLAGS} -l")
+    set(FLEX_COMPILE_FLAGS "${FLEX_COMPILE_FLAGS} -L")
+    set(BISON_COMPILE_FLAGS "${BISON_COMPILE_FLAGS} -l")
   endif()
 
   FLEX_TARGET(openvdb_ax_lexer grammar/axlexer.l ${OPENVDB_AX_GRAMMAR_DIR}/axlexer.cc
@@ -88,16 +86,7 @@ if(OPENVDB_BUILD_AX_GRAMMAR)
     COMMENT "Re-generate the AX language files."
     DEPENDS
       ${OPENVDB_AX_GRAMMAR_DIR}/axlexer.cc
-      ${OPENVDB_AX_GRAMMAR_DIR}/axparser.cc
-  )
-else()
-  file(COPY
-    grammar/generated/axlexer.cc
-    grammar/generated/axparser.cc
-    grammar/generated/axparser.h
-  DESTINATION
-    ${OPENVDB_AX_GRAMMAR_DIR}
-  )
+      ${OPENVDB_AX_GRAMMAR_DIR}/axparser.cc)
 endif()
 
 #########################################################################
@@ -133,8 +122,6 @@ find_package(Boost REQUIRED COMPONENTS random)
 #########################################################################
 
 set(OPENVDB_AX_LIBRARY_SOURCE_FILES
-  ${OPENVDB_AX_GRAMMAR_DIR}/axlexer.cc
-  ${OPENVDB_AX_GRAMMAR_DIR}/axparser.cc
   ast/Parse.cc
   ast/PrintTree.cc
   ast/Scanners.cc
@@ -153,6 +140,16 @@ set(OPENVDB_AX_LIBRARY_SOURCE_FILES
   compiler/Logger.cc
   math/OpenSimplexNoise.cc
 )
+
+if(OPENVDB_BUILD_AX_GRAMMAR)
+  list(APPEND OPENVDB_AX_LIBRARY_SOURCE_FILES
+    ${OPENVDB_AX_GRAMMAR_DIR}/axlexer.cc
+    ${OPENVDB_AX_GRAMMAR_DIR}/axparser.cc)
+else()
+  list(APPEND OPENVDB_AX_LIBRARY_SOURCE_FILES
+    grammar/generated/axlexer.cc
+    grammar/generated/axparser.cc)
+endif()
 
 set(OPENVDB_AX_AST_INCLUDE_FILES
   ast/AST.h
@@ -229,17 +226,25 @@ set(OPENVDB_AX_CORE_DEPENDENT_LIBS
 
 if(OPENVDB_AX_STATIC)
   target_compile_definitions(openvdb_ax_static PUBLIC ${LLVM_DEFINITIONS})
-  if(NOT MATRIX_SUPPORT)
-    target_compile_definitions(openvdb_ax_static PRIVATE -DOPENVDB_AX_NO_MATRIX)
+  if(OPENVDB_HAS_MATRIX_SUPPORT)
+    target_compile_definitions(openvdb_ax_static PUBLIC -DOPENVDB_HAS_MATRIX_SUPPORT)
   endif()
 
   target_include_directories(openvdb_ax_static
-    PUBLIC ../
-    PRIVATE . ${OPENVDB_AX_GRAMMAR_DIR}
+    PUBLIC ../ PRIVATE .
   )
   target_include_directories(openvdb_ax_static
     SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS}
   )
+
+  if(OPENVDB_BUILD_AX_GRAMMAR)
+    target_include_directories(openvdb_ax_static
+      PRIVATE ${OPENVDB_AX_GRAMMAR_DIR}
+    )
+    target_compile_definitions(openvdb_ax_static
+      PRIVATE -DOPENVDB_AX_REGENERATE_GRAMMAR
+    )
+  endif()
 
   set_target_properties(openvdb_ax_static
     PROPERTIES OUTPUT_NAME openvdb_ax
@@ -255,17 +260,25 @@ endif()
 
 if(OPENVDB_AX_SHARED)
   target_compile_definitions(openvdb_ax_shared PUBLIC ${LLVM_DEFINITIONS})
-  if(NOT MATRIX_SUPPORT)
-    target_compile_definitions(openvdb_ax_shared PRIVATE -DOPENVDB_AX_NO_MATRIX)
+  if(OPENVDB_HAS_MATRIX_SUPPORT)
+    target_compile_definitions(openvdb_ax_shared PUBLIC -DOPENVDB_HAS_MATRIX_SUPPORT)
   endif()
 
   target_include_directories(openvdb_ax_shared
-    PUBLIC ../
-    PRIVATE . ${OPENVDB_AX_GRAMMAR_DIR}
+    PUBLIC ../ PRIVATE .
   )
   target_include_directories(openvdb_ax_shared
     SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS}
   )
+
+  if(OPENVDB_BUILD_AX_GRAMMAR)
+    target_include_directories(openvdb_ax_shared
+      PRIVATE ${OPENVDB_AX_GRAMMAR_DIR}
+    )
+    target_compile_definitions(openvdb_ax_shared
+      PRIVATE -DOPENVDB_AX_REGENERATE_GRAMMAR
+    )
+  endif()
 
   set_target_properties(
     openvdb_ax_shared
