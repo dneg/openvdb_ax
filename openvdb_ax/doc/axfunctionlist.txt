@@ -62,8 +62,10 @@ usually automatically updated from the most recent output of the @ref vdbaxbinar
     <li> @ref axpretransform "pretransform"</li>
     <li> @ref axprint "print"</li>
     <li> @ref axrand "rand"</li>
+    <li> @ref axrand32 "rand32"</li>
     <li> @ref axremovefromgroup "removefromgroup"</li>
     <li> @ref axround "round"</li>
+    <li> @ref axsign "sign"</li>
     <li> @ref axsignbit "signbit"</li>
     <li> @ref axsimplexnoise "simplexnoise"</li>
     <li> @ref axsin "sin"</li>

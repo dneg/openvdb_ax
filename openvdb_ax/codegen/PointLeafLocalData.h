@@ -28,7 +28,7 @@
 //
 ///////////////////////////////////////////////////////////////////////////
 
-/// @file compiler/LeafLocalData.h
+/// @file codegen/PointLeafLocalData.h
 ///
 /// @authors Nick Avramoussis
 ///
@@ -50,7 +50,9 @@ OPENVDB_USE_VERSION_NAMESPACE
 namespace OPENVDB_VERSION_NAME {
 
 namespace ax {
-namespace compiler {
+namespace codegen {
+
+namespace codegen_internal {
 
 
 /// @brief  Various functions can request the use and initialization of point data from within
@@ -65,9 +67,9 @@ namespace compiler {
 ///        maps are used for temporary storage per point. The maps use the string array
 ///        pointers as a key for later synchronization.
 ///
-struct LeafLocalData
+struct PointLeafLocalData
 {
-    using UniquePtr = std::unique_ptr<LeafLocalData>;
+    using UniquePtr = std::unique_ptr<PointLeafLocalData>;
     using GroupArrayT = openvdb::points::GroupAttributeArray;
     using GroupHandleT = openvdb::points::GroupWriteHandle;
 
@@ -82,7 +84,7 @@ struct LeafLocalData
     /// @param  count  The number of points within the current leaf, used to initialize
     ///                the size of new arrays
     ///
-    LeafLocalData(const size_t count)
+    PointLeafLocalData(const size_t count)
         : mPointCount(count)
         , mArrays()
         , mOffset(0)
@@ -247,6 +249,8 @@ private:
     std::map<std::string, std::unique_ptr<GroupHandleT>> mHandles;
     StringArrayMap mStringMap;
 };
+
+} // codegen_internal
 
 } // namespace compiler
 } // namespace ax

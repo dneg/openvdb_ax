@@ -115,12 +115,6 @@ message(STATUS "Found LLVM: ${LLVM_DIR} (found suitable version \"${LLVM_PACKAGE
 
 #########################################################################
 
-# Configure other dependencies
-
-find_package(Boost REQUIRED COMPONENTS random)
-
-#########################################################################
-
 set(OPENVDB_AX_LIBRARY_SOURCE_FILES
   ast/Parse.cc
   ast/PrintTree.cc
@@ -132,12 +126,13 @@ set(OPENVDB_AX_LIBRARY_SOURCE_FILES
   codegen/PointComputeGenerator.cc
   codegen/PointFunctions.cc
   codegen/StandardFunctions.cc
+  codegen/Types.cc
   codegen/VolumeComputeGenerator.cc
   codegen/VolumeFunctions.cc
   compiler/Compiler.cc
+  compiler/Logger.cc
   compiler/PointExecutable.cc
   compiler/VolumeExecutable.cc
-  compiler/Logger.cc
   math/OpenSimplexNoise.cc
 )
 
@@ -154,7 +149,6 @@ endif()
 set(OPENVDB_AX_AST_INCLUDE_FILES
   ast/AST.h
   ast/Parse.h
-  ast/Literals.h
   ast/PrintTree.h
   ast/Scanners.h
   ast/Tokens.h
@@ -168,6 +162,7 @@ set(OPENVDB_AX_CODEGEN_INCLUDE_FILES
   codegen/Functions.h
   codegen/FunctionTypes.h
   codegen/PointComputeGenerator.h
+  codegen/PointLeafLocalData.h
   codegen/SymbolTable.h
   codegen/Types.h
   codegen/Utils.h
@@ -179,7 +174,6 @@ set(OPENVDB_AX_COMPILER_INCLUDE_FILES
   compiler/Compiler.h
   compiler/CompilerOptions.h
   compiler/CustomData.h
-  compiler/LeafLocalData.h
   compiler/PointExecutable.h
   compiler/AttributeRegistry.h
   compiler/VolumeExecutable.h
@@ -216,7 +210,6 @@ endif()
 
 set(OPENVDB_AX_CORE_DEPENDENT_LIBS
   OpenVDB::openvdb
-  Boost::random
   ${LLVM_LIBS}
 )
 
@@ -291,7 +284,6 @@ if(OPENVDB_AX_SHARED)
   if(OPENVDB_ENABLE_RPATH)
     # @todo There is probably a better way to do this for imported targets
     list(APPEND RPATHS
-      ${Boost_LIBRARY_DIRS}
       ${IlmBase_LIBRARY_DIRS}
       ${OpenEXR_LIBRARY_DIRS}
       ${Log4cplus_LIBRARY_DIRS}

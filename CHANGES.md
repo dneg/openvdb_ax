@@ -5,26 +5,45 @@ Version 1.0.0 - In Development
 
     New Features:
     - Introduced new error logging framework for AX syntax errors/warnings,
-      allowing capture and reporting of syntax errors in AX code beyond the
-      first error, as well as graceful breaking of the compilation process if it
-      cannot continue. This allows for more useful error messages and other
-      quality of life improvements such as printing of the offending lines of
-      code.
+      (along with an improved set of warnings) allowing capture and reporting
+      of syntax errors in AX code beyond the first error, as well as graceful
+      breaking of the compilation process if it cannot continue. This allows
+      for more useful error messages and other quality of life improvements
+      such as printing of the offending lines of code.
     - Synced AX library version to VDB version. The library version now matches
       the version of VDB it is built against. This is in preparation for porting
       into the OpenVDB repository.
+    - Changed some default integer types. 'short' types are now 'int16', 'long'
+      types are 'int64'. An additional int type 'int32' has also been added which
+      'int' is currently aliased to.
     - Added sign() to return -1, 0 or 1 depending on the sign of a scalar input
+    - Updated logical && and || operators to use short-circuiting. That is, for
+      && if the first operand is false, the second is not evaluated (as at least
+      one operand is false), similarly || does not evaluate the second operand if
+      the first is true.
 
     Improvements:
-    - Update various API methods and objects to use Logger including Compiler
-      and ComputeGenerators
+    - Update various API methods and objects to use an AX Logger including
+      Compiler and ComputeGenerators
     - Moved initialization methods to ax.cc
     - Reworked all existing exception types with the majority being converted to
       logger errors. Remaining exception are consolidated library faults.
     - Updated command line binary to use Logger and report more than one error
       message and print error locations.
     - Added --werror and --max-errors options to the command line binary
-    - Fixed various warnings when building with GCC 9.3.1
+    - short (int16) integer literals created with the 's' suffix have been
+      deprecated and local variables of said types have been removed. All
+      integer are now a minimum of 32bit.
+    - lerp(a,b,x) is now guaranteed to always be monotonic, return exactly b
+      when x == 1.0 and return a (or b) when a==b, regardless of the value of x
+    - rand() now uses a 64bit mersenne twister. This is typically faster than
+      the old rand() on most architectures however produces different results.
+      The older version can be called with rand32().
+    - Improved the parsing of integer and floating point literals which produce
+      better warnings for overflows, underflows and truncations
+    - ax::run now errors if both points and volume grids were provided instead
+      of processing both separately
+    - Improved the behaviour of unary minus precedence (i.e. (-a) * b vs -(a * b))
     - Added some missing int64_t function signatures
 
     Compiler:
@@ -33,10 +52,17 @@ Version 1.0.0 - In Development
       possible errors before throwing (on error).
     - Added debug checks to ensure functions are registered correctly
 
+    Code Generation:
+    - Added support for arbitrary sized void pointer
+    - Renamed LeafLocalData to PointLeafLocalData and moved to codegen
+    - Removed some unnecessary shared pointer usage on function returns
+
     AST:
     - Moved parse methods from AST.h to new Parse.h
     - Added new parse method returning const AST for use with line/col tracking
       in codegen by Logger
+    - Removed the ability to construct an AST Value node from a string
+    - Removed ast/Literals.h
 
     Houdini:
     - Move OpenVDB AX SOP into VDB/ASWF folder
@@ -46,6 +72,7 @@ Version 1.0.0 - In Development
     CMake / Build / Testing:
     - Increased the minimum CMake version requirement to 3.12
     - Increased the minimum LLVM version requirement to 6.0.0
+    - Fixed various warnings when building with GCC 9.3.1
     - Switch to use GNU Install Dirs
     - Fixed github actions not running on branches with slashes
     - Removed deprecated openvdb_ax_houdini CMake var

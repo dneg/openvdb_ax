@@ -47,7 +47,6 @@ This library uses doxygen for creating its documentation. This documentation cur
 apt-get install -y cmake
 apt-get install -y doxygen
 apt-get install -y libboost-iostreams-dev
-apt-get install -y libboost-random-dev
 apt-get install -y libboost-system-dev
 apt-get install -y libboost-thread-dev
 apt-get install -y libcppunit-dev
