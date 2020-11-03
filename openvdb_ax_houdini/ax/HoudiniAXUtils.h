@@ -411,7 +411,7 @@ private:
     UT_Ramp mData;
 };
 
-inline openvdb::ax::codegen::FunctionGroup::Ptr
+inline openvdb::ax::codegen::FunctionGroup::UniquePtr
 hax_chramp(const openvdb::ax::FunctionOptions& op)
 {
     static auto sample =
@@ -452,7 +452,7 @@ hax_chramp(const openvdb::ax::FunctionOptions& op)
         .get();
 }
 
-inline openvdb::ax::codegen::FunctionGroup::Ptr
+inline openvdb::ax::codegen::FunctionGroup::UniquePtr
 haxchramp(const openvdb::ax::FunctionOptions& op)
 {
     auto generate =

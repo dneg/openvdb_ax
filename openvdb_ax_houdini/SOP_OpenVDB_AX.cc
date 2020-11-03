@@ -42,7 +42,6 @@
 #include "ax/HoudiniAXUtils.h"
 
 #include <openvdb_ax/ast/AST.h>
-#include <openvdb_ax/ast/Literals.h>
 #include <openvdb_ax/compiler/Compiler.h>
 #include <openvdb_ax/compiler/Logger.h>
 #include <openvdb_ax/compiler/CustomData.h>
@@ -75,6 +74,7 @@
 #include <tbb/mutex.h>
 
 #include <sstream>
+#include <string>
 
 namespace hvdb = openvdb_houdini;
 namespace hax =  openvdb_ax_houdini;
@@ -1299,8 +1299,7 @@ SOP_OpenVDB_AX::Cache::evalInsertHScriptVariable(const std::string& name,
         if (valueStr.length() > 0) {
             const std::string str = valueStr.toStdString();
             try {
-                const fpreal32 valueFloat =
-                    static_cast<fpreal32>(openvdb::ax::LiteralLimits<float>::convert(str));
+                const fpreal32 valueFloat = static_cast<fpreal32>(std::stod(str));
                 valueFloatPtr.reset(new fpreal32(valueFloat));
                 expectedType = openvdb::typeNameAsString<float>();
             }

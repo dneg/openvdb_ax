@@ -434,7 +434,7 @@ TestVDBFunctions::testValidContext()
             // Don't check internal functions
             if (func.second.isInternal()) continue;
 
-            const openvdb::ax::codegen::FunctionGroup::Ptr ptr = func.second.function();
+            const openvdb::ax::codegen::FunctionGroup* const ptr = func.second.function();
             CPPUNIT_ASSERT(ptr);
             const auto& signatures = ptr->list();
             CPPUNIT_ASSERT(!signatures.empty());
@@ -457,7 +457,7 @@ TestVDBFunctions::testValidContext()
             // Don't check internal functions
             if (func.second.isInternal()) continue;
 
-            const openvdb::ax::codegen::FunctionGroup::Ptr ptr = func.second.function();
+            const openvdb::ax::codegen::FunctionGroup* const ptr = func.second.function();
             CPPUNIT_ASSERT(ptr);
             const auto& signatures = ptr->list();
             CPPUNIT_ASSERT(!signatures.empty());

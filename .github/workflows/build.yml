@@ -56,7 +56,7 @@ jobs:
       matrix:
         compiler: ['g++', 'clang++']
         build: ['Release']
-        llvm: ['7','8','9','10']
+        llvm: ['7','8','9'] #@todo add back llvm 10 when the brew formula is fixed
         # Debug builds
         include:
           - compiler: 'g++'

@@ -102,6 +102,7 @@ struct PointRangeKernel : public PointKernel
 ///////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////
 
+namespace codegen_internal {
 
 /// @brief Visitor object which will generate llvm IR for a syntax tree which has been generated from
 ///        AX that targets point grids.  The IR will represent  2 functions : one that executes over
@@ -132,6 +133,8 @@ private:
     llvm::Value* attributeHandleFromToken(const std::string&);
     void getAttributeValue(const std::string& globalName, llvm::Value* location);
 };
+
+} // namespace namespace codegen_internal
 
 } // namespace codegen
 } // namespace ax
