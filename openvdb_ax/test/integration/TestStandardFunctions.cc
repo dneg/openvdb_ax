@@ -885,37 +885,26 @@ TestStandardFunctions::rand()
 void
 TestStandardFunctions::rand32()
 {
-    auto hashToSeed = [](size_t hash) -> uint32_t {
+    auto hashToSeed = [](size_t hash) ->
+        std::mt19937::result_type
+    {
         unsigned int seed = 0;
         do {
             seed ^= (uint32_t) hash;
         } while (hash >>= sizeof(uint32_t) * 8);
-        return seed;
+        return std::mt19937::result_type(seed);
     };
 
     std::mt19937 engine;
-    std::mt19937::result_type seed;
     std::uniform_real_distribution<double> uniform(0.0,1.0);
 
     size_t hash = std::hash<double>()(2.0);
-    if (!std::is_same<size_t, std::mt19937::result_type>::value) {
-        seed = hashToSeed(hash);
-    }
-    else {
-        seed = hash;
-    }
-    engine.seed(seed);
+    engine.seed(hashToSeed(hash));
 
     const double expected1 = uniform(engine);
 
     hash = std::hash<double>()(3.0);
-    if (!std::is_same<size_t, std::mt19937::result_type>::value) {
-        seed = hashToSeed(hash);
-    }
-    else {
-        seed = hash;
-    }
-    engine.seed(seed);
+    engine.seed(hashToSeed(hash));
 
     const double expected2 = uniform(engine);
     const double expected3 = uniform(engine);

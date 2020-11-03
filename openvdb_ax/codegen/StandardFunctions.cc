@@ -81,11 +81,6 @@ inline SeedType hashToSeed(size_t hash) {
     return seed;
 }
 
-template <>
-inline size_t hashToSeed<size_t>(size_t hash) {
-    return hash;
-}
-
 struct SimplexNoise
 {
     // Open simplex noise - Visually axis-decorrelated coherent noise algorithm
@@ -915,8 +910,10 @@ inline FunctionGroup::UniquePtr axrand32(const FunctionOptions& op)
             //
             // We use the `hashToSeed` function to reduce our `size_t` to an `unsigned int`,
             // whilst taking all bits in the `size_t` into account.
+            // On some architectures std::uint_fast32_t may be size_t, but we always hash to
+            // be consistent.
             const std::mt19937::result_type uintseed =
-                hashToSeed<std::mt19937::result_type>(hash);
+                static_cast<std::mt19937::result_type>(hashToSeed<uint32_t>(hash));
             return Rand::rand(&uintseed);
         }
 
