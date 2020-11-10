@@ -729,7 +729,7 @@ container types). Binary arithmetic operations have the following forms:
 <tr><td>Subtraction</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`-`</b> @a `rhs` </td><td>The first operand minus the second operand</td></tr>
 <tr><td>Multiplication</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`*`</b> @a `rhs` </td><td>The product of both operands</td></tr>
 <tr><td>Division</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`/`</b> @a `rhs` </td><td>The first operand divided by the second operand</td></tr>
-<tr><td>Modulo</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`%`</b> @a `rhs` </td><td>The remainder of the first operand divided by the second operand</td></tr>
+<tr><td>Modulo</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`%`</b> @a `rhs` </td><td>The @b floored modulo operator. See @ref axbinmultop "Multiplicative operands"</td></tr>
 <tr><td>Bitwise AND</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`&amp;`</b> @a `rhs` </td>
 <td>The @b integral bitwise AND result of each bit in the first operand applied to the bit at the same location in the second operand</td></tr>
 <tr><td>Bitwise OR</td><td bgcolor="#ffc4c4"> @a `lhs` <b>`|`</b> @a `rhs` </td>
@@ -870,8 +870,17 @@ operation:
     - @b OR performs matrix multiplication for vector and matrix types.
  - with the arithmetic @b `/` (@ref axtokens "forward slash token") is the first
  operand divided by the second operand.
- - with the arithmetic @b `%` (@ref axtokens "percentage token") is the remainder
- of the division of the first operand by the second.
+ - with the arithmetic @b `%` (@ref axtokens "percentage token") is the
+ @b floored modulo operations .i.e. the expression `d % D` returns the result
+ `D - d * floor(D/d)`. This is in contrast to truncated modulo operations
+ `D - d * (D/d)` where the division is truncated.
+@warning
+Floored modulo has been chosen to provide better expected behaviour with signed
+dividends. In such cases the result will always be positive; in other words,
+the sign of the result is @b always taken from the divisor. This does however
+mean that the relationship properties between `%` and `/` differ when either
+@b `d` or @b `D` is negative. i.e.:
+`(d/D)*D + (d%D) != d`
 @note
 The multiplicative operation @b `*` has important behaviour for vectors and
 matrix types.

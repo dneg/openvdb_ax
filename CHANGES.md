@@ -21,6 +21,10 @@ Version 1.0.0 - In Development
       && if the first operand is false, the second is not evaluated (as at least
       one operand is false), similarly || does not evaluate the second operand if
       the first is true.
+    - Changed the modulo operator % to perform a floored modulus operation
+      instead of a truncated modulo. This results in better behaviour for negative
+      dividends. Introduced truncatemod(), floormod() and euclideanmod() functions
+      to provide all behaviours.
 
     Improvements:
     - Update various API methods and objects to use an AX Logger including

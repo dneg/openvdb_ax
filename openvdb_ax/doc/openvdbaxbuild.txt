@@ -18,7 +18,7 @@ for a list of indirect dependencies through OpenVDB.
 @par
 Component                 | Requirements                                             |
 ------------------------- | -------------------------------------------------------- |
-OpenVDB AX Library        | OpenVDB Core Library, LLVM, Boost::random                |
+OpenVDB AX Library        | OpenVDB Core Library, LLVM                               |
 OpenVDB AX Binary         | OpenVDB AX Library dependencies                          |
 OpenVDB AX Python         | OpenVDB AX Library dependencies, OpenVDB Python Library  |
 OpenVDB AX Houdini        | OpenVDB AX Library dependencies, OpenVDB Houdini Library |
@@ -37,7 +37,6 @@ The dependencies listed below are additionally specific to OpenVDB AX.
 Package        | Minimum | Recommended | Description                        | apt-get | Homebrew | Source
 -------------- | ------- | ----------- | ---------------------------------- | ------- | -------- | ------
 LLVM           | 6.0.0   | 8.0.0       | Target-independent code generation | Y       | Y        | https://llvm.org/
-Boost          | 1.61    | 1.61        | Components: random                 | Y       | Y        | https://www.boost.org
 Bison*         | 3.0.0   | 3.0.5       | General-purpose parser generator   | Y       | Y        | https://www.gnu.org/software/gcc
 Flex*          | 2.6     | 2.6.4       | Fast lexical analyzer generator    | Y       | Y        | https://github.com/westes/flex
 
@@ -53,7 +52,6 @@ replacing the version number in the dev package name.
 @code{.sh}
 #!/bin/bash
 apt-get install llvm-8-dev        # LLVM 8
-apt-get install boost-random-dev  # Boost::random
 apt-get install bison             # Bison
 apt-get install flex              # Flex
 @endcode
@@ -68,7 +66,6 @@ supplied, homebrew will install the latest version available.
 @code{.sh}
 #!/bin/bash
 brew install llvm@8  # LLVM 8
-brew install boost   # Boost
 brew install bison   # Bison
 brew install flex    # Flex
 @endcode
