@@ -47,10 +47,10 @@ set(DOXY_FILES
   ../grammar/generated
   ../test
   ax.txt
+  axcplusplus.txt
   axexamples.txt
   axfunctionlist.txt
   doc.txt
-  openvdbax.txt
   openvdbaxbuild.txt)
 
 set(DOXYGEN_PROJECT_NAME "OpenVDB AX")

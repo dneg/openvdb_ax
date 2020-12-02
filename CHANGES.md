@@ -49,6 +49,7 @@ Version 1.0.0 - In Development
       of processing both separately
     - Improved the behaviour of unary minus precedence (i.e. (-a) * b vs -(a * b))
     - Added some missing int64_t function signatures
+    - Added C++ API developer documentation for using the OpenVDB AX library.
 
     Compiler:
     - Added new compile methods using Logger/deprecated old compile methods
