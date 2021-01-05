@@ -73,6 +73,8 @@ Version 1.0.0 - In Development
     - Move OpenVDB AX SOP into VDB/ASWF folder
     - Updated to use new Logger, can now report more than one error message at a
       time.
+    - Updated OpenVDB AX SOP UI to streamline interface. Renamed parameters to fit
+      better with existing Houdini Attribute/Volume Wrangle naming convention.
 
     CMake / Build / Testing:
     - Increased the minimum CMake version requirement to 3.12
