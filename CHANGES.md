@@ -1,7 +1,15 @@
 OpenVDB AX Version History
 ==========================
 
-Version 1.0.0 - In Development
+Version 1.0.0 - January 18, 2021
+
+    This release coincides with the release of OpenVDB 8.0.0, where the core
+    OpenVDB AX library has been incorporated into the OpenVDB ASWF repository.
+    Future development will be focused in the OpenVDB ASWF repo. The standalone
+    OpenVDB AX repository is in maintenance mode.
+
+    See the official OpenVDB ASWF repository:
+        https://github.com/AcademySoftwareFoundation/openvdb
 
     New Features:
     - Introduced new error logging framework for AX syntax errors/warnings,
